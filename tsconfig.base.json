@@ -24,8 +24,8 @@
     /* Path aliases */
     "baseUrl": ".",
     "paths": {
-      "@lai/core": ["packages/core/src"],
-      "@lai/core/*": ["packages/core/src/*"]
+  "@lia-code/core": ["packages/core/src"],
+  "@lai/core/*": ["packages/core/src/*"]
     }
   },
   "include": ["packages"],

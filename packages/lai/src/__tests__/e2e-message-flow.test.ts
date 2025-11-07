@@ -1,16 +1,16 @@
 /**
  * End-to-End Message Flow Test
  * Tests the complete workflow:
- * 1. Create conversation with @lai/core
- * 2. Send user message and store in @lai/core
+ * 1. Create conversation with @lia-code/core
+ * 2. Send user message and store in @lia-code/core
  * 3. Get provider response (mocked)
- * 4. Store assistant response in @lai/core
+ * 4. Store assistant response in @lia-code/core
  * 5. Retrieve full conversation
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ConversationAdapter, MessageAdapter } from '../lib/api/core-adapter';
-import { ProviderFactory } from '@lai/core';
+import { ProviderFactory } from '@lia-code/core';
 import * as fs from 'fs';
 import * as path from 'path';
 

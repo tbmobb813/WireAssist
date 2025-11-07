@@ -1,6 +1,6 @@
 /**
  * Hybrid Database Module
- * Intelligently switches between Tauri-based and @lai/core-based storage
+ * Intelligently switches between Tauri-based and @lia-code/core-based storage
  * Allows the app to work in both native (Tauri) and web contexts
  */
 
@@ -27,7 +27,7 @@ let useCoreDatabaseBackend = false;
 
 /**
  * Enable or disable the core database backend
- * When enabled, uses @lai/core for storage instead of Tauri IPC
+ * When enabled, uses @lia-code/core for storage instead of Tauri IPC
  */
 export function setUseCoreDatabase(enable: boolean) {
   useCoreDatabaseBackend = enable;

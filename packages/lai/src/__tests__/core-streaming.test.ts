@@ -1,6 +1,6 @@
 /**
  * Core Streaming Integration Tests
- * Verifies that @lai/core streaming works with LAI app's provider system
+ * Verifies that @lia-code/core streaming works with LAI app's provider system
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';

@@ -663,7 +663,7 @@ export async function enableCoreDatabase() {
   try {
     const { setUseCoreDatabase } = await import("./database-hybrid");
     setUseCoreDatabase(true);
-    console.log("[Database] Switched to @lai/core-backed database");
+    console.log("[Database] Switched to @lia-code/core-backed database");
     return true;
   } catch (error) {
     console.error("[Database] Failed to enable core database:", error);

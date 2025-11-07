@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ContextService } from '../lib/services/contextService';
-import type { FileChange, AIContext } from '@lai/core';
+import type { FileChange, AIContext } from '@lia-code/core';
 
 describe('Context Service', () => {
   let service: ContextService;

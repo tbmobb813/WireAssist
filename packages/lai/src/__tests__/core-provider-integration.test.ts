@@ -1,16 +1,16 @@
 /**
- * @lai/core Provider Integration Tests
- * Verifies that @lai/core providers work correctly with LAI app's provider system
+ * @lia-code/core Provider Integration Tests
+ * Verifies that @lia-code/core providers work correctly with LAI app's provider system
  */
 
 import { describe, it, expect } from 'vitest';
-import { ProviderFactory } from '@lai/core';
+import { ProviderFactory } from '@lia-code/core';
 import type {
   ProviderCompletionOptions,
   ProviderResponse,
-} from '@lai/core';
+} from '@lia-code/core';
 
-describe('@lai/core Provider Integration', () => {
+describe('@lia-code/core Provider Integration', () => {
   describe('ProviderFactory', () => {
     it('should create OpenAI provider', () => {
       const provider = ProviderFactory.create({

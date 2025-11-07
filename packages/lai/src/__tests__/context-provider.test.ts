@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ContextAwareProvider, wrapWithContext } from '../lib/providers/contextProvider';
 import type { Provider, ProviderMessage } from '../lib/providers/provider';
-import type { AIContext } from '@lai/core';
+import type { AIContext } from '@lia-code/core';
 
 // Mock provider for testing
 class MockProvider implements Provider {

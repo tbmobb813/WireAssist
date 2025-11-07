@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ContextAwareProvider } from '../lib/providers/contextProvider';
 import { contextService } from '../lib/services/contextService';
 import type { Provider, ProviderMessage } from '../lib/providers/provider';
-import type { AIContext, FileChange } from '@lai/core';
+import type { AIContext, FileChange } from '@lia-code/core';
 
 // Mock streaming provider
 class MockStreamingProvider implements Provider {

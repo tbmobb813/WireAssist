@@ -1,6 +1,6 @@
 /**
  * Core Database Adapter Tests
- * Verifies that @lai/core adapters work correctly with the LAI app
+ * Verifies that @lia-code/core adapters work correctly with the LAI app
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';

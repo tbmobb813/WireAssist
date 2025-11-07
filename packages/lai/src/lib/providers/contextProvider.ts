@@ -5,7 +5,7 @@
 
 import { contextService } from '../services/contextService';
 import type { ProviderMessage, Provider } from './provider';
-import type { AIContext, FileChange } from '@lai/core';
+import type { AIContext, FileChange } from '@lia-code/core';
 
 export interface ContextAwareOptions {
   conversationId: string;

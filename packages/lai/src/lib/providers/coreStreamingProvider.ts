@@ -1,10 +1,10 @@
 /**
  * Core Streaming Provider
- * Integrates @lai/core's native streaming with LAI app's provider interface
+ * Integrates @lia-code/core's native streaming with LAI app's provider interface
  * Provides direct streaming without Tauri IPC overhead
  */
 
-import { ProviderFactory, handleStream } from '@lai/core';
+import { ProviderFactory, handleStream } from '@lia-code/core';
 import type { ProviderMessage, Provider } from './provider';
 import { useSettingsStore } from '../stores/settingsStore';
 
@@ -93,7 +93,7 @@ export class CoreStreamingProvider implements Provider {
         prompt: messages.map((m) => `${m.role}: ${m.content}`).join('\n'),
       });
 
-      // Handle stream with @lai/core's stream handler
+      // Handle stream with @lia-code/core's stream handler
       const fullResponse = await handleStream(stream, {
         onChunk,
         onComplete: () => {

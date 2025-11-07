@@ -1,7 +1,7 @@
 /**
  * Core-backed Database Module
- * Uses @lai/core's ConversationStore and MessageStore instead of Tauri IPC
- * This provides local-first storage with full integration to @lai/core
+ * Uses @lia-code/core's ConversationStore and MessageStore instead of Tauri IPC
+ * This provides local-first storage with full integration to @lia-code/core
  */
 
 import { initializeCoreAdapters, type ConversationAdapter, type MessageAdapter } from './core-adapter';
@@ -51,7 +51,7 @@ function getAdapters() {
 
 /**
  * Core-backed database interface
- * Matches the same API as the original database module but uses @lai/core for storage
+ * Matches the same API as the original database module but uses @lia-code/core for storage
  */
 export const coreDatabaseApi = {
   // Conversation operations
@@ -181,7 +181,7 @@ export const coreDatabaseApi = {
   // Tag operations (not implemented in core yet)
   tags: {
     create: async (data: NewTag): Promise<ApiTag> => {
-      throw new Error('Tags not yet implemented in @lai/core');
+      throw new Error('Tags not yet implemented in @lia-code/core');
     },
 
     get: async (id: string): Promise<ApiTag | null> => {

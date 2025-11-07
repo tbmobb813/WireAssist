@@ -1,11 +1,11 @@
 /**
  * Context Service
  * Manages building and caching AI context from workspace and file changes
- * Integrates with @lai/core's ContextBuilder
+ * Integrates with @lia-code/core's ContextBuilder
  */
 
-import { ContextBuilder } from '@lai/core';
-import type { AIContext, FileChange, FileContext } from '@lai/core';
+import { ContextBuilder } from '@lia-code/core';
+import type { AIContext, FileChange, FileContext } from '@lia-code/core';
 
 export interface ContextOptions {
   includeFiles?: boolean;

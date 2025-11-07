@@ -1,13 +1,13 @@
 /**
  * Core Adapter Layer
- * Bridges @lai/core storage with the LAI app's database interface
+ * Bridges @lia-code/core storage with the LAI app's database interface
  * Provides ConversationStore and MessageStore adapters that match the database API
  */
 
 import {
   ConversationStore as CoreConversationStore,
   MessageStore as CoreMessageStore,
-} from '@lai/core';
+} from '@lia-code/core';
 import type {
   ApiConversation,
   ApiMessage,
@@ -16,7 +16,7 @@ import type {
 } from './types';
 
 /**
- * Adapter for @lai/core's ConversationStore to match the database API interface
+ * Adapter for @lia-code/core's ConversationStore to match the database API interface
  */
 export class ConversationAdapter {
   private coreStore: CoreConversationStore;
@@ -169,7 +169,7 @@ export class ConversationAdapter {
 }
 
 /**
- * Adapter for @lai/core's MessageStore to match the database API interface
+ * Adapter for @lia-code/core's MessageStore to match the database API interface
  */
 export class MessageAdapter {
   private coreStore: CoreMessageStore;

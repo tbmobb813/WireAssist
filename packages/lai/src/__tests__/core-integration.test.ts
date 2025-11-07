@@ -1,6 +1,6 @@
 /**
  * Core Integration Tests
- * Verify that @lai/core modules work correctly within the LAI app context
+ * Verify that @lia-code/core modules work correctly within the LAI app context
  */
 
 import {
@@ -12,19 +12,19 @@ import {
   AuditLogger,
   PrivacyController,
   StreamParser,
-} from '@lai/core';
+} from '@lia-code/core';
 import type {
   Conversation,
   Message,
   ProviderType,
   AIContext,
   PrivacySettings,
-} from '@lai/core';
+} from '@lia-code/core';
 import * as fs from 'fs';
 import * as path from 'path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-describe('@lai/core Integration Tests', () => {
+describe('@lia-code/core Integration Tests', () => {
   let testDbPath: string;
   let conversationStore: ConversationStore;
   let messageStore: MessageStore;
