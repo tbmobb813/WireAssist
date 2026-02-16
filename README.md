@@ -1,4 +1,4 @@
-# Prive - A Linux Based AI Assistant
+# Nolta - A Linux Based AI Assistant
 
 A monorepo containing the core AI engine and desktop/web applications for a privacy-first, multi-provider AI assistant.
 
