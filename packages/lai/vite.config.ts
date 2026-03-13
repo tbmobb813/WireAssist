@@ -23,7 +23,18 @@ export default defineConfig({
   // inside the Tauri desktop environment.
   build: {
     rollupOptions: {
-      external: [/^@tauri-apps\/api($|\/)/],
+      external: [
+        /^@tauri-apps\/api($|\/)/,
+        // Externalize @lia-code/core and its Node.js dependencies
+        // These modules are only used in the Tauri backend, not in the browser
+        '@lia-code/core',
+        'better-sqlite3',
+        'crypto',
+        'fs',
+        'path',
+        'os',
+        'util',
+      ],
       output: {
         manualChunks: {
           // Split vendor libraries into separate chunks
@@ -47,6 +58,10 @@ export default defineConfig({
   },
   // Enable dependency optimization
   optimizeDeps: {
-    exclude: ["@tauri-apps/api"],
+    exclude: [
+      "@tauri-apps/api",
+      "@lia-code/core",
+      "better-sqlite3",
+    ],
   },
 });

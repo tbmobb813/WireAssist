@@ -454,7 +454,7 @@ export const database = {
       return callInvoke<void>("update_message", { id, content: data.content });
     },
 
-    getTokenCount: async (conversationId: string): Promise<number> => {
+    getConversationTokenCount: async (conversationId: string): Promise<number> => {
       return callInvoke<number>("get_conversation_token_count", {
         conversation_id: conversationId,
       });

@@ -90,7 +90,7 @@ export class EncryptionService {
     );
 
     // Create cipher and encrypt
-    const cipher = crypto.createCipheriv(this.DEFAULT_CONFIG.algorithm, derivedKey, iv);
+    const cipher = crypto.createCipheriv(this.DEFAULT_CONFIG.algorithm, derivedKey, iv) as crypto.CipherGCM;
     let encrypted = cipher.update(data, 'utf8', 'hex');
     encrypted += cipher.final('hex');
 
@@ -136,7 +136,7 @@ export class EncryptionService {
       const tag = Buffer.from(tagHex, 'hex');
 
       // Create decipher and decrypt
-      const decipher = crypto.createDecipheriv(encryptedData.algorithm, derivedKey, iv);
+      const decipher = crypto.createDecipheriv(encryptedData.algorithm, derivedKey, iv) as crypto.DecipherGCM;
       decipher.setAuthTag(tag);
 
       let decrypted = decipher.update(encryptedWithoutTag, 'hex', 'utf8');

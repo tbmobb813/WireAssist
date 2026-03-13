@@ -88,35 +88,6 @@ export interface PrivacySettings {
   neverSendPatterns?: string[]; // Regex patterns for sensitive data
 }
 
-export interface FileContext {
-  path: string;
-  content: string;
-  language: string;
-  startLine?: number;
-  endLine?: number;
-}
-
-export interface ProjectStructure {
-  type: string;
-  rootPath: string;
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-  mainFiles?: string[];
-}
-
-export interface WorkspaceInfo {
-  path: string;
-  structure: ProjectStructure;
-  openFiles?: string[];
-}
-
-export interface FileChange {
-  path: string;
-  type: 'added' | 'modified' | 'deleted';
-  timestamp: number;
-  diff?: string;
-}
-
 export interface StreamOptions extends CompletionOptions {
   conversationId?: string;
   onChunk?: (chunk: string) => void;

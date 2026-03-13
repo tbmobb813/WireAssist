@@ -39,7 +39,6 @@
     "dev": "vite",
     "typecheck": "tsc --noEmit",
     "run-dev": "../dev/run-dev.sh",
-    "prepare": "git rev-parse --is-inside-work-tree > /dev/null 2>&1 && (ROOT=$(git rev-parse --show-toplevel 2>/dev/null) && if [ -n \"$ROOT\" ]; then if [ -x \"$ROOT/node_modules/.bin/husky\" ]; then (cd \"$ROOT\" && \"$ROOT/node_modules/.bin/husky\" install); elif command -v husky >/dev/null 2>&1; then (cd \"$ROOT\" && husky install); fi; fi) || true",
     "build": "tsc && vite build",
     "build:full": "pnpm build && pnpm cli:build",
     "preview": "vite preview",
