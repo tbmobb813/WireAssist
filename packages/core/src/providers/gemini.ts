@@ -1,6 +1,7 @@
 // Google Gemini implementation
 import { Provider, ProviderCompletionOptions, ProviderResponse, ProviderType } from './base';
 import type { ProviderConfig } from '../types';
+import { PROVIDER_CAPABILITIES, type ProviderCapabilities } from './capabilities';
 
 export class GeminiProvider implements Provider {
   type: ProviderType = 'gemini';
@@ -144,6 +145,10 @@ export class GeminiProvider implements Provider {
     } catch {
       return false;
     }
+  }
+
+  getCapabilities(): ProviderCapabilities {
+    return PROVIDER_CAPABILITIES.gemini;
   }
 
   private buildContents(options: ProviderCompletionOptions): any[] {

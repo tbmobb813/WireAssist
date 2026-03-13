@@ -1,6 +1,7 @@
 // Anthropic/Claude implementation
 import { Provider, ProviderCompletionOptions, ProviderResponse, ProviderType } from './base';
 import type { ProviderConfig } from '../types';
+import { PROVIDER_CAPABILITIES, type ProviderCapabilities } from './capabilities';
 
 export class AnthropicProvider implements Provider {
   type: ProviderType = 'anthropic';
@@ -139,6 +140,10 @@ export class AnthropicProvider implements Provider {
     } catch {
       return false;
     }
+  }
+
+  getCapabilities(): ProviderCapabilities {
+    return PROVIDER_CAPABILITIES.anthropic;
   }
 
   private buildSystemPrompt(options: ProviderCompletionOptions): string {

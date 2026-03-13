@@ -1,6 +1,7 @@
 // OpenAI implementation
 import { Provider, ProviderCompletionOptions, ProviderResponse, ProviderType } from './base';
 import type { ProviderConfig } from '../types';
+import { PROVIDER_CAPABILITIES, type ProviderCapabilities } from './capabilities';
 
 export class OpenAIProvider implements Provider {
   type: ProviderType = 'openai';
@@ -140,6 +141,10 @@ export class OpenAIProvider implements Provider {
     } catch {
       return false;
     }
+  }
+
+  getCapabilities(): ProviderCapabilities {
+    return PROVIDER_CAPABILITIES.openai;
   }
 
   private buildMessages(options: ProviderCompletionOptions): any[] {

@@ -8,8 +8,10 @@ Core AI engine for LAI (Linux AI Assistant) and UDP - Multi-provider AI with pri
 ## Features
 
 - 🚀 **Multi-Provider Support** - OpenAI, Anthropic, Google Gemini, Ollama
+- 🎯 **Provider Registry** - Dynamic provider management and discovery
+- 📊 **Capability System** - Query provider features before using them
 - 🔒 **Privacy Controls** - Built-in encryption and audit logging
-- 📡 **Streaming Support** - Real-time response streaming
+- 📡 **Streaming Support** - Real-time response streaming with utilities
 - 🗂️ **SQLite Backend** - Persistent conversation storage
 - 🔍 **Full-Text Search** - Advanced search with filtering and ranking
 - 🎯 **Context Awareness** - Workspace and file context injection
@@ -35,19 +37,26 @@ pnpm add @lai/core
 
 ## Quick Start
 
-### Basic Usage
+### Basic Usage with Provider Registry
 
 ```typescript
-import {
-  CoreStreamingProvider,
-  SearchService,
-  PrivacyService,
-} from '@lai/core';
+import { ProviderRegistry, handleStream } from '@lia-code/core';
 
-// Initialize provider
-const provider = new CoreStreamingProvider({
-  apiKey: process.env.OPENAI_API_KEY,
-  model: 'gpt-4',
+// Create registry with all available providers
+const registry = ProviderRegistry.createDefault();
+
+// Detect which providers are available
+const available = await ProviderRegistry.detectAvailable();
+console.log('Available:', available);
+
+// Get a provider and use it
+const provider = registry.get('openai');
+if (provider) {
+  const stream = await provider.stream({ prompt: 'Hello!' });
+  const response = await handleStream(stream, {
+    onChunk: (chunk) => console.log(chunk),
+  });
+}
   temperature: 0.7,
 });
 
@@ -134,6 +143,77 @@ const response = await contextProvider.generateResponse(
   (chunk) => console.log(chunk)
 );
 ```
+
+## Provider System
+
+### Using ProviderFactory
+
+```typescript
+import { ProviderFactory } from '@lia-code/core';
+
+// Create a provider
+const provider = ProviderFactory.create({
+  type: 'openai',
+  apiKey: process.env.OPENAI_API_KEY,
+  model: 'gpt-4',
+});
+
+// Use the provider
+const response = await provider.complete({ prompt: 'Hello!' });
+console.log(response.content);
+
+// Stream responses
+const stream = await provider.stream({ prompt: 'Tell me a story' });
+for await (const chunk of stream) {
+  process.stdout.write(chunk);
+}
+```
+
+### Provider Capabilities
+
+```typescript
+import { ProviderFactory, PROVIDER_CAPABILITIES } from '@lia-code/core';
+
+// Check capabilities before creating a provider
+const caps = ProviderFactory.getCapabilities('openai');
+console.log('Supports streaming:', caps?.supportsStreaming);
+console.log('Supports embeddings:', caps?.supportsEmbeddings);
+console.log('Max context:', caps?.maxContextLength);
+
+// Filter providers by capability
+const providers: Array<'openai' | 'anthropic' | 'gemini' | 'ollama'> = [
+  'openai', 'anthropic', 'gemini', 'ollama'
+];
+
+const embeddingProviders = providers.filter(type => 
+  ProviderFactory.getCapabilities(type)?.supportsEmbeddings
+);
+// Result: ['openai', 'ollama']
+```
+
+### Streaming Utilities
+
+```typescript
+import { handleStream, StreamManager } from '@lia-code/core';
+
+const stream = await provider.stream({ prompt: 'Hello' });
+
+// Simple usage
+const response = await handleStream(stream, {
+  onChunk: (chunk) => console.log('Received:', chunk),
+  onComplete: (full) => console.log('Done:', full),
+});
+
+// Advanced usage with StreamManager
+const manager = new StreamManager();
+const buffered = manager.bufferStream(stream, 50); // Buffer 50 chars
+
+for await (const batch of buffered) {
+  console.log('Batch:', batch);
+}
+```
+
+For more examples, see [PROVIDER_ARCHITECTURE.md](./PROVIDER_ARCHITECTURE.md).
 
 ## Providers
 

@@ -1,6 +1,7 @@
 // Local Ollama implementation
 import { Provider, ProviderCompletionOptions, ProviderResponse, ProviderType } from './base';
 import type { ProviderConfig } from '../types';
+import { PROVIDER_CAPABILITIES, type ProviderCapabilities } from './capabilities';
 
 export class OllamaProvider implements Provider {
   type: ProviderType = 'ollama';
@@ -127,6 +128,10 @@ export class OllamaProvider implements Provider {
     } catch {
       return false;
     }
+  }
+
+  getCapabilities(): ProviderCapabilities {
+    return PROVIDER_CAPABILITIES.ollama;
   }
 
   private buildPrompt(options: ProviderCompletionOptions): string {

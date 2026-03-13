@@ -1,6 +1,15 @@
 // @lai/core/src/providers/base.ts
 
 import type { ProviderType, AIContext } from '../types';
+import type { ProviderCapabilities } from './capabilities';
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  contextLength?: number;
+  description?: string;
+  deprecated?: boolean;
+}
 
 export interface Provider {
   type: ProviderType;
@@ -10,6 +19,9 @@ export interface Provider {
   stream(options: ProviderCompletionOptions): Promise<AsyncGenerator<string>>;
   listModels(): Promise<string[]>;
   validateConfig(): Promise<boolean>;
+  
+  // NEW: Capability discovery
+  getCapabilities(): ProviderCapabilities;
 }
 
 export interface ProviderCompletionOptions {

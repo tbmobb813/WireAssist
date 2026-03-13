@@ -6,6 +6,7 @@ import { GeminiProvider } from './gemini';
 import { OllamaProvider } from './ollama';
 import type { Provider, ProviderType } from './base';
 import type { ProviderConfig } from '../types';
+import { PROVIDER_CAPABILITIES, type ProviderCapabilities } from './capabilities';
 
 export class ProviderFactory {
   static create(config: ProviderConfig): Provider {
@@ -41,4 +42,18 @@ export class ProviderFactory {
 
     return available;
   }
+
+  /**
+   * Get provider capabilities without instantiating
+   */
+  static getCapabilities(type: ProviderType): ProviderCapabilities | undefined {
+    return PROVIDER_CAPABILITIES[type];
+  }
 }
+
+// Re-export new components
+export { ProviderRegistry } from './registry';
+export { StreamManager, handleStream } from './streaming';
+export { PROVIDER_CAPABILITIES } from './capabilities';
+export type { ProviderCapabilities } from './capabilities';
+export type { StreamCallbacks } from './streaming';

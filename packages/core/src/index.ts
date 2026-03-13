@@ -12,9 +12,18 @@ export { ContextBuilder } from './context';
 // Privacy controls
 export { PrivacyController, AuditLogger, ConversationEncryption } from './privacy';
 
-// Provider types
-export { ProviderFactory } from './providers';
-export type { Provider, ProviderCompletionOptions, ProviderResponse } from './providers/base';
+// Provider system (ENHANCED)
+export { ProviderFactory, ProviderRegistry } from './providers';
+export { StreamManager, handleStream } from './providers/streaming';
+export { PROVIDER_CAPABILITIES } from './providers/capabilities';
+export type { 
+  Provider, 
+  ProviderCompletionOptions, 
+  ProviderResponse,
+  ModelInfo,
+} from './providers/base';
+export type { ProviderCapabilities } from './providers/capabilities';
+export type { StreamCallbacks } from './providers/streaming';
 
 // Streaming
 export { StreamHandler, ResponseBuffer, StreamParser } from './streaming';
