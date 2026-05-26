@@ -71,12 +71,20 @@ export class GmailClient {
 
         const qs = new URL(req.url, this.redirectUri.origin).searchParams;
         const code = qs.get('code');
+        const error = qs.get('error');
 
-        res.end('<h1>✅ SynqWorks authorized. You can close this tab.</h1>');
+        // Ignore requests with no OAuth params (browser prefetch, favicon, etc.)
+        if (!code && !error) return;
+
+        res.end(
+          error
+            ? '<h1>❌ Authorization failed. You can close this tab.</h1>'
+            : '<h1>✅ SynqWorks authorized. You can close this tab.</h1>'
+        );
         server.close();
 
-        if (!code) {
-          reject(new Error('No OAuth code received'));
+        if (error || !code) {
+          reject(new Error(error ?? 'No OAuth code received'));
           return;
         }
 
@@ -131,7 +139,7 @@ export class GmailClient {
       q: params.q,
     });
 
-    return (res.data.threads ?? []).map(t => ({
+    return (res.data.threads ?? []).map((t: gmail_v1.Schema$Thread) => ({
       id: t.id!,
       snippet: t.snippet ?? '',
     }));
@@ -155,9 +163,9 @@ export class GmailClient {
     const firstMessage = thread.messages?.[0];
     const headers = firstMessage?.payload?.headers ?? [];
 
-    const from = headers.find(h => h.name === 'From')?.value ?? 'Unknown';
-    const subject = headers.find(h => h.name === 'Subject')?.value ?? '(no subject)';
-    const date = headers.find(h => h.name === 'Date')?.value ?? '';
+    const from = headers.find((h: gmail_v1.Schema$MessagePartHeader) => h.name === 'From')?.value ?? 'Unknown';
+    const subject = headers.find((h: gmail_v1.Schema$MessagePartHeader) => h.name === 'Subject')?.value ?? '(no subject)';
+    const date = headers.find((h: gmail_v1.Schema$MessagePartHeader) => h.name === 'Date')?.value ?? '';
 
     // Extract plain text body
     const body = this.extractBody(firstMessage?.payload);
@@ -250,7 +258,7 @@ export class GmailClient {
 
   private async getOrCreateLabel(name: string): Promise<string> {
     const res = await this.gmail.users.labels.list({ userId: 'me' });
-    const existing = res.data.labels?.find(l => l.name === name);
+    const existing = res.data.labels?.find((l: gmail_v1.Schema$Label) => l.name === name);
     if (existing?.id) return existing.id;
 
     const created = await this.gmail.users.labels.create({
