@@ -51,6 +51,6 @@ export async function setupAdminMCP(mcp: MCPClient): Promise<void> {
     console.log('[MCP] calendar_create_event (mock):', p);
     return { status: 'created' };
   });
-  mcp.register('calendar_update_event', async (p) => ({ status: 'updated' }));
-  mcp.register('calendar_delete_event', async (p) => ({ status: 'deleted' }));
+  mcp.register('calendar_update_event', async () => ({ status: 'updated' }));
+  mcp.register('calendar_delete_event', async () => ({ status: 'deleted' }));
 }
