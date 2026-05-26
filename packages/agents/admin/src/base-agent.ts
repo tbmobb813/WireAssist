@@ -4,7 +4,7 @@ import {
   type AgentRole,
   type AgentTask,
   type AgentStatus,
-  type ApprovalQueue,
+  type IApprovalQueue,
   type MemoryStore,
   type MCPClient,
   type EventBus,
@@ -12,7 +12,7 @@ import {
 
 export abstract class BaseAgent {
   protected config: AgentConfig;
-  protected approval: ApprovalQueue;
+  protected approval: IApprovalQueue;
   protected memory: MemoryStore;
   protected mcp: MCPClient;
   protected events: EventBus;
@@ -22,7 +22,7 @@ export abstract class BaseAgent {
   constructor(
     config: AgentConfig,
     deps: {
-      approval: ApprovalQueue;
+      approval: IApprovalQueue;
       memory: MemoryStore;
       mcp: MCPClient;
       events: EventBus;

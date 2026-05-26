@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 
 import readline from 'readline';
-import { MemoryStore, MCPClient, EventBus, ApprovalQueue } from '@synqworks/core';
+import { MemoryStore, MCPClient, EventBus, type IApprovalQueue } from '@synqworks/core';
 import { AdminAgent } from './admin-agent';
 import { setupAdminMCP } from './mcp-setup';
 import { createEmailTriageTask } from './task-factory';
@@ -11,7 +11,7 @@ import { createEmailTriageTask } from './task-factory';
  * for each proposed action. This is intentionally in-memory and does not
  * persist to SQLite; it is only used for the demo.
  */
-class CliApprovalQueue implements ApprovalQueue {
+class CliApprovalQueue implements IApprovalQueue {
   // These properties satisfy the structural type of ApprovalQueue
   // used by the agent, but are no-ops for the demo.
 

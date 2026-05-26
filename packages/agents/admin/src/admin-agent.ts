@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import {
   type AgentConfig,
   type AgentTask,
-  type ApprovalQueue,
+  type IApprovalQueue,
   type MemoryStore,
   type MCPClient,
   type EventBus,
@@ -37,7 +37,7 @@ Use plain English for explanations and recommendations.`;
 
 export class AdminAgent extends BaseAgent {
   constructor(deps: {
-    approval: ApprovalQueue;
+    approval: IApprovalQueue;
     memory: MemoryStore;
     mcp: MCPClient;
     events: EventBus;
