@@ -1,6 +1,6 @@
 packages:
-  - 'packages/core'
-  - 'packages/lai'
+  - 'synqworks/core'
+  - 'synqworks/lai'
 
 onlyBuiltDependencies:
   - better-sqlite3

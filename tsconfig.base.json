@@ -24,13 +24,13 @@
     /* Path aliases */
     "baseUrl": ".",
     "paths": {
-  "@lia-code/core": ["packages/core/src"],
-  "@lai/core/*": ["packages/core/src/*"]
+  "@synqworks/core": ["synqworks/core/src"],
+  "@synqworks/core/*": ["synqworks/core/src/*"]
     }
   },
-  "include": ["packages"],
+  "include": ["synqworks"],
   "references": [
-    { "path": "./packages/core" },
-    { "path": "./packages/lai" }
+    { "path": "./synqworks/core" },
+    { "path": "./synqworks/lai" }
   ]
 }
