@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
 import * as os from 'os';
+import { spawn } from 'child_process';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
@@ -93,8 +94,18 @@ export class GmailClient {
           : 80;
 
       server.listen(port, this.redirectUri.hostname, () => {
-        const open = require('child_process').exec;
-        open(`xdg-open "${authUrl}" || open "${authUrl}" || start "${authUrl}"`);
+        const opener =
+          process.platform === 'darwin'
+            ? { command: 'open', args: [authUrl] }
+            : process.platform === 'win32'
+              ? { command: 'cmd', args: ['/c', 'start', '', authUrl] }
+              : { command: 'xdg-open', args: [authUrl] };
+        const child = spawn(opener.command, opener.args, { detached: true, stdio: 'ignore' });
+        child.on('error', (error) => {
+          console.error('Failed to open browser automatically:', error.message);
+          console.log('Open this URL manually:\n', authUrl);
+        });
+        child.unref();
       });
     });
   }
@@ -102,7 +113,7 @@ export class GmailClient {
   private saveToken(token: object): void {
     const dir = path.dirname(TOKEN_PATH);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(token), { mode: 0o600 });
+    fs.writeFileSync(TOKEN_PATH, JSON.stringify(token));
     fs.chmodSync(TOKEN_PATH, 0o600);
   }
 
@@ -269,6 +280,10 @@ export class GmailClient {
   private decodeBase64Url(data: string): string {
     const normalized = data.replace(/-/g, '+').replace(/_/g, '/');
     const padding = (4 - (normalized.length % 4)) % 4;
-    return Buffer.from(normalized + '='.repeat(padding), 'base64').toString('utf8');
+    try {
+      return Buffer.from(normalized + '='.repeat(padding), 'base64').toString('utf8');
+    } catch {
+      return '';
+    }
   }
 }
