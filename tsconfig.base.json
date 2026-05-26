@@ -24,13 +24,16 @@
     /* Path aliases */
     "baseUrl": ".",
     "paths": {
-  "@synqworks/core": ["synqworks/core/src"],
-  "@synqworks/core/*": ["synqworks/core/src/*"]
+      "@synqworks/core": ["synqworks/core/src"],
+      "@synqworks/core/*": ["synqworks/core/src/*"],
+      "@synqworks/agent-admin": ["packages/agents/admin/src"],
+      "@synqworks/agent-admin/*": ["packages/agents/admin/src/*"]
     }
   },
-  "include": ["synqworks"],
+  "include": ["synqworks", "packages/agents"],
   "references": [
     { "path": "./synqworks/core" },
-    { "path": "./synqworks/lai" }
+    { "path": "./synqworks/lai" },
+    { "path": "./packages/agents/admin" }
   ]
 }
