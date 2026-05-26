@@ -3,7 +3,7 @@ import { OAuth2Client } from 'google-auth-library';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
-import * as url from 'url';
+import * as os from 'os';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
@@ -11,12 +11,14 @@ const SCOPES = [
   'https://www.googleapis.com/auth/gmail.modify',
 ];
 
-const TOKEN_PATH = path.join(process.env.HOME ?? '~', '.synqworks', 'gmail-token.json');
-const CREDENTIALS_PATH = path.join(process.env.HOME ?? '~', '.synqworks', 'gmail-credentials.json');
+const HOME_PATH = process.env.SYNQWORKS_HOME ?? os.homedir();
+const TOKEN_PATH = path.join(HOME_PATH, '.synqworks', 'gmail-token.json');
+const CREDENTIALS_PATH = path.join(HOME_PATH, '.synqworks', 'gmail-credentials.json');
 
 export class GmailClient {
   private auth: OAuth2Client;
   private gmail: gmail_v1.Gmail;
+  private redirectUri: URL;
 
   constructor() {
     if (!fs.existsSync(CREDENTIALS_PATH)) {
@@ -29,7 +31,8 @@ export class GmailClient {
     const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf8'));
     const { client_secret, client_id, redirect_uris } = credentials.installed ?? credentials.web;
 
-    this.auth = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+    this.redirectUri = new URL(redirect_uris[0]);
+    this.auth = new google.auth.OAuth2(client_id, client_secret, this.redirectUri.toString());
     this.gmail = google.gmail({ version: 'v1', auth: this.auth });
   }
 
@@ -63,9 +66,9 @@ export class GmailClient {
 
       // Start a local server to catch the OAuth callback
       const server = http.createServer(async (req, res) => {
-        if (!req.url?.startsWith('/oauth2callback')) return;
+        if (!req.url?.startsWith(this.redirectUri.pathname)) return;
 
-        const qs = new url.URL(req.url, 'http://localhost:3000').searchParams;
+        const qs = new URL(req.url, this.redirectUri.origin).searchParams;
         const code = qs.get('code');
 
         res.end('<h1>✅ SynqWorks authorized. You can close this tab.</h1>');
@@ -83,7 +86,13 @@ export class GmailClient {
         resolve();
       });
 
-      server.listen(3000, () => {
+      const port = this.redirectUri.port
+        ? Number(this.redirectUri.port)
+        : this.redirectUri.protocol === 'https:'
+          ? 443
+          : 80;
+
+      server.listen(port, this.redirectUri.hostname, () => {
         const open = require('child_process').exec;
         open(`xdg-open "${authUrl}" || open "${authUrl}" || start "${authUrl}"`);
       });
@@ -93,7 +102,8 @@ export class GmailClient {
   private saveToken(token: object): void {
     const dir = path.dirname(TOKEN_PATH);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(token));
+    fs.writeFileSync(TOKEN_PATH, JSON.stringify(token), { mode: 0o600 });
+    fs.chmodSync(TOKEN_PATH, 0o600);
   }
 
   // ─── GMAIL METHODS ─────────────────────────────────────────────
@@ -243,7 +253,7 @@ export class GmailClient {
     if (!payload) return '';
 
     if (payload.mimeType === 'text/plain' && payload.body?.data) {
-      return Buffer.from(payload.body.data, 'base64').toString('utf8');
+      return this.decodeBase64Url(payload.body.data);
     }
 
     if (payload.parts) {
@@ -253,6 +263,12 @@ export class GmailClient {
       }
     }
 
-    return payload.snippet ?? '';
+    return '';
+  }
+
+  private decodeBase64Url(data: string): string {
+    const normalized = data.replace(/-/g, '+').replace(/_/g, '/');
+    const padding = (4 - (normalized.length % 4)) % 4;
+    return Buffer.from(normalized + '='.repeat(padding), 'base64').toString('utf8');
   }
 }
