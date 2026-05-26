@@ -65,7 +65,7 @@ async function runDemo(): Promise<void> {
   const approval = new CliApprovalQueue();
 
   // Wire up mock Gmail + Calendar tools
-  setupAdminMCP(mcp);
+  await setupAdminMCP(mcp);
 
   // Basic logging so we can observe the agent behavior
   events.on('agent:task_started', (payload) => {
