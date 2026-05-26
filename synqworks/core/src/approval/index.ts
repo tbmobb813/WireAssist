@@ -1,2 +1,2 @@
 export { ApprovalQueue } from './queue';
-export type { ApprovalRequest } from './types';
+export type { ApprovalRequest, IApprovalQueue } from './types';
