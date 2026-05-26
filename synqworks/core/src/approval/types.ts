@@ -10,3 +10,14 @@ export interface ApprovalRequest {
   createdAt: Date;
   resolvedAt?: Date;
 }
+
+export interface IApprovalQueue {
+  request(params: {
+    taskId: string;
+    agentRole: AgentRole;
+    action: string;
+    payload: Record<string, unknown>;
+  }): Promise<boolean>;
+  resolve(id: string, approved: boolean): void;
+  getPending(): ApprovalRequest[];
+}

@@ -1,6 +1,7 @@
 packages:
   - 'synqworks/core'
   - 'synqworks/lai'
+  - 'packages/agents/admin'
 
 onlyBuiltDependencies:
   - better-sqlite3
