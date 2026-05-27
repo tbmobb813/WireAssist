@@ -100,7 +100,7 @@ async function runDemo(): Promise<void> {
   });
 
   console.log('\nRunning email triage task...');
-  await agent.triageEmail(task);
+  await agent.run(task);
 
   // After the triage task completes, add:
   console.log('\nRunning calendar review...');
