@@ -47,18 +47,27 @@ export class CalendarClient {
       orderBy: 'startTime',
     });
 
-    return (res.data.items ?? []).map(e => ({
-      id: e.id!,
-      summary: e.summary ?? '(no title)',
-      start: e.start?.dateTime ?? e.start?.date ?? '',
-      end: e.end?.dateTime ?? e.end?.date ?? '',
-      attendees: (e.attendees ?? [])
-        .filter((a): a is calendar_v3.Schema$EventAttendee & { email: string } => typeof a.email === 'string')
-        .map(a => ({ email: a.email })),
-      description: e.description ?? '',
-      location: e.location ?? '',
-      status: e.status ?? 'confirmed',
-    }));
+    return (res.data.items ?? []).flatMap((e) => {
+      const start = e.start?.dateTime ?? e.start?.date;
+      const end = e.end?.dateTime ?? e.end?.date;
+
+      if (!start || !end || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end))) {
+        return [];
+      }
+
+      return [{
+        id: e.id!,
+        summary: e.summary ?? '(no title)',
+        start,
+        end,
+        attendees: (e.attendees ?? [])
+          .filter((a): a is calendar_v3.Schema$EventAttendee & { email: string } => typeof a.email === 'string')
+          .map(a => ({ email: a.email })),
+        description: e.description ?? '',
+        location: e.location ?? '',
+        status: e.status ?? 'confirmed',
+      }];
+    });
   }
 
   async createEvent(params: {
@@ -152,6 +161,8 @@ export class CalendarClient {
       }
 
       const slotEnd = new Date(cursor.getTime() + duration);
+      const workdayEnd = new Date(cursor);
+      workdayEnd.setHours(workEnd, 0, 0, 0);
 
       // Check if this slot conflicts with any event
       const hasConflict = events.some(e => {
@@ -160,7 +171,7 @@ export class CalendarClient {
         return cursor < eEnd && slotEnd > eStart;
       });
 
-      if (!hasConflict && slotEnd.getHours() <= workEnd) {
+      if (!hasConflict && slotEnd <= workdayEnd) {
         slots.push({
           start: cursor.toISOString(),
           end: slotEnd.toISOString(),
