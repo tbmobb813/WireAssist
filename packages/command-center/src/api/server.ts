@@ -1,3 +1,4 @@
+import './load-env';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { cors } from 'hono/cors';
@@ -11,21 +12,74 @@ import {
 } from '@synqworks/core';
 import { AdminAgent, setupAdminMCP, AdminTasks } from '@synqworks/agent-admin';
 
-const DB_PATH = path.join(os.homedir(), '.synqworks', 'synqworks.db');
+const HOME_PATH = process.env.SYNQWORKS_HOME ?? os.homedir();
+const DB_PATH = path.join(HOME_PATH, '.synqworks', 'synqworks.db');
 
 // ── Shared state ───────────────────────────────────────────────────────────
-const approval = new ApprovalQueue(DB_PATH);
-const memory = new MemoryStore(DB_PATH);
 const mcp = new MCPClient();
 const events = new EventBus();
 
+let approval: ApprovalQueue;
+let memory: MemoryStore;
 let agent: AdminAgent;
 let agentReady = false;
+
+function anthropicConfigured(): boolean {
+  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+}
+
+function anthropicRequiredResponse() {
+  return {
+    error:
+      'ANTHROPIC_API_KEY is not set. Export it before running agent tasks: export ANTHROPIC_API_KEY=sk-ant-...',
+  };
+}
+
+function logAgentTaskError(err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+  if (message.includes('Could not resolve authentication method')) {
+    console.error(
+      '❌ Anthropic auth failed — set ANTHROPIC_API_KEY in the environment where you run pnpm dev:command-center',
+    );
+    return;
+  }
+  console.error('❌ Agent task failed:', err);
+}
+
+function sqliteSetupHint(): string {
+  return (
+    'SQLite (better-sqlite3) is not built. Run:\n' +
+    '  pnpm approve-builds   # enable better-sqlite3\n' +
+    '  pnpm install && pnpm rebuild better-sqlite3'
+  );
+}
+
+function openStores() {
+  try {
+    approval = new ApprovalQueue(DB_PATH);
+    memory = new MemoryStore(DB_PATH);
+  } catch (err) {
+    console.error(`❌ ${sqliteSetupHint()}`);
+    throw err;
+  }
+}
 
 // SSE clients — broadcast agent events to all connected browsers
 const sseClients = new Set<(data: string) => void>();
 
+interface ActivityRecord {
+  event: string;
+  payload: unknown;
+  at: string;
+}
+
+const recentActivity: ActivityRecord[] = [];
+const MAX_ACTIVITY = 100;
+
 function broadcast(event: string, payload: unknown) {
+  recentActivity.unshift({ event, payload, at: new Date().toISOString() });
+  if (recentActivity.length > MAX_ACTIVITY) recentActivity.pop();
+
   const data = `data: ${JSON.stringify({ event, payload })}\n\n`;
   sseClients.forEach(send => send(data));
 }
@@ -42,9 +96,15 @@ events.on('agent:freeform_response', p => broadcast('freeform_response', p));
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 async function bootstrap() {
+  openStores();
   await setupAdminMCP(mcp);
   agent = new AdminAgent({ approval, memory, mcp, events });
   agentReady = true;
+  if (!anthropicConfigured()) {
+    console.warn(
+      '⚠️  ANTHROPIC_API_KEY is not set — dashboard loads, but triage/chat/calendar tasks will fail until you export it.',
+    );
+  }
   console.log('✅ SynqWorks API server ready');
 }
 
@@ -54,7 +114,9 @@ const app = new Hono();
 app.use('*', cors({ origin: 'http://localhost:3001' }));
 
 // Health check
-app.get('/health', c => c.json({ status: 'ok', agentReady }));
+app.get('/health', c =>
+  c.json({ status: 'ok', agentReady, anthropicConfigured: anthropicConfigured() }),
+);
 
 // ── AGENT STATUS ──────────────────────────────────────────────────────────
 app.get('/api/agent/status', c => {
@@ -67,8 +129,12 @@ app.get('/api/agent/status', c => {
   });
 });
 
+// Recent agent events (for activity feed on load / missed SSE)
+app.get('/api/activity', c => c.json(recentActivity));
+
 // ── APPROVAL QUEUE ────────────────────────────────────────────────────────
 app.get('/api/approvals', c => {
+  if (!agentReady) return c.json([]);
   return c.json(approval.getPending());
 });
 
@@ -89,36 +155,36 @@ app.post('/api/approvals/:id/reject', c => {
 // ── TASKS ─────────────────────────────────────────────────────────────────
 app.post('/api/tasks/triage-email', async c => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const task = AdminTasks.triageEmail(20);
-  // Run in background — SSE streams progress
-  agent.run(task).catch(console.error);
+  agent.run(task).catch(logAgentTaskError);
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
 app.post('/api/tasks/review-calendar', async c => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const body = await c.req.json().catch(() => ({}));
   const task = AdminTasks.reviewCalendar(body.daysAhead ?? 7);
-  agent.run(task).catch(console.error);
+  agent.run(task).catch(logAgentTaskError);
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
 app.post('/api/tasks/freeform', async c => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const { instruction } = await c.req.json();
   if (!instruction) return c.json({ error: 'instruction required' }, 400);
   const task = AdminTasks.freeform(instruction);
-  agent.run(task).catch(console.error);
+  agent.run(task).catch(logAgentTaskError);
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
 // ── MEMORY ────────────────────────────────────────────────────────────────
 app.get('/api/memory', c => {
-  const query = c.req.query('q') ?? '';
-  const results = query
-    ? memory.search(query)
-    : memory.search('', undefined);
-  return c.json(results);
+  const query = (c.req.query('q') ?? '').trim();
+  if (!query) return c.json([]);
+  return c.json(memory.search(query));
 });
 
 // ── SSE STREAM ────────────────────────────────────────────────────────────
@@ -154,8 +220,24 @@ app.get('/api/events', c => {
 });
 
 // ── Start ──────────────────────────────────────────────────────────────────
-bootstrap().then(() => {
-  serve({ fetch: app.fetch, port: 3002 }, () => {
-    console.log('🚀 API server running at http://localhost:3002');
+const API_PORT = Number(process.env.API_PORT ?? 3002);
+
+const server = serve({ fetch: app.fetch, port: API_PORT }, (info) => {
+  console.log(`🚀 API server running at http://localhost:${info.port}`);
+  bootstrap().catch((err) => {
+    console.error('❌ Agent bootstrap failed:', err);
+    process.exit(1);
   });
+});
+
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(
+      `❌ Port ${API_PORT} is already in use.\n` +
+        `   Stop the other process: fuser -k ${API_PORT}/tcp\n` +
+        `   Or use another port: API_PORT=3003 pnpm dev:api`,
+    );
+    process.exit(1);
+  }
+  throw err;
 });

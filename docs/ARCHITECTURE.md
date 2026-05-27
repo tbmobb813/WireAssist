@@ -103,7 +103,7 @@ Operational UI for running agents.
 
 | Layer | Tech | Port |
 |-------|------|------|
-| Web | Next.js 15 | 3001 |
+| Web | Next.js 16 | 3001 |
 | API | Hono + `@hono/node-server` | 3002 |
 
 **API highlights:**

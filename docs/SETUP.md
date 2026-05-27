@@ -40,13 +40,30 @@ ls -la synqworks/lai/node_modules/@synqworks/core
 # should symlink to ../../../core
 ```
 
+### Native module: `better-sqlite3`
+
+Command Center and `@synqworks/core` use SQLite via `better-sqlite3`, which must compile during install. If the API exits immediately or you see `Could not locate the bindings file`:
+
+```bash
+pnpm approve-builds   # enable better-sqlite3 when prompted
+pnpm install
+pnpm rebuild better-sqlite3
+```
+
+The workspace `pnpm-workspace.yaml` should list `better-sqlite3: true` under `allowBuilds`.
+
 ## Environment variables
 
 ### Admin Agent & Command Center
 
+Put secrets in the **monorepo root** `.env` (gitignored) — Command Center loads it automatically:
+
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+# /path/to/Nolta/.env
+ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+You can also `export ANTHROPIC_API_KEY=...` in your shell, or use `packages/command-center/.env.local` for package-only overrides.
 
 ### Google Gmail + Calendar
 
@@ -95,7 +112,9 @@ pnpm --filter @synqworks/command-center dev
 | API | http://localhost:3002 |
 | Health | http://localhost:3002/health |
 
-The Next.js app proxies `/api/*` to the Hono API (see `packages/command-center/next.config.ts`).
+The Next.js app proxies `/api/*` to the Hono API (see `packages/command-center/next.config.ts`). Command Center uses **Next.js 16** and **React 19**.
+
+If the API fails with `EADDRINUSE` on port 3002, a previous API process is still running. `pnpm dev:api` runs a pre-step to free the port; you can also run `fuser -k 3002/tcp` manually.
 
 SQLite state for approvals and memory defaults to `~/.synqworks/synqworks.db`.
 
