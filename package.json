@@ -5,7 +5,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "install": "pnpm install",
     "build": "pnpm -r build",
     "build:core": "pnpm --filter @synqworks/core build",
     "build:lai": "pnpm --filter linux-ai-assistant build",

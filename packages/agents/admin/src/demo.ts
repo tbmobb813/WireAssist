@@ -4,13 +4,8 @@ import readline from 'readline';
 import { MemoryStore, MCPClient, EventBus, type IApprovalQueue } from '@synqworks/core';
 import { AdminAgent } from './admin-agent';
 import { setupAdminMCP } from './mcp-setup';
-import { createEmailTriageTask, createCalendarReviewTask } from './task-factory';
-
-const AdminTasks = {
-  reviewCalendar(daysAhead: number) {
-    return createCalendarReviewTask({ daysAhead });
-  },
-};
+import { AdminTasks } from './admin-tasks';
+import { createEmailTriageTask } from './task-factory';
 
 /**
  * Simple CLI-based ApprovalQueue implementation that asks the user [y/n]
@@ -62,7 +57,7 @@ class CliApprovalQueue implements IApprovalQueue {
 
 async function runDemo(): Promise<void> {
   console.log('=== SynqWorks Admin Agent Demo ===');
-  console.log('This demo triages mock Gmail threads and asks for [y/n] approvals.\n');
+  console.log('This demo triages Gmail and reviews calendar; approvals are [y/n] in the terminal.\n');
 
   // Core dependencies
   const memory = new MemoryStore(':memory:');

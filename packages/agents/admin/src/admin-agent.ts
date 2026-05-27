@@ -356,9 +356,9 @@ Only return valid JSON. No markdown fences.`;
 
     await this.useTool('calendar_create_event', {
       summary,
-      start: { dateTime: start },
-      end: { dateTime: end },
-      attendees: attendees?.map(email => ({ email })) ?? [],
+      start,
+      end,
+      attendees,
       description,
     });
 
