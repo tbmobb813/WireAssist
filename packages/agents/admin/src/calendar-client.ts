@@ -52,7 +52,9 @@ export class CalendarClient {
       summary: e.summary ?? '(no title)',
       start: e.start?.dateTime ?? e.start?.date ?? '',
       end: e.end?.dateTime ?? e.end?.date ?? '',
-      attendees: (e.attendees ?? []).map(a => ({ email: a.email! })),
+      attendees: (e.attendees ?? [])
+        .filter((a): a is calendar_v3.Schema$EventAttendee & { email: string } => typeof a.email === 'string')
+        .map(a => ({ email: a.email })),
       description: e.description ?? '',
       location: e.location ?? '',
       status: e.status ?? 'confirmed',
