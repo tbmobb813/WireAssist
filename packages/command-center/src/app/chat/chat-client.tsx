@@ -155,6 +155,7 @@ export default function ChatClient() {
   );
 
   useAgentEvents(useCallback((e) => {
+    if (e.event === 'connected') return;
     const taskId = payloadTaskId(e.payload);
     if (!taskId || !pendingTaskId.current || taskId !== pendingTaskId.current) return;
     applyTaskEvent(e.event, e.payload, taskId);

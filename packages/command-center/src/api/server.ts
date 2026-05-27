@@ -11,6 +11,8 @@ import {
   EventBus,
 } from '@synqworks/core';
 import { AdminAgent, setupAdminMCP, AdminTasks } from '@synqworks/agent-admin';
+import { ContentAgent, ContentTasks } from '@synqworks/agent-content';
+import { registerSynqPostTools, SynqPostStorage } from '@synqworks/synqpost-mcp';
 
 const HOME_PATH = process.env.SYNQWORKS_HOME ?? os.homedir();
 const DB_PATH = path.join(HOME_PATH, '.synqworks', 'synqworks.db');
@@ -22,6 +24,8 @@ const events = new EventBus();
 let approval: ApprovalQueue;
 let memory: MemoryStore;
 let agent: AdminAgent;
+let contentAgent: ContentAgent;
+let synqpostStorage: SynqPostStorage;
 let agentReady = false;
 
 function anthropicConfigured(): boolean {
@@ -46,12 +50,22 @@ function logAgentTaskError(err: unknown) {
   console.error('❌ Agent task failed:', err);
 }
 
-/** Run one agent task at a time so events and status stay coherent. */
-let agentTaskChain: Promise<void> = Promise.resolve();
+/** Run one admin task at a time so events and status stay coherent. */
+let adminTaskChain: Promise<void> = Promise.resolve();
 
 function queueAgentTask(task: Parameters<AdminAgent['run']>[0]) {
-  agentTaskChain = agentTaskChain
+  adminTaskChain = adminTaskChain
     .then(() => agent.run(task))
+    .catch(logAgentTaskError);
+  return task;
+}
+
+/** Run one content task at a time. */
+let contentTaskChain: Promise<void> = Promise.resolve();
+
+function queueContentTask(task: Parameters<ContentAgent['run']>[0]) {
+  contentTaskChain = contentTaskChain
+    .then(() => contentAgent.run(task))
     .catch(logAgentTaskError);
   return task;
 }
@@ -103,12 +117,21 @@ events.on('agent:approval_resolved', p => broadcast('approval_resolved', p));
 events.on('agent:triage_complete', p => broadcast('triage_complete', p));
 events.on('agent:calendar_review_complete', p => broadcast('calendar_review_complete', p));
 events.on('agent:freeform_response', p => broadcast('freeform_response', p));
+events.on('agent:content_generated', p => broadcast('content_generated', p));
+events.on('agent:content_approved', p => broadcast('content_approved', p));
+events.on('agent:content_plan_generated', p => broadcast('content_plan_generated', p));
+events.on('agent:post_scheduled', p => broadcast('post_scheduled', p));
+events.on('agent:content_analyzed', p => broadcast('content_analyzed', p));
+events.on('agent:scheduled_posts', p => broadcast('scheduled_posts', p));
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 async function bootstrap() {
   openStores();
   await setupAdminMCP(mcp);
+  synqpostStorage = new SynqPostStorage(DB_PATH);
+  registerSynqPostTools(mcp, synqpostStorage);
   agent = new AdminAgent({ approval, memory, mcp, events });
+  contentAgent = new ContentAgent({ approval, memory, mcp, events });
   agentReady = true;
   if (!anthropicConfigured()) {
     console.warn(
@@ -135,6 +158,11 @@ app.get('/api/agent/status', c => {
       role: 'admin',
       name: 'Admin Agent',
       status: agent?.status ?? 'idle',
+    },
+    content: {
+      role: 'content',
+      name: 'Content Agent',
+      status: contentAgent?.status ?? 'idle',
     },
   });
 });
@@ -196,6 +224,46 @@ app.post('/api/tasks/freeform', async c => {
   const task = AdminTasks.freeform(instruction);
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// ── CONTENT TASKS ─────────────────────────────────────────────────────────
+app.post('/api/tasks/generate-post', async c => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const { topic, platform, tone } = await c.req.json();
+  if (!topic || !platform) return c.json({ error: 'topic and platform required' }, 400);
+  const task = ContentTasks.generatePost(topic, platform, tone);
+  queueContentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/generate-plan', async c => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const body = await c.req.json().catch(() => ({}));
+  const task = ContentTasks.generatePlan(
+    body.platforms ?? ['linkedin', 'twitter'],
+    body.weeksAhead ?? 1,
+    body.postsPerWeek ?? 3,
+  );
+  queueContentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// ── CONTENT DATA ──────────────────────────────────────────────────────────
+app.get('/api/content/posts', c => {
+  if (!agentReady) return c.json([]);
+  const daysAhead = parseInt(c.req.query('daysAhead') ?? '14');
+  const now = new Date();
+  return c.json(synqpostStorage.listPosts({
+    from: now,
+    to: new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000),
+  }));
+});
+
+app.get('/api/content/ideas', c => {
+  if (!agentReady) return c.json([]);
+  return c.json(synqpostStorage.listIdeas());
 });
 
 // ── MEMORY ────────────────────────────────────────────────────────────────

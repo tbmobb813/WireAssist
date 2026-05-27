@@ -95,6 +95,7 @@ function describeEvent(event: string, payload: unknown): { description: string; 
 export default function DashboardClient() {
   const [agents, setAgents] = useState<AgentCard[]>([
     { role: 'admin', name: 'Admin Agent', status: 'idle' },
+    { role: 'content', name: 'Content Agent', status: 'idle' },
   ]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
@@ -140,7 +141,7 @@ export default function DashboardClient() {
     const fetchStatus = async () => {
       const res = await fetch('/api/agent/status');
       const data = await res.json();
-      setAgents([data.admin]);
+      setAgents([data.admin, data.content].filter(Boolean));
     };
     fetchStatus();
     const t = setInterval(fetchStatus, 3000);
@@ -208,6 +209,12 @@ export default function DashboardClient() {
           break;
         case 'calendar_review_complete':
           addActivity('calendar_review_complete', e.payload);
+          break;
+        case 'content_generated':
+        case 'content_approved':
+        case 'content_plan_generated':
+        case 'post_scheduled':
+          addActivity(e.event, e.payload);
           break;
       }
     },
@@ -279,6 +286,7 @@ export default function DashboardClient() {
             label: `APPROVALS${pendingCount > 0 ? ` (${pendingCount})` : ''}`,
             urgent: pendingCount > 0,
           },
+          { href: '/content', label: 'CONTENT' },
           { href: '/chat', label: 'AGENT CHAT' },
           { href: '/memory', label: 'MEMORY' },
         ].map(item => (
@@ -327,24 +335,35 @@ export default function DashboardClient() {
               </div>
 
               <div className="space-y-2">
-                <button
-                  onClick={runTriage}
-                  className="w-full text-left text-xs py-2 px-3 rounded border border-border text-gray-400 hover:border-accent hover:text-accent transition-colors"
-                >
-                  → Triage inbox
-                </button>
-                <button
-                  onClick={runCalendar}
-                  className="w-full text-left text-xs py-2 px-3 rounded border border-border text-gray-400 hover:border-accent hover:text-accent transition-colors"
-                >
-                  → Review calendar
-                </button>
-                <Link
-                  href="/chat"
-                  className="block text-xs py-2 px-3 rounded border border-border text-gray-400 hover:border-accent hover:text-accent transition-colors"
-                >
-                  → Open chat
-                </Link>
+                {agent.role === 'admin' ? (
+                  <>
+                    <button
+                      onClick={runTriage}
+                      className="w-full text-left text-xs py-2 px-3 rounded border border-border text-gray-400 hover:border-accent hover:text-accent transition-colors"
+                    >
+                      → Triage inbox
+                    </button>
+                    <button
+                      onClick={runCalendar}
+                      className="w-full text-left text-xs py-2 px-3 rounded border border-border text-gray-400 hover:border-accent hover:text-accent transition-colors"
+                    >
+                      → Review calendar
+                    </button>
+                    <Link
+                      href="/chat"
+                      className="block text-xs py-2 px-3 rounded border border-border text-gray-400 hover:border-accent hover:text-accent transition-colors"
+                    >
+                      → Open chat
+                    </Link>
+                  </>
+                ) : (
+                  <Link
+                    href="/content"
+                    className="block text-xs py-2 px-3 rounded border border-border text-gray-400 hover:border-accent hover:text-accent transition-colors"
+                  >
+                    → Open content
+                  </Link>
+                )}
               </div>
             </div>
           ))}
@@ -392,6 +411,10 @@ export default function DashboardClient() {
                           waiting_approval: '#ffb347',
                           triage_complete: '#4fc3f7',
                           calendar_review_complete: '#c084fc',
+                          content_generated: '#ffb347',
+                          content_approved: '#00ff9d',
+                          content_plan_generated: '#ffb347',
+                          post_scheduled: '#00ff9d',
                         }[item.event] ?? '#475569',
                       }}
                     >
