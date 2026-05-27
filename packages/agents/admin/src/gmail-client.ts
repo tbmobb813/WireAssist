@@ -10,6 +10,8 @@ const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.compose',
   'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/calendar.events',
 ];
 
 const HOME_PATH = process.env.SYNQWORKS_HOME ?? os.homedir();
@@ -38,16 +40,33 @@ export class GmailClient {
   }
 
   // Call once to authenticate — opens browser, saves token
-  async authenticate(): Promise<void> {
+  async authenticate(options?: { forceReauth?: boolean }): Promise<void> {
+    if (options?.forceReauth) {
+      await this.runOAuthFlow();
+      return;
+    }
+
     if (fs.existsSync(TOKEN_PATH)) {
       const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+      if (!this.hasRequiredScopes(token.scope)) {
+        console.log('\n⚠️  Existing token is missing required Gmail/Calendar scopes. Re-authorizing...');
+        await this.runOAuthFlow();
+        return;
+      }
+
       this.auth.setCredentials(token);
 
       // Refresh if expired
       if (token.expiry_date && token.expiry_date < Date.now()) {
         const { credentials } = await this.auth.refreshAccessToken();
-        this.saveToken(credentials);
-        this.auth.setCredentials(credentials);
+        const merged = {
+          ...token,
+          ...credentials,
+          // Some refresh responses omit scope; preserve the existing granted scope string.
+          scope: credentials.scope ?? token.scope,
+        };
+        this.saveToken(merged);
+        this.auth.setCredentials(merged);
       }
       return;
     }
@@ -60,6 +79,8 @@ export class GmailClient {
       const authUrl = this.auth.generateAuthUrl({
         access_type: 'offline',
         scope: SCOPES,
+        include_granted_scopes: true,
+        prompt: 'consent',
       });
 
       console.log('\n🔐 Opening browser for Gmail authorization...');
@@ -101,6 +122,19 @@ export class GmailClient {
           ? 443
           : 80;
 
+      server.on('error', (error) => {
+        if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+          reject(
+            new Error(
+              `OAuth callback port ${port} is already in use. Close the other process using this port and retry.`
+            )
+          );
+          return;
+        }
+
+        reject(error);
+      });
+
       server.listen(port, this.redirectUri.hostname, () => {
         const opener =
           process.platform === 'darwin'
@@ -123,6 +157,15 @@ export class GmailClient {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(TOKEN_PATH, JSON.stringify(token));
     fs.chmodSync(TOKEN_PATH, 0o600);
+  }
+
+  private hasRequiredScopes(scopeClaim: unknown): boolean {
+    if (typeof scopeClaim !== 'string' || scopeClaim.trim() === '') {
+      return false;
+    }
+
+    const granted = new Set(scopeClaim.split(/\s+/).filter(Boolean));
+    return SCOPES.every((scope) => granted.has(scope));
   }
 
   // ─── GMAIL METHODS ─────────────────────────────────────────────
