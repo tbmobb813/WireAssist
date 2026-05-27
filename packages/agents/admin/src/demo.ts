@@ -107,7 +107,7 @@ async function runDemo(): Promise<void> {
   console.log('\nRunning email triage task...');
   await agent.triageEmail(task);
 
-  // After the triage task completes, add:
+  // Run a calendar review after triage to demonstrate a second admin workflow.
   console.log('\nRunning calendar review...');
   const calTask = AdminTasks.reviewCalendar(7);
   await agent.run(calTask);
