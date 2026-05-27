@@ -47,15 +47,18 @@ export class AdminAgent extends BaseAgent {
       name: 'Admin Agent',
       systemPrompt: ADMIN_SYSTEM_PROMPT,
       tools: [
+        // Gmail tools
         'gmail_list_threads',
         'gmail_get_thread',
         'gmail_create_draft',
         'gmail_send',
         'gmail_label_thread',
+        // Calendar tools will be registered in MCP setup, but we declare them here for clarity
         'calendar_list_events',
         'calendar_create_event',
         'calendar_update_event',
         'calendar_delete_event',
+        'calendar_find_availability',
       ],
       model: 'claude-sonnet-4-20250514',
       maxTokens: 4096,
@@ -144,6 +147,7 @@ Triage these ${threadDetails.length} email threads.
 
 THREADS:
 ${threadDetails.map((t, i) => `
+ThreadId: ${t.id}
 [${i + 1}] From: ${t.from}
 Subject: ${t.subject}
 Snippet: ${t.snippet}
@@ -176,9 +180,11 @@ Only return valid JSON. No markdown fences.`;
 
     // 5. Build proposed actions
     const proposedActions: ProposedAction[] = [];
+    const validThreadIds = new Set(threadDetails.map((thread) => thread.id));
 
     // Propose drafts for reply-needed emails
     for (const email of triage.categories.replyNeeded ?? []) {
+      if (!validThreadIds.has(email.threadId)) continue;
       proposedActions.push({
         id: randomUUID(),
         type: 'create_draft',
@@ -192,6 +198,7 @@ Only return valid JSON. No markdown fences.`;
 
     // Propose labeling urgent emails
     for (const email of triage.categories.urgent ?? []) {
+      if (!validThreadIds.has(email.threadId)) continue;
       proposedActions.push({
         id: randomUUID(),
         type: 'label_thread',
@@ -349,9 +356,9 @@ Only return valid JSON. No markdown fences.`;
 
     await this.useTool('calendar_create_event', {
       summary,
-      start: { dateTime: start },
-      end: { dateTime: end },
-      attendees: attendees?.map(email => ({ email })) ?? [],
+      start,
+      end,
+      attendees,
       description,
     });
 
@@ -462,4 +469,3 @@ interface CalendarReview {
   suggestions: { type: string; description: string; action: string }[];
   summary: string;
 }
-

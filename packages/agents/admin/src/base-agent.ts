@@ -1,4 +1,4 @@
-import Anthropic, { type TextBlock } from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import {
   type AgentConfig,
   type AgentRole,
@@ -60,7 +60,7 @@ export abstract class BaseAgent {
     });
 
     return response.content
-      .filter((b): b is TextBlock => b.type === 'text')
+      .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
       .map(b => b.text)
       .join('');
   }

@@ -4,7 +4,13 @@ import readline from 'readline';
 import { MemoryStore, MCPClient, EventBus, type IApprovalQueue } from '@synqworks/core';
 import { AdminAgent } from './admin-agent';
 import { setupAdminMCP } from './mcp-setup';
-import { createEmailTriageTask } from './task-factory';
+import { createEmailTriageTask, createCalendarReviewTask } from './task-factory';
+
+const AdminTasks = {
+  reviewCalendar(daysAhead: number) {
+    return createCalendarReviewTask({ daysAhead });
+  },
+};
 
 /**
  * Simple CLI-based ApprovalQueue implementation that asks the user [y/n]
@@ -100,6 +106,11 @@ async function runDemo(): Promise<void> {
 
   console.log('\nRunning email triage task...');
   await agent.triageEmail(task);
+
+  // Run a calendar review after triage to demonstrate a second admin workflow.
+  console.log('\nRunning calendar review...');
+  const calTask = AdminTasks.reviewCalendar(7);
+  await agent.run(calTask);
 
   console.log('\nDemo complete. Press Ctrl+C to exit.');
 }

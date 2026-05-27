@@ -10,6 +10,8 @@ const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.compose',
   'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/calendar.events',
 ];
 
 const HOME_PATH = process.env.SYNQWORKS_HOME ?? os.homedir();
@@ -38,16 +40,33 @@ export class GmailClient {
   }
 
   // Call once to authenticate — opens browser, saves token
-  async authenticate(): Promise<void> {
+  async authenticate(options?: { forceReauth?: boolean }): Promise<void> {
+    if (options?.forceReauth) {
+      await this.runOAuthFlow();
+      return;
+    }
+
     if (fs.existsSync(TOKEN_PATH)) {
       const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+      if (!this.hasRequiredScopes(token.scope)) {
+        console.log('\n⚠️  Existing token is missing required Gmail/Calendar scopes. Re-authorizing...');
+        await this.runOAuthFlow();
+        return;
+      }
+
       this.auth.setCredentials(token);
 
       // Refresh if expired
       if (token.expiry_date && token.expiry_date < Date.now()) {
         const { credentials } = await this.auth.refreshAccessToken();
-        this.saveToken(credentials);
-        this.auth.setCredentials(credentials);
+        const merged = {
+          ...token,
+          ...credentials,
+          // Some refresh responses omit scope; preserve the existing granted scope string.
+          scope: credentials.scope ?? token.scope,
+        };
+        this.saveToken(merged);
+        this.auth.setCredentials(merged);
       }
       return;
     }
@@ -60,6 +79,8 @@ export class GmailClient {
       const authUrl = this.auth.generateAuthUrl({
         access_type: 'offline',
         scope: SCOPES,
+        include_granted_scopes: true,
+        prompt: 'consent',
       });
 
       console.log('\n🔐 Opening browser for Gmail authorization...');
@@ -71,12 +92,20 @@ export class GmailClient {
 
         const qs = new URL(req.url, this.redirectUri.origin).searchParams;
         const code = qs.get('code');
+        const error = qs.get('error');
 
-        res.end('<h1>✅ SynqWorks authorized. You can close this tab.</h1>');
+        // Ignore requests with no OAuth params (browser prefetch, favicon, etc.)
+        if (!code && !error) return;
+
+        res.end(
+          error
+            ? '<h1>❌ Authorization failed. You can close this tab.</h1>'
+            : '<h1>✅ SynqWorks authorized. You can close this tab.</h1>'
+        );
         server.close();
 
-        if (!code) {
-          reject(new Error('No OAuth code received'));
+        if (error || !code) {
+          reject(new Error(error ?? 'No OAuth code received'));
           return;
         }
 
@@ -92,6 +121,19 @@ export class GmailClient {
         : this.redirectUri.protocol === 'https:'
           ? 443
           : 80;
+
+      server.on('error', (error) => {
+        if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+          reject(
+            new Error(
+              `OAuth callback port ${port} is already in use. Close the other process using this port and retry.`
+            )
+          );
+          return;
+        }
+
+        reject(error);
+      });
 
       server.listen(port, this.redirectUri.hostname, () => {
         const opener =
@@ -117,6 +159,15 @@ export class GmailClient {
     fs.chmodSync(TOKEN_PATH, 0o600);
   }
 
+  private hasRequiredScopes(scopeClaim: unknown): boolean {
+    if (typeof scopeClaim !== 'string' || scopeClaim.trim() === '') {
+      return false;
+    }
+
+    const granted = new Set(scopeClaim.split(/\s+/).filter(Boolean));
+    return SCOPES.every((scope) => granted.has(scope));
+  }
+
   // ─── GMAIL METHODS ─────────────────────────────────────────────
 
   async listThreads(params: {
@@ -131,7 +182,7 @@ export class GmailClient {
       q: params.q,
     });
 
-    return (res.data.threads ?? []).map(t => ({
+    return (res.data.threads ?? []).map((t: gmail_v1.Schema$Thread) => ({
       id: t.id!,
       snippet: t.snippet ?? '',
     }));
@@ -155,9 +206,9 @@ export class GmailClient {
     const firstMessage = thread.messages?.[0];
     const headers = firstMessage?.payload?.headers ?? [];
 
-    const from = headers.find(h => h.name === 'From')?.value ?? 'Unknown';
-    const subject = headers.find(h => h.name === 'Subject')?.value ?? '(no subject)';
-    const date = headers.find(h => h.name === 'Date')?.value ?? '';
+    const from = headers.find((h: gmail_v1.Schema$MessagePartHeader) => h.name === 'From')?.value ?? 'Unknown';
+    const subject = headers.find((h: gmail_v1.Schema$MessagePartHeader) => h.name === 'Subject')?.value ?? '(no subject)';
+    const date = headers.find((h: gmail_v1.Schema$MessagePartHeader) => h.name === 'Date')?.value ?? '';
 
     // Extract plain text body
     const body = this.extractBody(firstMessage?.payload);
@@ -250,7 +301,7 @@ export class GmailClient {
 
   private async getOrCreateLabel(name: string): Promise<string> {
     const res = await this.gmail.users.labels.list({ userId: 'me' });
-    const existing = res.data.labels?.find(l => l.name === name);
+    const existing = res.data.labels?.find((l: gmail_v1.Schema$Label) => l.name === name);
     if (existing?.id) return existing.id;
 
     const created = await this.gmail.users.labels.create({
