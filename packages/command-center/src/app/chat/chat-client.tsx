@@ -11,6 +11,19 @@ interface Message {
   taskId?: string;
 }
 
+interface ActivityRecord {
+  event: string;
+  payload: unknown;
+  at: string;
+}
+
+function payloadTaskId(payload: unknown): string | undefined {
+  const p = payload as { taskId?: string };
+  return typeof p?.taskId === 'string' ? p.taskId : undefined;
+}
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export default function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([{
     id: '0',
@@ -21,49 +34,138 @@ export default function ChatClient() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const pendingTaskId = useRef<string | null>(null);
+  const handledEvents = useRef(new Set<string>());
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const finishSending = useCallback(() => {
+    setSending(false);
+    pendingTaskId.current = null;
+  }, []);
+
+  const addAgentMessage = useCallback((content: string, taskId?: string) => {
+    setMessages(prev => [...prev, {
+      id: Math.random().toString(36).slice(2),
+      role: 'agent',
+      content,
+      time: new Date(),
+      taskId,
+    }]);
+    finishSending();
+  }, [finishSending]);
+
+  const markHandled = useCallback((taskId: string, event: string) => {
+    handledEvents.current.add(`${taskId}:${event}`);
+  }, []);
+
+  const wasHandled = useCallback((taskId: string, event: string) => {
+    return handledEvents.current.has(`${taskId}:${event}`);
+  }, []);
+
+  const applyTaskEvent = useCallback(
+    (event: string, payload: unknown, taskId: string): boolean => {
+      if (wasHandled(taskId, event)) return true;
+
+      switch (event) {
+        case 'freeform_response': {
+          const p = payload as { response?: string };
+          const text = typeof p.response === 'string' ? p.response.trim() : '';
+          addAgentMessage(text || '(No response text returned.)', taskId);
+          markHandled(taskId, event);
+          return true;
+        }
+        case 'task_failed': {
+          const p = payload as { error?: string };
+          addAgentMessage(`Error: ${p.error ?? 'Task failed'}`, taskId);
+          markHandled(taskId, event);
+          return true;
+        }
+        case 'triage_complete': {
+          const p = payload as { summary?: string; totalEmails?: number };
+          addAgentMessage(
+            `Triage complete. ${p.summary ?? ''}\n\nProcessed ${p.totalEmails ?? 0} emails. Check the Approvals tab for proposed actions.`,
+            taskId,
+          );
+          markHandled(taskId, event);
+          return true;
+        }
+        case 'calendar_review_complete': {
+          const p = payload as { review?: { summary?: string } };
+          addAgentMessage(`Calendar review done. ${p.review?.summary ?? ''}`, taskId);
+          markHandled(taskId, event);
+          return true;
+        }
+        default:
+          return false;
+      }
+    },
+    [addAgentMessage, markHandled, wasHandled],
+  );
+
+  const scanActivity = useCallback(
+    async (taskId: string): Promise<'resolved' | 'complete' | 'pending'> => {
+      const res = await fetch(`/api/activity?taskId=${encodeURIComponent(taskId)}`);
+      if (!res.ok) return 'pending';
+      const records = (await res.json()) as ActivityRecord[];
+      let sawComplete = false;
+
+      for (const record of records) {
+        if (record.event === 'task_complete') sawComplete = true;
+        if (applyTaskEvent(record.event, record.payload, taskId)) {
+          return 'resolved';
+        }
+      }
+
+      return sawComplete ? 'complete' : 'pending';
+    },
+    [applyTaskEvent],
+  );
+
+  const pollForTask = useCallback(
+    async (taskId: string) => {
+      let completePolls = 0;
+      for (let i = 0; i < 120; i++) {
+        if (pendingTaskId.current !== taskId) return;
+
+        const status = await scanActivity(taskId);
+        if (status === 'resolved') return;
+
+        if (status === 'complete') {
+          completePolls += 1;
+          if (completePolls >= 3) {
+            addAgentMessage(
+              'The agent finished but the UI did not receive the reply. Refresh and try again, or check the dashboard activity feed.',
+              taskId,
+            );
+            return;
+          }
+        }
+
+        await sleep(1000);
+      }
+
+      if (pendingTaskId.current === taskId) {
+        addAgentMessage('Timed out waiting for a response. The agent may still be running — check the dashboard.', taskId);
+      }
+    },
+    [addAgentMessage, scanActivity],
+  );
+
   useAgentEvents(useCallback((e) => {
-    if (e.event === 'freeform_response') {
-      setMessages(prev => [...prev, {
-        id: Math.random().toString(36).slice(2),
-        role: 'agent',
-        content: (e.payload as { response: string }).response,
-        time: new Date(),
-        taskId: (e.payload as { taskId: string }).taskId,
-      }]);
-      setSending(false);
-    }
-    if (e.event === 'triage_complete') {
-      const p = e.payload as { summary: string; totalEmails: number };
-      setMessages(prev => [...prev, {
-        id: Math.random().toString(36).slice(2),
-        role: 'agent',
-        content: `Triage complete. ${p.summary}\n\nProcessed ${p.totalEmails} emails. Check the Approvals tab for proposed actions.`,
-        time: new Date(),
-      }]);
-      setSending(false);
-    }
-    if (e.event === 'calendar_review_complete') {
-      const p = e.payload as { review: { summary: string } };
-      setMessages(prev => [...prev, {
-        id: Math.random().toString(36).slice(2),
-        role: 'agent',
-        content: `Calendar review done. ${p.review.summary}`,
-        time: new Date(),
-      }]);
-      setSending(false);
-    }
-  }, []));
+    const taskId = payloadTaskId(e.payload);
+    if (!taskId || !pendingTaskId.current || taskId !== pendingTaskId.current) return;
+    applyTaskEvent(e.event, e.payload, taskId);
+  }, [applyTaskEvent]));
 
   const send = async () => {
     if (!input.trim() || sending) return;
     const text = input.trim();
     setInput('');
     setSending(true);
+    pendingTaskId.current = null;
 
     setMessages(prev => [...prev, {
       id: Math.random().toString(36).slice(2),
@@ -72,18 +174,41 @@ export default function ChatClient() {
       time: new Date(),
     }]);
 
-    // Route commands to specific task endpoints
     const lower = text.toLowerCase();
-    if (lower.includes('triage') || lower.includes('inbox') || lower.includes('email')) {
-      await fetch('/api/tasks/triage-email', { method: 'POST' });
-    } else if (lower.includes('calendar') || lower.includes('schedule') || lower.includes('meeting')) {
-      await fetch('/api/tasks/review-calendar', { method: 'POST' });
-    } else {
-      await fetch('/api/tasks/freeform', {
+    let path = '/api/tasks/freeform';
+    let body: string | undefined = JSON.stringify({ instruction: text });
+
+    if (/\b(triage|inbox)\b/.test(lower) && /\b(email|inbox|mail)\b/.test(lower)) {
+      path = '/api/tasks/triage-email';
+      body = undefined;
+    } else if (/\b(review|check)\b/.test(lower) && /\b(calendar|schedule|meeting)\b/.test(lower)) {
+      path = '/api/tasks/review-calendar';
+      body = undefined;
+    }
+
+    try {
+      const res = await fetch(path, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instruction: text }),
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body,
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message =
+          typeof data.error === 'string' ? data.error : `Request failed (${res.status})`;
+        addAgentMessage(`Error: ${message}`);
+        return;
+      }
+      if (typeof data.taskId === 'string') {
+        pendingTaskId.current = data.taskId;
+        void pollForTask(data.taskId);
+      } else {
+        finishSending();
+      }
+    } catch (err) {
+      addAgentMessage(
+        `Error: ${err instanceof Error ? err.message : 'Could not reach the API'}`,
+      );
     }
   };
 
@@ -100,7 +225,6 @@ export default function ChatClient() {
         <h1 className="text-2xl font-black">ADMIN AGENT</h1>
       </div>
 
-      {/* Messages */}
       <div
         className="flex-1 rounded-lg border p-4 overflow-y-auto mb-4 space-y-4"
         style={{ background: '#0d0d1a', borderColor: '#1e2040', minHeight: 400, maxHeight: 600 }}
@@ -149,7 +273,6 @@ export default function ChatClient() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
       <div className="flex gap-3">
         <input
           type="text"

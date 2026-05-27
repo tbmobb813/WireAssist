@@ -46,6 +46,16 @@ function logAgentTaskError(err: unknown) {
   console.error('❌ Agent task failed:', err);
 }
 
+/** Run one agent task at a time so events and status stay coherent. */
+let agentTaskChain: Promise<void> = Promise.resolve();
+
+function queueAgentTask(task: Parameters<AdminAgent['run']>[0]) {
+  agentTaskChain = agentTaskChain
+    .then(() => agent.run(task))
+    .catch(logAgentTaskError);
+  return task;
+}
+
 function sqliteSetupHint(): string {
   return (
     'SQLite (better-sqlite3) is not built. Run:\n' +
@@ -130,7 +140,15 @@ app.get('/api/agent/status', c => {
 });
 
 // Recent agent events (for activity feed on load / missed SSE)
-app.get('/api/activity', c => c.json(recentActivity));
+app.get('/api/activity', c => {
+  const taskId = c.req.query('taskId');
+  if (!taskId) return c.json(recentActivity);
+  const filtered = recentActivity.filter(r => {
+    const p = r.payload as { taskId?: string };
+    return p?.taskId === taskId;
+  });
+  return c.json(filtered);
+});
 
 // ── APPROVAL QUEUE ────────────────────────────────────────────────────────
 app.get('/api/approvals', c => {
@@ -157,7 +175,7 @@ app.post('/api/tasks/triage-email', async c => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const task = AdminTasks.triageEmail(20);
-  agent.run(task).catch(logAgentTaskError);
+  queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
@@ -166,7 +184,7 @@ app.post('/api/tasks/review-calendar', async c => {
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const body = await c.req.json().catch(() => ({}));
   const task = AdminTasks.reviewCalendar(body.daysAhead ?? 7);
-  agent.run(task).catch(logAgentTaskError);
+  queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
@@ -176,14 +194,14 @@ app.post('/api/tasks/freeform', async c => {
   const { instruction } = await c.req.json();
   if (!instruction) return c.json({ error: 'instruction required' }, 400);
   const task = AdminTasks.freeform(instruction);
-  agent.run(task).catch(logAgentTaskError);
+  queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
 // ── MEMORY ────────────────────────────────────────────────────────────────
 app.get('/api/memory', c => {
   const query = (c.req.query('q') ?? '').trim();
-  if (!query) return c.json([]);
+  if (!query) return c.json(memory.listRecent());
   return c.json(memory.search(query));
 });
 

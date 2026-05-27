@@ -371,8 +371,13 @@ Only return valid JSON. No markdown fences.`;
   // ─── FREEFORM ──────────────────────────────────────────────────
 
   async handleFreeform(task: AgentTask): Promise<void> {
-    const context = this.loadContext(task.description);
-    const response = await this.think(task.description, context);
+    const input = task.input as { type: string; prompt?: string };
+    const prompt =
+      input.type === 'freeform' && typeof input.prompt === 'string'
+        ? input.prompt
+        : task.description;
+    const context = this.loadContext(prompt);
+    const response = await this.think(prompt, context);
 
     this.events.emit('agent:freeform_response', {
       taskId: task.id,

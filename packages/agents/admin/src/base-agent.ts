@@ -114,9 +114,13 @@ export abstract class BaseAgent {
 
   // Pull relevant memories for context
   protected loadContext(query: string): string {
-    const memories = this.memory.search(query, { agentRole: this.role });
-    if (memories.length === 0) return '';
-    return memories.map(m => m.content).join('\n\n');
+    try {
+      const memories = this.memory.search(query, { agentRole: this.role });
+      if (memories.length === 0) return '';
+      return memories.map(m => m.content).join('\n\n');
+    } catch {
+      return '';
+    }
   }
 
   // Persist something to shared memory
