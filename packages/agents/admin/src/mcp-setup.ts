@@ -74,11 +74,26 @@ export async function setupAdminMCP(mcp: MCPClient): Promise<void> {
   });
 
   mcp.register('calendar_create_event', async (params) => {
+    const start =
+      typeof params.start === 'string'
+        ? params.start
+        : (params.start as { dateTime?: string } | undefined)?.dateTime;
+    const end =
+      typeof params.end === 'string'
+        ? params.end
+        : (params.end as { dateTime?: string } | undefined)?.dateTime;
+    const attendees = (params.attendees as (string | { email?: string })[] | undefined)
+      ?.map((attendee) => (typeof attendee === 'string' ? attendee : attendee.email))
+      .filter((email): email is string => typeof email === 'string' && email.length > 0);
+    if (!start || !end) {
+      throw new Error('calendar_create_event requires start and end dateTime values.');
+    }
+
     return cal.createEvent({
       summary: params.summary as string,
-      start: params.start as string,
-      end: params.end as string,
-      attendees: params.attendees as string[] | undefined,
+      start,
+      end,
+      attendees,
       description: params.description as string | undefined,
       location: params.location as string | undefined,
     });
