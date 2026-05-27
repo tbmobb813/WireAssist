@@ -42,12 +42,13 @@ Nolta/
 git clone <repo-url> Nolta
 cd Nolta
 pnpm install
-pnpm build
+pnpm build:core
+pnpm build:admin
 ```
 
 ### Command Center (agents + UI)
 
-Runs the API on port **3002** and the web UI on **3001**.
+Runs the API on port **3002** and the web UI on **3001**. Build `@synqworks/core` and `@synqworks/agent-admin` first (they resolve to `dist/`).
 
 ```bash
 # Required for Admin Agent
@@ -56,6 +57,8 @@ export ANTHROPIC_API_KEY=sk-ant-...
 # Optional: override config directory (default: ~/.synqworks)
 # export SYNQWORKS_HOME=/path/to/home
 
+pnpm build:core
+pnpm build:admin
 pnpm --filter @synqworks/command-center dev
 ```
 

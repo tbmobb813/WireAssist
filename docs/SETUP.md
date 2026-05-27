@@ -20,8 +20,11 @@ corepack prepare pnpm@11.3.0 --activate
 ```bash
 cd /path/to/Nolta
 pnpm install
-pnpm build
+pnpm build:core
+pnpm build:admin
 ```
+
+Command Center and the Admin Agent CLI depend on compiled `dist/` output from core and agent-admin. Run `pnpm build` to build all workspace packages, or build individually as above.
 
 Workspace packages (from `pnpm-workspace.yaml`):
 
@@ -81,6 +84,8 @@ OPENAI_API_KEY=...
 ## Run Command Center
 
 ```bash
+pnpm build:core
+pnpm build:admin
 pnpm --filter @synqworks/command-center dev
 ```
 
