@@ -1,406 +1,145 @@
-# Contributing to LAI
+# Contributing to SynqWorks (Nolta)
 
-## Development Philosophy
+## Development philosophy
 
-- **Code clarity over cleverness** - Easy to understand is more important than concise
-- **Type safety** - Use TypeScript strictly, no `any` without justification
-- **Modular design** - Single responsibility principle for all modules
-- **Testing first** - Write tests alongside code, not after
-- **Documentation** - Code comments explain *why*, not *what*
+- **Clarity over cleverness** — readable code beats terse tricks
+- **Type safety** — avoid `any` unless justified
+- **Modular design** — single responsibility per module
+- **Tests with behavior** — cover real logic, not trivial assertions
+- **Comments for why** — not what the code already says
 
-## Getting Started
+## Getting started
 
-1. **Set up the monorepo:** Follow `SETUP.md`
-2. **Understand the architecture:** Read `ARCHITECTURE.md`
-3. **Explore the codebase:** Start with `packages/core/src/index.ts`
+1. [SETUP.md](./SETUP.md) — install, env vars, Google OAuth
+2. [ARCHITECTURE.md](./ARCHITECTURE.md) — packages and agent flow
+3. Explore entry points:
+   - `synqworks/core/src/index.ts` — core exports
+   - `packages/agents/admin/src/admin-agent.ts` — Admin Agent
+   - `packages/command-center/src/api/server.ts` — API bootstrap
 
-## Code Structure
+## Code structure
 
-### @lai/core (packages/core/)
-
-```
-src/
-├── client.ts          # Main AIClient class - START HERE
-├── types.ts           # TypeScript interfaces
-├── providers/         # AI provider implementations
-│   ├── base.ts        # Provider interface (read this)
-│   ├── anthropic.ts   # Claude implementation
-│   ├── openai.ts      # GPT implementation
-│   ├── gemini.ts      # Google implementation
-│   └── ollama.ts      # Local models
-├── storage/           # Database persistence
-│   ├── conversations.ts
-│   ├── messages.ts
-│   ├── search.ts      # Full-text search (FTS5)
-│   └── migrations.ts
-├── context/           # Context extraction
-│   ├── builder.ts     # Main context builder
-│   ├── files.ts       # File context
-│   └── git.ts         # Git history context
-├── privacy/           # Privacy features
-│   ├── controller.ts  # Privacy control logic
-│   ├── encryption.ts  # Optional encryption
-│   └── audit.ts       # Audit logging
-├── streaming/         # Response streaming
-│   ├── handler.ts     # Main streaming logic
-│   └── parser.ts      # Provider-specific parsing
-└── __tests__/         # Test files
-```
-
-### linux-ai-assistant (packages/lai/)
+### `@synqworks/core` (`synqworks/core/`)
 
 ```
 src/
-├── App.tsx            # Main React component
-├── components/        # Reusable React components
-│   ├── ChatPanel.tsx
-│   ├── Settings.tsx
-│   └── ...
-├── lib/               # Utilities and helpers
-│   ├── tauriClient.ts # Tauri IPC bridge
-│   └── ...
-└── __tests__/         # Tests
-
-src-tauri/
-├── src/
-│   ├── lib.rs         # Rust command handlers
-│   ├── main.rs        # Tauri app entry
-│   └── ...
-└── Cargo.toml
-
-cli/
-├── src/               # CLI tool code
-├── Cargo.toml
-└── ...
+├── client.ts              # AIClient orchestrator
+├── types.ts
+├── providers/             # OpenAI, Anthropic, Gemini, Ollama
+├── storage/               # SQLite conversations, FTS search
+├── context/               # File/git/workspace context
+├── privacy/               # Audit, encryption, local-first
+├── streaming/
+├── agents/                # Agent types & registry
+├── mcp/                   # MCPClient tool dispatch
+├── approval/              # ApprovalQueue
+├── memory/                # MemoryStore
+├── events/                # EventBus
+└── __tests__/
 ```
 
-## Making Changes
+### `linux-ai-assistant` (`synqworks/lai/`)
 
-### Adding a New AI Provider
+```
+src/                 # React UI (Vite)
+src-tauri/           # Tauri Rust backend
+cli/                 # Optional CLI (Rust)
+playwright-e2e/      # E2E tests
+```
 
-1. **Create provider implementation:**
-   ```bash
-   touch packages/core/src/providers/newprovider.ts
-   ```
+### `@synqworks/agent-admin` (`packages/agents/admin/`)
 
-2. **Implement Provider interface:**
+```
+src/
+├── admin-agent.ts     # Task execution (triage, calendar, freeform)
+├── base-agent.ts      # Claude completions
+├── gmail-client.ts    # OAuth + Gmail API
+├── calendar-client.ts # Calendar API (shared token)
+├── mcp-setup.ts       # Register MCP tool handlers
+├── task-factory.ts    # AgentTask builders
+└── demo.ts            # CLI demo with [y/n] approvals
+```
+
+### `@synqworks/command-center` (`packages/command-center/`)
+
+```
+src/
+├── api/server.ts      # Hono API + agent bootstrap
+└── app/               # Next.js pages (dashboard, approvals, chat, memory)
+```
+
+## Common tasks
+
+### Add an AI provider (core)
+
+1. Implement `Provider` in `synqworks/core/src/providers/newprovider.ts`
+2. Register in `synqworks/core/src/providers/index.ts`
+3. Add tests under `synqworks/core/src/__tests__/providers/`
+4. `pnpm build:core && pnpm test:core`
+
+### Add an MCP tool (Admin Agent)
+
+1. Add a method on `GmailClient` or `CalendarClient` if needed
+2. Register in `packages/agents/admin/src/mcp-setup.ts`:
+
    ```typescript
-   import { Provider, ProviderType } from './base';
-
-   export class NewProvider implements Provider {
-     type: ProviderType = 'newprovider';
-
-     async complete(options) {
-       // Implementation
-     }
-
-     async stream(options) {
-       // Stream implementation
-     }
-   }
-   ```
-
-3. **Register in ProviderFactory:**
-   ```typescript
-   // packages/core/src/providers/index.ts
-   import { NewProvider } from './newprovider';
-
-   export function createProvider(type: ProviderType) {
-     switch (type) {
-       case 'newprovider':
-         return new NewProvider(config);
-       // ...
-     }
-   }
-   ```
-
-4. **Add tests:**
-   ```bash
-   touch packages/core/src/__tests__/providers/newprovider.test.ts
-   ```
-
-5. **Build and test:**
-   ```bash
-   pnpm build:core
-   pnpm test:core
-   ```
-
-### Adding a New UI Component
-
-1. **Create component:**
-   ```bash
-   touch packages/lai/src/components/MyComponent.tsx
-   ```
-
-2. **Write component + tests:**
-   ```typescript
-   // MyComponent.tsx
-   export function MyComponent() {
-     // ...
-   }
-
-   // MyComponent.test.tsx
-   import { render } from '@testing-library/react';
-   import { MyComponent } from './MyComponent';
-
-   describe('MyComponent', () => {
-     it('should render', () => {
-       const { container } = render(<MyComponent />);
-       expect(container).toBeInTheDocument();
-     });
+   mcp.register('my_tool', async (params) => {
+     return gmail.someMethod(params.id as string);
    });
    ```
 
-3. **Test in dev mode:**
-   ```bash
-   pnpm dev:lai
-   # Browser opens with HMR
-   ```
+3. Declare the tool name in `AdminAgent` config (`admin-agent.ts` `tools` array)
+4. Rebuild: `pnpm --filter @synqworks/agent-admin build`
 
-### Updating Database Schema
+### Add a new agent task type
 
-1. **Create migration:**
-   ```bash
-   # Edit packages/core/src/storage/migrations.ts
-   ```
+1. Extend `SupportedTaskInput` in `task-factory.ts`
+2. Add a factory function (e.g. `createMyTask`)
+3. Handle the type in `admin-agent.ts` `run()` switch
+4. Expose via Command Center API in `packages/command-center/src/api/server.ts` if needed
 
-2. **Add migration function:**
-   ```typescript
-   async function migrateV2(db: Database) {
-     db.exec(`ALTER TABLE messages ADD COLUMN newField TEXT`);
-   }
-   ```
+### UI component (LAI desktop)
 
-3. **Increment schema version in storage initialization**
+1. Add component under `synqworks/lai/src/components/`
+2. `pnpm dev:lai` for HMR
 
-4. **Test with fresh database:**
-   ```bash
-   rm test-conversations.db
-   pnpm test:core
-   ```
+### UI page (Command Center)
+
+1. Add route under `packages/command-center/src/app/`
+2. `pnpm dev:command-center`
+
+## Credentials and local data
+
+Never commit:
+
+- `.env`, `.env.local`
+- `~/.synqworks/gmail-credentials.json`
+- `~/.synqworks/gmail-token.json`
+- `~/.synqworks/synqworks.db`
+
+Use `SYNQWORKS_HOME` in development if you need an isolated config directory.
 
 ## Testing
 
-### Running Tests
-
 ```bash
-# All tests
-pnpm test
-
-# Watch mode
-pnpm test:watch
-
-# Specific package
+pnpm test              # all packages with test scripts
 pnpm test:core
-pnpm test:lai
-
-# With coverage
-pnpm test:coverage
+pnpm --filter linux-ai-assistant test
 ```
 
-### Writing Tests
+## Pull requests
 
-**For @lai/core (Jest):**
-```typescript
-// src/__tests__/providers/openai.test.ts
-describe('OpenAIProvider', () => {
-  let provider: OpenAIProvider;
+- Keep PRs focused on one concern
+- Update `README.md` or `docs/` when changing layout, env vars, or public APIs
+- Run `pnpm build` for packages you touched
+- Note manual test steps (OAuth, Command Center, etc.)
 
-  beforeEach(() => {
-    provider = new OpenAIProvider({
-      apiKey: 'test-key',
-      model: 'gpt-4',
-    });
-  });
+## Legacy paths
 
-  it('should complete prompts', async () => {
-    const response = await provider.complete({
-      messages: [{ role: 'user', content: 'Hello' }],
-    });
-    expect(response).toHaveProperty('text');
-  });
-});
-```
+Older docs may reference `packages/core`, `packages/lai`, or `@lai/core`. Current locations:
 
-**For LAI (Vitest + React Testing Library):**
-```typescript
-// src/__tests__/components/ChatPanel.test.tsx
-import { render, screen } from '@testing-library/react';
-import { ChatPanel } from '@/components/ChatPanel';
-
-describe('ChatPanel', () => {
-  it('should render chat input', () => {
-    render(<ChatPanel />);
-    expect(screen.getByPlaceholderText(/type a message/i)).toBeInTheDocument();
-  });
-});
-```
-
-## Code Style
-
-### TypeScript
-
-- **Use `const` by default**, `let` when needed
-- **No `any` type** (use `unknown` and narrow types)
-- **Explicit return types** on functions
-- **Interfaces over types** for object shapes
-- **Enums for fixed sets** of values
-
-✅ Good:
-```typescript
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-async function sendMessage(msg: Message): Promise<string> {
-  return msg.content;
-}
-```
-
-❌ Bad:
-```typescript
-function sendMessage(msg: any) {
-  return msg.content;
-}
-```
-
-### Formatting
-
-Prettier is configured automatically. Just run:
-```bash
-pnpm format
-```
-
-Or in your IDE, set "format on save" to use Prettier.
-
-### Comments
-
-Write comments that explain **why**, not **what**:
-
-✅ Good:
-```typescript
-// We cache results to avoid re-querying the database
-// for the same conversation within 5 seconds
-const cachedResult = cache.get(conversationId);
-```
-
-❌ Bad:
-```typescript
-// Get cached result
-const cachedResult = cache.get(conversationId);
-```
-
-## Debugging
-
-### Debug @lai/core
-
-1. **Run tests with logging:**
-   ```bash
-   NODE_DEBUG=* pnpm test:core
-   ```
-
-2. **Use TypeScript breakpoints in IDE** (e.g., VSCode)
-
-3. **Check database:**
-   ```bash
-   sqlite3 test-conversations.db
-   ```
-
-### Debug LAI
-
-1. **Tauri dev mode shows Rust + JS errors:**
-   ```bash
-   pnpm dev:lai
-   ```
-
-2. **Open DevTools:** Right-click → Inspect
-
-3. **Check Rust logs:**
-   ```bash
-   RUST_LOG=debug pnpm dev:lai
-   ```
-
-## Pull Request Process
-
-1. **Create feature branch:**
-   ```bash
-   git checkout -b feat/my-feature
-   ```
-
-2. **Make changes and commit:**
-   ```bash
-   git add .
-   git commit -m "feat: add new feature"
-   ```
-
-3. **Run tests locally:**
-   ```bash
-   pnpm test
-   pnpm lint
-   ```
-
-4. **Push and open PR:**
-   ```bash
-   git push origin feat/my-feature
-   ```
-
-### Commit Message Format
-
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
-
-```
-feat: add new feature
-fix: resolve bug
-docs: update documentation
-refactor: improve code structure
-test: add test coverage
-chore: update dependencies
-```
-
-## Common Issues
-
-### "Cannot find module '@lai/core'"
-```bash
-pnpm install
-pnpm build:core
-```
-
-### "Database is locked"
-Multiple tests accessing same DB:
-```bash
-# Use separate test databases per package
-# Or mock database in tests
-```
-
-### "TypeScript compilation fails"
-```bash
-pnpm clean
-pnpm install
-pnpm build
-```
-
-## Performance Guidelines
-
-- **@lai/core:** Keep initialization fast (< 100ms)
-- **UI:** Aim for 60fps animations, < 16ms frame time
-- **Database queries:** Add indexes for hot queries
-- **Streaming:** Buffer responses to avoid excessive updates
-
-## Security Considerations
-
-- **Never commit API keys** (use `.env.local`)
-- **Validate all user input** before sending to AI providers
-- **Sanitize markdown** before rendering in UI
-- **Encrypt sensitive conversations** when requested
-
-## Need Help?
-
-- **Architecture questions:** See `ARCHITECTURE.md`
-- **Setup issues:** See `SETUP.md`
-- **Code examples:** Check `__tests__/` directories
-- **Type errors:** Use `pnpm typecheck` to see all issues
-
----
-
-Happy coding! 🚀
+| Legacy | Current |
+|--------|---------|
+| `packages/core` | `synqworks/core` (`@synqworks/core`) |
+| `packages/lai` | `synqworks/lai` (`linux-ai-assistant`) |
+| `@lai/core` | `@synqworks/core` |

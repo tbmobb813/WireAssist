@@ -1,5 +1,7 @@
 # Phase 1: MVP Integration - COMPLETE ✅
 
+> **Historical document.** Paths like `packages/core` and `@lai/core` are outdated; use `synqworks/core` and `@synqworks/core`. See [README.md](./README.md).
+
 **Status:** READY FOR PRODUCTION
 **Date:** November 6, 2024
 **Tests Passing:** 232 tests | 41 test files | 2 skipped

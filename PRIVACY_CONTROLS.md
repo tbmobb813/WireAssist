@@ -1,5 +1,7 @@
 # Privacy Controls Implementation - Complete ✅
 
+> **Historical document.** LAI app paths are now under `synqworks/lai/` (e.g. `synqworks/lai/src/lib/services/encryptionService.ts`).
+
 **Status:** Privacy controls fully implemented with encryption and audit logging
 **Date:** November 6, 2024
 **Tests Passing:** 501 tests | 52 test files | 2 skipped

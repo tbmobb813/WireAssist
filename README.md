@@ -1,119 +1,132 @@
-# Nolta - A Linux Based AI Assistant
+# Nolta (SynqWorks)
 
-A monorepo containing the core AI engine and desktop/web applications for a privacy-first, multi-provider AI assistant.
+A pnpm monorepo for **SynqWorks** — a privacy-oriented AI platform with a multi-provider chat engine, a Linux desktop assistant, and an agent workforce that can triage email and manage calendar with human-in-the-loop approvals.
 
-## 📁 Structure
+The repository name is **Nolta**; product surfaces use **SynqWorks**.
+
+## What’s in this repo
+
+| Package | Path | Purpose |
+|---------|------|---------|
+| `@synqworks/core` | `synqworks/core/` | Shared AI engine, storage, agents, MCP, approval queue, memory |
+| `linux-ai-assistant` | `synqworks/lai/` | Tauri + React desktop app for local multi-provider chat |
+| `@synqworks/agent-admin` | `packages/agents/admin/` | Admin agent — Gmail + Google Calendar via Claude |
+| `@synqworks/command-center` | `packages/command-center/` | Next.js dashboard + Hono API to run agents and review approvals |
+
+## Repository layout
 
 ```
-lai/
+Nolta/
+├── synqworks/
+│   ├── core/                 # @synqworks/core
+│   └── lai/                  # linux-ai-assistant (Tauri)
 ├── packages/
-│   ├── core/     # @lai/core - Core AI engine (providers, storage, context)
-│   └── lai/      # linux-ai-assistant - Native Linux Tauri desktop app
-└── docs/         # Documentation
+│   ├── agents/admin/         # @synqworks/agent-admin
+│   └── command-center/       # @synqworks/command-center
+├── docs/                     # Setup, architecture, contributing
+├── pnpm-workspace.yaml
+└── package.json
 ```
 
-## 🚀 Quick Start
+## Prerequisites
 
-### Prerequisites
-- Node.js 18+
-- pnpm 9.0.0+
-- Rust (for Tauri desktop app)
+- **Node.js** 18+
+- **pnpm** 11+ (see `packageManager` in root `package.json`)
+- **Rust** 1.70+ (only for the Tauri desktop app)
+- **Anthropic API key** (for the Admin Agent)
+- **Google Cloud OAuth credentials** (for Gmail + Calendar tools)
 
-### Installation
+## Quick start
+
 ```bash
-cd /home/nixstation-remote/Projects/lai
+git clone <repo-url> Nolta
+cd Nolta
 pnpm install
-```
-
-### Development
-
-**Start all packages in dev mode:**
-```bash
-pnpm dev
-```
-
-**Start specific package:**
-```bash
-pnpm dev:core    # Just core AI engine
-pnpm dev:lai     # Just LAI desktop app
-```
-
-### Building
-
-**Build all packages:**
-```bash
 pnpm build
 ```
 
-**Build specific package:**
+### Command Center (agents + UI)
+
+Runs the API on port **3002** and the web UI on **3001**.
+
 ```bash
-pnpm build:core
-pnpm build:lai
+# Required for Admin Agent
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# Optional: override config directory (default: ~/.synqworks)
+# export SYNQWORKS_HOME=/path/to/home
+
+pnpm --filter @synqworks/command-center dev
 ```
 
-### Testing
+Open [http://localhost:3001](http://localhost:3001). On first run, complete Google OAuth when prompted (credentials must be in place — see [docs/SETUP.md](docs/SETUP.md)).
 
-**Run all tests:**
+### Admin Agent CLI demo
+
+Interactive demo with terminal `[y/n]` approvals (no Command Center UI):
+
 ```bash
-pnpm test
+pnpm --filter @synqworks/agent-admin build
+cd packages/agents/admin && node dist/demo.js
 ```
 
-**Run tests for specific package:**
+### Linux AI Assistant (desktop)
+
 ```bash
-pnpm test:core
-pnpm test:lai
+pnpm dev:lai
+# or
+pnpm --filter linux-ai-assistant dev
 ```
 
-## 📦 Packages
+Requires Rust and Tauri toolchain — see [docs/SETUP.md](docs/SETUP.md).
 
-### @lai/core
-Multi-provider AI engine with local-first privacy support.
+## Common commands
 
-**Features:**
-- Support for OpenAI, Anthropic, Google Gemini, and Ollama
-- Full-text search on conversations (SQLite + FTS5)
-- Context building from files, git, and workspace
-- Privacy controls and audit logging
-- Streaming response support
+| Command | Description |
+|---------|-------------|
+| `pnpm install` | Install all workspace dependencies |
+| `pnpm build` | Build all packages |
+| `pnpm build:core` | Build `@synqworks/core` only |
+| `pnpm build:lai` | Build desktop app only |
+| `pnpm dev` | Run `dev` in all packages (parallel) |
+| `pnpm dev:core` | Watch-build core |
+| `pnpm dev:lai` | Vite dev server for LAI |
+| `pnpm test` | Run tests across packages |
+| `pnpm --filter @synqworks/command-center dev` | Command Center API + web |
 
-**Location:** `packages/core/`
+## Admin Agent capabilities
 
-### linux-ai-assistant
-Native Linux desktop application built with Tauri + React.
+The Admin Agent uses Claude and real Google APIs (via `googleapis`):
 
-**Features:**
-- System tray integration
-- Global keyboard shortcuts
-- Multi-provider AI switching
-- Conversation management
-- File watcher
+- **Email triage** — list threads, categorize, propose drafts and labels
+- **Calendar review** — list events, suggest scheduling changes
+- **Approval queue** — sensitive actions require explicit approval in the UI or CLI
+- **MCP tools** — `gmail_*` and `calendar_*` handlers registered in `setupAdminMCP`
 
-**Location:** `packages/lai/`
+Gmail and Calendar share one OAuth token stored under `$SYNQWORKS_HOME/.synqworks/` (default `~/.synqworks/gmail-token.json`).
 
-## 🔧 Architecture
+## Configuration
 
-The monorepo uses **pnpm workspaces** for package management:
-- **Local linking:** Packages automatically link to each other
-- **Shared dev tools:** ESLint, Prettier, TypeScript config at root
-- **Independent builds:** Each package can be built/tested separately
-- **Workspace commands:** `pnpm -r` runs commands across all packages
+| Variable | Used by | Description |
+|----------|---------|-------------|
+| `ANTHROPIC_API_KEY` | Admin Agent, core providers | Claude API access |
+| `SYNQWORKS_HOME` | Gmail/Calendar clients | Base directory for `.synqworks/` config (default: user home) |
+| `OPENAI_API_KEY`, etc. | LAI / core providers | Optional; see core provider docs |
 
-## 📚 Documentation
+Place Google OAuth client JSON at:
 
-See the `/docs` folder for:
-- `ARCHITECTURE.md` - Deep dive into the monorepo design
-- `SETUP.md` - Detailed setup and configuration
-- `CONTRIBUTING.md` - Development guidelines
+`$SYNQWORKS_HOME/.synqworks/gmail-credentials.json`
 
-## 🎯 Current Phase
+Details: [docs/SETUP.md](docs/SETUP.md).
 
-**Phase 1: MVP Integration**
-- [x] Set up monorepo structure
-- [x] Link @lai/core to LAI app
-- [ ] Test @lai/core integration in LAI
-- [ ] Basic conversation management UI
-- [ ] Multi-provider switching
+## Documentation
 
-## 📝 License
+- [docs/SETUP.md](docs/SETUP.md) — install, Google OAuth, env vars, per-package dev
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — packages, data flow, agent platform
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — development guidelines
+
+Legacy phase notes (`PHASE_*.md`, `MONOREPO_SETUP.md`) describe earlier milestones and may reference old paths; prefer this README and `docs/` for current layout.
+
+## License
 
 MIT

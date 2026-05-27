@@ -1,20 +1,20 @@
 {
-  "name": "lai-monorepo",
+  "name": "synqworks-monorepo",
   "version": "0.1.0",
-  "description": "Linux AI Assistant - Monorepo for core AI engine and desktop/web applications",
+  "description": "SynqWorks monorepo — AI core, Linux assistant, agents, and Command Center",
   "private": true,
   "type": "module",
-  "workspaces": [
-    "packages/*"
-  ],
   "scripts": {
     "install": "pnpm install",
     "build": "pnpm -r build",
     "build:core": "pnpm --filter @synqworks/core build",
     "build:lai": "pnpm --filter linux-ai-assistant build",
+    "build:admin": "pnpm --filter @synqworks/agent-admin build",
+    "build:command-center": "pnpm --filter @synqworks/command-center build",
     "dev": "pnpm -r --parallel dev",
     "dev:core": "pnpm --filter @synqworks/core dev",
     "dev:lai": "pnpm --filter linux-ai-assistant dev",
+    "dev:command-center": "pnpm --filter @synqworks/command-center dev",
     "test": "pnpm -r test",
     "test:core": "pnpm --filter @synqworks/core test",
     "test:lai": "pnpm --filter linux-ai-assistant test",
