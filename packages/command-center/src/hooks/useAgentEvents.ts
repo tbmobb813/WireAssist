@@ -10,7 +10,13 @@ export type AgentEvent =
   | { event: 'approval_resolved'; payload: { id?: string; agentRole?: string; approved: boolean } }
   | { event: 'triage_complete'; payload: unknown }
   | { event: 'calendar_review_complete'; payload: unknown }
-  | { event: 'freeform_response'; payload: { taskId: string; response: string } };
+  | { event: 'freeform_response'; payload: { taskId: string; response: string } }
+  | { event: 'content_generated'; payload: { taskId: string; content: string; platform: string; topic: string } }
+  | { event: 'content_approved'; payload: { taskId: string; content: string; platform: string } }
+  | { event: 'content_plan_generated'; payload: { taskId: string; ideas: unknown[]; totalGenerated: number } }
+  | { event: 'post_scheduled'; payload: { taskId: string; post: unknown } }
+  | { event: 'content_analyzed'; payload: { taskId: string; content: string; platform: string; analysis: unknown } }
+  | { event: 'scheduled_posts'; payload: { taskId: string; posts: unknown[] } };
 
 export function useAgentEvents(onEvent: (e: AgentEvent) => void) {
   const handlerRef = useRef(onEvent);

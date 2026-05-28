@@ -9,6 +9,8 @@
     "build:core": "pnpm --filter @synqworks/core build",
     "build:lai": "pnpm --filter linux-ai-assistant build",
     "build:admin": "pnpm --filter @synqworks/agent-admin build",
+    "build:synqpost-mcp": "pnpm --filter @synqworks/synqpost-mcp build",
+    "build:content": "pnpm --filter @synqworks/agent-content build",
     "build:command-center": "pnpm --filter @synqworks/command-center build",
     "dev": "pnpm -r --parallel dev",
     "dev:core": "pnpm --filter @synqworks/core dev",

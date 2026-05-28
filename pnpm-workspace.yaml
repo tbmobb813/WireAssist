@@ -2,6 +2,8 @@ packages:
   - 'synqworks/core'
   - 'synqworks/lai'
   - 'packages/agents/admin'
+  - 'packages/agents/content'
+  - 'packages/synqpost-mcp'
   - 'packages/command-center'
 
 allowBuilds:

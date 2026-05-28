@@ -27,13 +27,20 @@
       "@synqworks/core": ["synqworks/core/src"],
       "@synqworks/core/*": ["synqworks/core/src/*"],
       "@synqworks/agent-admin": ["packages/agents/admin/src"],
-      "@synqworks/agent-admin/*": ["packages/agents/admin/src/*"]
+      "@synqworks/agent-admin/*": ["packages/agents/admin/src/*"],
+      "@synqworks/synqpost-mcp": ["packages/synqpost-mcp/src"],
+      "@synqworks/synqpost-mcp/*": ["packages/synqpost-mcp/src/*"],
+      "@synqworks/agent-content": ["packages/agents/content/src"],
+      "@synqworks/agent-content/*": ["packages/agents/content/src/*"]
     }
   },
-  "include": ["synqworks", "packages/agents"],
+  "include": ["synqworks", "packages/agents", "packages/synqpost-mcp", "packages/command-center"],
   "references": [
     { "path": "./synqworks/core" },
     { "path": "./synqworks/lai" },
-    { "path": "./packages/agents/admin" }
+    { "path": "./packages/agents/admin" },
+    { "path": "./packages/synqpost-mcp" },
+    { "path": "./packages/agents/content" },
+    { "path": "./packages/command-center" }
   ]
 }

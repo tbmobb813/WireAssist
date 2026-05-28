@@ -1,0 +1,21 @@
+{
+  "name": "@synqworks/agent-content",
+  "version": "0.1.0",
+  "description": "Content Agent — generates, schedules, and manages content via SynqPost",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@synqworks/core": "workspace:*",
+    "@synqworks/agent-admin": "workspace:*",
+    "@synqworks/synqpost-mcp": "workspace:*",
+    "@anthropic-ai/sdk": "^0.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.24",
+    "typescript": "^5.9.3"
+  }
+}

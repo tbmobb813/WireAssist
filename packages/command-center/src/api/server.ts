@@ -11,6 +11,8 @@ import {
   EventBus,
 } from '@synqworks/core';
 import { AdminAgent, setupAdminMCP, AdminTasks } from '@synqworks/agent-admin';
+import { ContentAgent, ContentTasks } from '@synqworks/agent-content';
+import { registerSynqPostTools, SynqPostStorage } from '@synqworks/synqpost-mcp';
 
 const HOME_PATH = process.env.SYNQWORKS_HOME ?? os.homedir();
 const DB_PATH = path.join(HOME_PATH, '.synqworks', 'synqworks.db');
@@ -22,6 +24,8 @@ const events = new EventBus();
 let approval: ApprovalQueue;
 let memory: MemoryStore;
 let agent: AdminAgent;
+let contentAgent: ContentAgent;
+let synqpostStorage: SynqPostStorage;
 let agentReady = false;
 
 function anthropicConfigured(): boolean {
@@ -46,12 +50,22 @@ function logAgentTaskError(err: unknown) {
   console.error('❌ Agent task failed:', err);
 }
 
-/** Run one agent task at a time so events and status stay coherent. */
-let agentTaskChain: Promise<void> = Promise.resolve();
+/** Run one admin task at a time so events and status stay coherent. */
+let adminTaskChain: Promise<void> = Promise.resolve();
 
 function queueAgentTask(task: Parameters<AdminAgent['run']>[0]) {
-  agentTaskChain = agentTaskChain
+  adminTaskChain = adminTaskChain
     .then(() => agent.run(task))
+    .catch(logAgentTaskError);
+  return task;
+}
+
+/** Run one content task at a time. */
+let contentTaskChain: Promise<void> = Promise.resolve();
+
+function queueContentTask(task: Parameters<ContentAgent['run']>[0]) {
+  contentTaskChain = contentTaskChain
+    .then(() => contentAgent.run(task))
     .catch(logAgentTaskError);
   return task;
 }
@@ -68,6 +82,7 @@ function openStores() {
   try {
     approval = new ApprovalQueue(DB_PATH);
     memory = new MemoryStore(DB_PATH);
+    synqpostStorage = new SynqPostStorage(DB_PATH);
   } catch (err) {
     console.error(`❌ ${sqliteSetupHint()}`);
     throw err;
@@ -103,12 +118,32 @@ events.on('agent:approval_resolved', p => broadcast('approval_resolved', p));
 events.on('agent:triage_complete', p => broadcast('triage_complete', p));
 events.on('agent:calendar_review_complete', p => broadcast('calendar_review_complete', p));
 events.on('agent:freeform_response', p => broadcast('freeform_response', p));
+events.on('agent:content_generated', p => broadcast('content_generated', p));
+events.on('agent:content_approved', p => broadcast('content_approved', p));
+events.on('agent:content_plan_generated', p => broadcast('content_plan_generated', p));
+events.on('agent:post_scheduled', p => broadcast('post_scheduled', p));
+events.on('agent:content_analyzed', p => broadcast('content_analyzed', p));
+events.on('agent:scheduled_posts', p => broadcast('scheduled_posts', p));
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 async function bootstrap() {
   openStores();
-  await setupAdminMCP(mcp);
-  agent = new AdminAgent({ approval, memory, mcp, events });
+
+  // Content Agent tools — registered independently; always available
+  registerSynqPostTools(mcp, synqpostStorage);
+  contentAgent = new ContentAgent({ approval, memory, mcp, events });
+
+  // Admin Agent tools — may fail if Gmail credentials are absent; surface a warning but continue
+  try {
+    await setupAdminMCP(mcp);
+    agent = new AdminAgent({ approval, memory, mcp, events });
+  } catch (err) {
+    console.warn(
+      '⚠️  Admin Agent unavailable (Gmail/Calendar credentials missing or invalid).',
+      err instanceof Error ? err.message : err,
+    );
+  }
+
   agentReady = true;
   if (!anthropicConfigured()) {
     console.warn(
@@ -135,6 +170,11 @@ app.get('/api/agent/status', c => {
       role: 'admin',
       name: 'Admin Agent',
       status: agent?.status ?? 'idle',
+    },
+    content: {
+      role: 'content',
+      name: 'Content Agent',
+      status: contentAgent?.status ?? 'idle',
     },
   });
 });
@@ -170,9 +210,14 @@ app.post('/api/approvals/:id/reject', c => {
   return c.json({ ok: true });
 });
 
+function adminAgentRequired() {
+  return { error: 'Admin Agent unavailable — Gmail/Calendar credentials are not configured. See docs/SETUP.md.' };
+}
+
 // ── TASKS ─────────────────────────────────────────────────────────────────
 app.post('/api/tasks/triage-email', async c => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!agent) return c.json(adminAgentRequired(), 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const task = AdminTasks.triageEmail(20);
   queueAgentTask(task);
@@ -181,6 +226,7 @@ app.post('/api/tasks/triage-email', async c => {
 
 app.post('/api/tasks/review-calendar', async c => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!agent) return c.json(adminAgentRequired(), 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const body = await c.req.json().catch(() => ({}));
   const task = AdminTasks.reviewCalendar(body.daysAhead ?? 7);
@@ -190,12 +236,73 @@ app.post('/api/tasks/review-calendar', async c => {
 
 app.post('/api/tasks/freeform', async c => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!agent) return c.json(adminAgentRequired(), 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const { instruction } = await c.req.json();
   if (!instruction) return c.json({ error: 'instruction required' }, 400);
   const task = AdminTasks.freeform(instruction);
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// ── CONTENT TASKS ─────────────────────────────────────────────────────────
+const VALID_PLATFORMS = new Set(['twitter', 'linkedin', 'instagram', 'threads']);
+
+function isValidPlatform(p: unknown): p is 'twitter' | 'linkedin' | 'instagram' | 'threads' {
+  return typeof p === 'string' && VALID_PLATFORMS.has(p);
+}
+
+app.post('/api/tasks/generate-post', async c => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const { topic, platform, tone } = await c.req.json();
+  if (!topic || typeof topic !== 'string') return c.json({ error: 'topic required' }, 400);
+  if (!isValidPlatform(platform)) {
+    return c.json({ error: `platform must be one of: ${[...VALID_PLATFORMS].join(', ')}` }, 400);
+  }
+  if (tone !== undefined && (typeof tone !== 'string' || tone.length > 100)) {
+    return c.json({ error: 'tone must be a string under 100 characters' }, 400);
+  }
+  const task = ContentTasks.generatePost(topic, platform, tone);
+  queueContentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/generate-plan', async c => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const body = await c.req.json().catch(() => ({}));
+  const platforms: unknown[] = Array.isArray(body.platforms)
+    ? body.platforms
+    : ['linkedin', 'twitter'];
+  const invalidPlatform = platforms.find(p => !isValidPlatform(p));
+  if (invalidPlatform) {
+    return c.json({ error: `invalid platform "${invalidPlatform}". Must be one of: ${[...VALID_PLATFORMS].join(', ')}` }, 400);
+  }
+  const task = ContentTasks.generatePlan(
+    platforms as ('twitter' | 'linkedin' | 'instagram' | 'threads')[],
+    body.weeksAhead ?? 1,
+    body.postsPerWeek ?? 3,
+  );
+  queueContentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// ── CONTENT DATA ──────────────────────────────────────────────────────────
+app.get('/api/content/posts', c => {
+  if (!agentReady) return c.json([]);
+  const raw = parseInt(c.req.query('daysAhead') ?? '14', 10);
+  const daysAhead = Number.isFinite(raw) && raw > 0 ? raw : 14;
+  const now = new Date();
+  return c.json(synqpostStorage.listPosts({
+    from: now,
+    to: new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000),
+  }));
+});
+
+app.get('/api/content/ideas', c => {
+  if (!agentReady) return c.json([]);
+  return c.json(synqpostStorage.listIdeas());
 });
 
 // ── MEMORY ────────────────────────────────────────────────────────────────
