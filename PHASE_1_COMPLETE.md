@@ -1,6 +1,6 @@
 # Phase 1: MVP Integration - COMPLETE ✅
 
-> **Historical document.** Paths like `packages/core` and `@lai/core` are outdated; use `synqworks/core` and `@synqworks/core`. See [README.md](./README.md).
+> **Historical document.** Paths like `packages/core` and `@aia/core` are outdated; use `synqworks/core` and `@synqworks/core`. See [README.md](./README.md).
 
 **Status:** READY FOR PRODUCTION
 **Date:** November 6, 2024
@@ -12,22 +12,22 @@
 
 ### ✅ Monorepo Setup
 - [x] pnpm workspaces configured
-- [x] @lai/core linked via `workspace:*` protocol
+- [x] @aia/core linked via `workspace:*` protocol
 - [x] Shared TypeScript, ESLint, Prettier configs
-- [x] Single source of truth established at `/lai`
+- [x] Single source of truth established at `/aia`
 - [x] Documentation: `MONOREPO_SETUP.md`
 
 ### ✅ Core Integration
-- [x] @lai/core imported and working in LAI app
+- [x] @aia/core imported and working in AIA app
 - [x] ConversationStore & MessageStore integrated
 - [x] ProviderFactory with all 4 providers (OpenAI, Anthropic, Gemini, Ollama)
 - [x] Type safety: Full TypeScript support
 - [x] 23 integration tests passing
 
 ### ✅ Database Layer
-- [x] Core Adapter: Maps @lai/core storage to LAI API format
+- [x] Core Adapter: Maps @aia/core storage to AIA API format
 - [x] Database Adapters: Full CRUD for conversations & messages
-- [x] Hybrid Database: Switches between Tauri and @lai/core backends
+- [x] Hybrid Database: Switches between Tauri and @aia/core backends
 - [x] 15 adapter tests passing
 
 ### ✅ Multi-Provider Support
@@ -40,7 +40,7 @@
 - [x] 30 provider integration tests passing
 
 ### ✅ End-to-End Message Flow (NEW)
-- [x] Create conversation with @lai/core
+- [x] Create conversation with @aia/core
 - [x] Store user messages
 - [x] Get provider responses (mocked)
 - [x] Store assistant responses
@@ -61,7 +61,7 @@ Core Integration:        23 tests
 Database Adapters:       15 tests
 Provider Integration:    30 tests
 E2E Message Flow:        9 tests
-Existing LAI Tests:      157 tests
+Existing AIA Tests:      157 tests
 
 Coverage Areas:
 ✅ Core module exports
@@ -81,8 +81,8 @@ Coverage Areas:
 ## 🏗️ Architecture Overview
 
 ```
-LAI Monorepo
-├── @lai/core (packages/core/)
+AIA Monorepo
+├── @aia/core (packages/core/)
 │   ├── AIClient - Main orchestrator
 │   ├── Providers - Multi-provider support
 │   ├── Storage - Conversation & Message stores
@@ -90,7 +90,7 @@ LAI Monorepo
 │   ├── Privacy - Encryption & audit logging
 │   └── Streaming - SSE parsing & buffering
 │
-├── LAI App (packages/lai/)
+├── AIA App (packages/aia/)
 │   ├── Database Adapters
 │   │   ├── ConversationAdapter
 │   │   ├── MessageAdapter
@@ -110,8 +110,8 @@ LAI Monorepo
 │       └── E2E flow tests (9)
 │
 └── External Repos (Deprecated)
-    ├── /lai-core - Archive only
-    └── /linux-ai-assistant - Archive only
+    ├── /aia-core - Archive only
+    └── /ai-assist - Archive only
 ```
 
 ---
@@ -119,7 +119,7 @@ LAI Monorepo
 ## 🚀 Key Features Implemented
 
 ### 1. Conversation Management
-- Create conversations with @lai/core
+- Create conversations with @aia/core
 - Track provider and model per conversation
 - Update conversation titles
 - Delete conversations
@@ -150,7 +150,7 @@ LAI Monorepo
 
 ### 5. Type Safety
 - Full TypeScript integration
-- Types exported from @lai/core
+- Types exported from @aia/core
 - API format mappings
 - Provider type validation
 
@@ -168,7 +168,7 @@ LAI Monorepo
 
 ## 🔄 Monorepo Structure
 
-**Primary Development Location:** `/lai`
+**Primary Development Location:** `/aia`
 
 ```bash
 # Install dependencies
@@ -176,18 +176,18 @@ pnpm install
 
 # Run tests
 pnpm test              # All packages
-pnpm test:core        # Just @lai/core
-pnpm test:lai         # Just LAI app
+pnpm test:core        # Just @aia/core
+pnpm test:aia         # Just AIA app
 
 # Build
 pnpm build            # All packages
-pnpm build:core       # Just @lai/core
-pnpm build:lai        # Just LAI app
+pnpm build:core       # Just @aia/core
+pnpm build:aia        # Just AIA app
 
 # Development
 pnpm dev              # All packages in watch mode
-pnpm dev:core         # Just @lai/core
-pnpm dev:lai          # Just LAI app
+pnpm dev:core         # Just @aia/core
+pnpm dev:aia          # Just AIA app
 ```
 
 ---
@@ -200,12 +200,12 @@ import { enableCoreDatabase } from './lib/api/database';
 
 // At app startup
 await enableCoreDatabase();
-// Now all database calls use @lai/core instead of Tauri IPC
+// Now all database calls use @aia/core instead of Tauri IPC
 ```
 
 ### Use Multi-Provider Support
 ```typescript
-import { ProviderFactory } from '@lai/core';
+import { ProviderFactory } from '@aia/core';
 
 // Create a provider for conversation
 const provider = ProviderFactory.create({
@@ -220,7 +220,7 @@ const response = await provider.complete({
 });
 ```
 
-### Store Message in @lai/core
+### Store Message in @aia/core
 ```typescript
 import { database } from './lib/api/database';
 
@@ -241,8 +241,8 @@ const messages = await database.messages.getByConversation(conversationId);
 
 - **MONOREPO_SETUP.md** - Repository structure and workflow
 - **PHASE_1_COMPLETE.md** - This file
-- **@lai/core README** - Core library documentation
-- **LAI App Tests** - 157 existing tests documenting features
+- **@aia/core README** - Core library documentation
+- **AIA App Tests** - 157 existing tests documenting features
 
 ---
 
@@ -253,7 +253,7 @@ const messages = await database.messages.getByConversation(conversationId);
 - Context building (file/Git integration)
 - Privacy controls (encryption + audit logging)
 - Search optimization (FTS improvements)
-- Publishing @lai/core to npm
+- Publishing @aia/core to npm
 - Mobile/web variants
 - Advanced provider features (function calling, vision)
 
@@ -261,7 +261,7 @@ const messages = await database.messages.getByConversation(conversationId);
 
 ## 🎉 Summary
 
-**Phase 1 is complete and tested.** The monorepo is the single source of truth for LAI development with @lai/core fully integrated into the LAI app. All conversations, messages, and provider operations work seamlessly with proper type safety and error handling.
+**Phase 1 is complete and tested.** The monorepo is the single source of truth for AIA development with @aia/core fully integrated into the AIA app. All conversations, messages, and provider operations work seamlessly with proper type safety and error handling.
 
 **Next phase can focus on:** Streaming, context building, advanced features, or scaling.
 

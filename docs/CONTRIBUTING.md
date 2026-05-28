@@ -38,7 +38,7 @@ src/
 └── __tests__/
 ```
 
-### `linux-ai-assistant` (`synqworks/lai/`)
+### `ai-assist` (`synqworks/aia/`)
 
 ```
 src/                 # React UI (Vite)
@@ -98,10 +98,10 @@ src/
 3. Handle the type in `admin-agent.ts` `run()` switch
 4. Expose via Command Center API in `packages/command-center/src/api/server.ts` if needed
 
-### UI component (LAI desktop)
+### UI component (AIA desktop)
 
-1. Add component under `synqworks/lai/src/components/`
-2. `pnpm dev:lai` for HMR
+1. Add component under `synqworks/aia/src/components/`
+2. `pnpm dev:aia` for HMR
 
 ### UI page (Command Center)
 
@@ -124,7 +124,7 @@ Use `SYNQWORKS_HOME` in development if you need an isolated config directory.
 ```bash
 pnpm test              # all packages with test scripts
 pnpm test:core
-pnpm --filter linux-ai-assistant test
+pnpm --filter ai-assist test
 ```
 
 ## Pull requests
@@ -136,10 +136,10 @@ pnpm --filter linux-ai-assistant test
 
 ## Legacy paths
 
-Older docs may reference `packages/core`, `packages/lai`, or `@lai/core`. Current locations:
+Older docs may reference `packages/core`, `packages/aia`, or `@aia/core`. Current locations:
 
 | Legacy | Current |
 |--------|---------|
 | `packages/core` | `synqworks/core` (`@synqworks/core`) |
-| `packages/lai` | `synqworks/lai` (`linux-ai-assistant`) |
-| `@lai/core` | `@synqworks/core` |
+| `packages/aia` | `synqworks/aia` (`ai-assist`) |
+| `@aia/core` | `@synqworks/core` |

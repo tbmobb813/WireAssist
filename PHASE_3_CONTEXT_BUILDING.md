@@ -50,7 +50,7 @@ Database Adapters:                15 tests
 Provider Integration:             30 tests
 E2E Message Flow:                 9 tests
 Core Integration:                 23 tests
-Existing LAI Tests:              154 tests
+Existing AIA Tests:              154 tests
 
 Total:                           352 tests (all passing)
 Test Files:                       47 files (46 passed, 1 skipped)
@@ -87,7 +87,7 @@ ContextAwareProvider.generateResponse()
 ### Class Hierarchy
 
 ```
-LAI App Context System
+AIA App Context System
 ├── ContextService
 │   ├── buildContext() → AIContext
 │   ├── cacheFile() → void
@@ -177,7 +177,7 @@ LAI App Context System
 
 ```typescript
 import { contextService } from './lib/services/contextService';
-import type { FileChange } from '@lai/core';
+import type { FileChange } from '@aia/core';
 
 // Build context for a conversation
 const context = await contextService.buildContext(
@@ -472,6 +472,6 @@ The implementation allows AI to understand:
 2. **Search Enhancement** - Full-text search on context files
 3. **Code Navigation** - Jump to definition, find references
 4. **Performance** - Background context building, lazy loading
-5. **Publish @lai/core** - Release to npm
+5. **Publish @aia/core** - Release to npm
 
 Would you like to proceed with Phase 4?

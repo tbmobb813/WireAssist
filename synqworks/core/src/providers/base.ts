@@ -1,4 +1,4 @@
-// @lai/core/src/providers/base.ts
+// @aia/core/src/providers/base.ts
 
 import type { ProviderType, AIContext } from '../types';
 

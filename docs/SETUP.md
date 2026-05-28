@@ -6,7 +6,7 @@
 |-------------|---------|------------|
 | Node.js | 20.9+ | All packages (Next.js 16 in Command Center requires >=20.9) |
 | pnpm | 11+ | Workspace install (`corepack enable` recommended) |
-| Rust | 1.70+ | `synqworks/lai` Tauri app only |
+| Rust | 1.70+ | `synqworks/aia` Tauri app only |
 
 Install pnpm if needed:
 
@@ -29,14 +29,14 @@ Command Center and the Admin Agent CLI depend on compiled `dist/` output from co
 Workspace packages (from `pnpm-workspace.yaml`):
 
 - `synqworks/core` — `@synqworks/core`
-- `synqworks/lai` — `linux-ai-assistant`
+- `synqworks/aia` — `ai-assist`
 - `packages/agents/admin` — `@synqworks/agent-admin`
 - `packages/command-center` — `@synqworks/command-center`
 
 Verify linking:
 
 ```bash
-ls -la synqworks/lai/node_modules/@synqworks/core
+ls -la synqworks/aia/node_modules/@synqworks/core
 # should symlink to ../../../core
 ```
 
@@ -88,9 +88,9 @@ export SYNQWORKS_HOME=/path/to/config-root
 
 On first agent startup, a browser OAuth flow runs and saves the token. Gmail and Calendar share this token; Calendar scopes are included in the Gmail auth flow.
 
-### LAI desktop (optional providers)
+### AIA desktop (optional providers)
 
-Create `synqworks/lai/.env.local` (or export in shell) as needed:
+Create `synqworks/aia/.env.local` (or export in shell) as needed:
 
 ```bash
 ANTHROPIC_API_KEY=...
@@ -169,20 +169,20 @@ Run tests:
 pnpm test:core
 ```
 
-## Run Linux AI Assistant (Tauri)
+## Run AI Assist (Tauri)
 
 ```bash
 # Install Rust if needed
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-pnpm dev:lai
+pnpm dev:aia
 ```
 
 Full desktop build:
 
 ```bash
-pnpm build:lai
-pnpm --filter linux-ai-assistant tauri build
+pnpm build:aia
+pnpm --filter ai-assist tauri build
 ```
 
 ## Build individual packages
@@ -191,14 +191,14 @@ pnpm --filter linux-ai-assistant tauri build
 pnpm build:core
 pnpm --filter @synqworks/agent-admin build
 pnpm --filter @synqworks/command-center build
-pnpm build:lai
+pnpm build:aia
 ```
 
 ## Troubleshooting
 
 ### `pnpm install` fails on missing packages
 
-Ensure `pnpm-workspace.yaml` only lists existing directories (`synqworks/*`, `packages/agents/admin`, `packages/command-center`). Do not add `packages/core` or `packages/lai` — those paths are not used.
+Ensure `pnpm-workspace.yaml` only lists existing directories (`synqworks/*`, `packages/agents/admin`, `packages/command-center`). Do not add `packages/core` or `packages/aia` — those paths are not used.
 
 ### Calendar 403 / insufficient scopes
 

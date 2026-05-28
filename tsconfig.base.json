@@ -37,7 +37,7 @@
   "include": ["synqworks", "packages/agents", "packages/synqpost-mcp", "packages/command-center"],
   "references": [
     { "path": "./synqworks/core" },
-    { "path": "./synqworks/lai" },
+    { "path": "./synqworks/aia" },
     { "path": "./packages/agents/admin" },
     { "path": "./packages/synqpost-mcp" },
     { "path": "./packages/agents/content" },

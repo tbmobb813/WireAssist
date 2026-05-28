@@ -1,15 +1,15 @@
-# LAI Monorepo Setup
+# AIA Monorepo Setup
 
-> **Historical document.** The repo layout has moved to `synqworks/core`, `synqworks/lai`, and `packages/agents/*`. See [README.md](./README.md) and [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for the current structure.
+> **Historical document.** The repo layout has moved to `synqworks/core`, `synqworks/aia`, and `packages/agents/*`. See [README.md](./README.md) and [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for the current structure.
 
-This monorepo is the **primary source of truth** for LAI development.
+This monorepo is the **primary source of truth** for AIA development.
 
 ## Repository Structure
 
 ```
-lai/ (monorepo root)
+aia/ (monorepo root)
 ├── packages/
-│   ├── core/          # @lai/core - AI engine with multi-provider support
+│   ├── core/          # @aia/core - AI engine with multi-provider support
 │   │   ├── src/
 │   │   │   ├── client.ts          # AIClient orchestrator
 │   │   │   ├── providers/         # OpenAI, Anthropic, Gemini, Ollama
@@ -20,11 +20,11 @@ lai/ (monorepo root)
 │   │   ├── package.json
 │   │   └── tsconfig.json
 │   │
-│   └── lai/           # linux-ai-assistant - Desktop UI (Tauri + React)
+│   └── aia/           # ai-assist - Desktop UI (Tauri + React)
 │       ├── src/
 │       │   ├── components/        # React components
 │       │   ├── lib/
-│       │   │   ├── api/           # Database adapters for @lai/core
+│       │   │   ├── api/           # Database adapters for @aia/core
 │       │   │   ├── stores/        # Zustand stores (chatStore, settingsStore)
 │       │   │   ├── providers/     # Provider integration
 │       │   │   └── utils/         # Tauri IPC, error handling
@@ -42,15 +42,15 @@ lai/ (monorepo root)
 
 ## Key Integration Points
 
-### 1. @lai/core Package
+### 1. @aia/core Package
 - **Source:** `packages/core/src`
 - **Built to:** `packages/core/dist`
 - **Export:** Main entry point exports all public APIs
-- **Usage:** Imported as `@lai/core` via workspace symlink
+- **Usage:** Imported as `@aia/core` via workspace symlink
 
-### 2. LAI App Database Adapters
-- **Location:** `packages/lai/src/lib/api/`
-  - `core-adapter.ts` - Maps @lai/core to LAI API format
+### 2. AIA App Database Adapters
+- **Location:** `packages/aia/src/lib/api/`
+  - `core-adapter.ts` - Maps @aia/core to AIA API format
   - `database-core.ts` - Core-backed database implementation
   - `database-hybrid.ts` - Switches between Tauri and Core
 
@@ -73,7 +73,7 @@ pnpm test
 
 # Specific package
 pnpm test:core
-pnpm test:lai
+pnpm test:aia
 ```
 
 ### Build
@@ -83,7 +83,7 @@ pnpm build
 
 # Specific package
 pnpm build:core
-pnpm build:lai
+pnpm build:aia
 ```
 
 ### Development Mode
@@ -93,28 +93,28 @@ pnpm dev
 
 # Or specific package
 pnpm dev:core
-pnpm dev:lai
+pnpm dev:aia
 ```
 
 ## External Repositories
 
 These are maintained separately but should reference this monorepo:
 
-### `/lai-core` (deprecated)
-- Original standalone @lai/core repository
+### `/aia-core` (deprecated)
+- Original standalone @aia/core repository
 - Now superseded by `packages/core/` in monorepo
 - **Action:** Keep as backup/archive, don't commit new changes here
 
-### `linux-ai-assistant - l.a.i.` (deprecated)
-- Original LAI app repository
-- Now superseded by `packages/lai/` in monorepo
+### `ai-assist - l.a.i.` (deprecated)
+- Original AIA app repository
+- Now superseded by `packages/aia/` in monorepo
 - **Action:** Keep as backup/archive, don't commit new changes here
 
 ## Phase 1: MVP Integration Status
 
 ✅ **Completed:**
 - [x] Monorepo structure with pnpm workspaces
-- [x] @lai/core linked via workspace symlink
+- [x] @aia/core linked via workspace symlink
 - [x] Core integration tests (23 tests)
 - [x] Database adapters for ConversationStore & MessageStore
 - [x] Hybrid database switching (Tauri ↔ Core)
@@ -124,12 +124,12 @@ These are maintained separately but should reference this monorepo:
 🔄 **In Progress:**
 - [ ] End-to-end message flow (user → provider → storage)
 - [ ] Streaming response integration
-- [ ] Search integration with @lai/core SearchEngine
+- [ ] Search integration with @aia/core SearchEngine
 
 ## Adding New Features
 
-1. **To @lai/core:** Update in `packages/core/src/`
-2. **To LAI app:** Update in `packages/lai/src/`
+1. **To @aia/core:** Update in `packages/core/src/`
+2. **To AIA app:** Update in `packages/aia/src/`
 3. **Test locally:** Run `pnpm test` to verify integration
 4. **Build:** Run `pnpm build` before committing
 
@@ -154,8 +154,8 @@ git push origin feature/name
 
 ## Notes
 
-- All development happens in `/lai` monorepo
-- @lai/core in `packages/core/` is the source of truth
-- LAI app in `packages/lai/` imports @lai/core via workspace
-- External repos (`/lai-core`, `linux-ai-assistant`) are deprecated for MVP
+- All development happens in `/aia` monorepo
+- @aia/core in `packages/core/` is the source of truth
+- AIA app in `packages/aia/` imports @aia/core via workspace
+- External repos (`/aia-core`, `ai-assist`) are deprecated for MVP
 - Can be cleaned up or archived after Phase 1 completion

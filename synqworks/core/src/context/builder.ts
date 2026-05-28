@@ -1,4 +1,4 @@
-// @lai/core/src/context/builder.ts
+// @aia/core/src/context/builder.ts
 
 import * as fs from 'fs';
 import * as path from 'path';
