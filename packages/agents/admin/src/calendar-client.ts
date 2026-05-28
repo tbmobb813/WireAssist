@@ -1,8 +1,8 @@
 import { google, calendar_v3 } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import * as fs from 'fs';
-import * as path from 'path';
 import * as os from 'os';
+import * as path from 'path';
 
 const SYNQWORKS_HOME = process.env.SYNQWORKS_HOME ?? os.homedir();
 const TOKEN_PATH = path.join(SYNQWORKS_HOME, '.synqworks', 'gmail-token.json');

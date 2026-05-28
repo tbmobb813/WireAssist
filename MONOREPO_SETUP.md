@@ -1,5 +1,7 @@
 # LAI Monorepo Setup
 
+> **Historical document.** The repo layout has moved to `synqworks/core`, `synqworks/lai`, and `packages/agents/*`. See [README.md](./README.md) and [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for the current structure.
+
 This monorepo is the **primary source of truth** for LAI development.
 
 ## Repository Structure

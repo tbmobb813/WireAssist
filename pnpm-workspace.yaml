@@ -2,6 +2,12 @@ packages:
   - 'synqworks/core'
   - 'synqworks/lai'
   - 'packages/agents/admin'
+  - 'packages/command-center'
+
+allowBuilds:
+  better-sqlite3: true
+  esbuild: true
+  sharp: true
 
 onlyBuiltDependencies:
   - better-sqlite3

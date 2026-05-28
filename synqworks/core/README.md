@@ -1,8 +1,9 @@
-# @lai/core
+# @synqworks/core
 
-Core AI engine for LAI (Linux AI Assistant) and UDP - Multi-provider AI with privacy controls and streaming support.
+Core AI engine for **SynqWorks** and the **Linux AI Assistant** — multi-provider AI with privacy controls, streaming, and the agent platform (MCP, approvals, memory, events).
 
-[![npm version](https://img.shields.io/npm/v/@lai/core.svg)](https://www.npmjs.com/package/@lai/core)
+> Package name in this monorepo: `@synqworks/core` (path: `synqworks/core/`). Older docs may refer to `@lai/core`.
+
 [![license](https://img.shields.io/npm/l/@lai/core.svg)](https://github.com/tbmobb813/lai-core/blob/main/LICENSE)
 
 ## Features
@@ -17,20 +18,16 @@ Core AI engine for LAI (Linux AI Assistant) and UDP - Multi-provider AI with pri
 
 ## Installation
 
+Within this monorepo (workspace):
+
 ```bash
-npm install @lai/core
+pnpm add @synqworks/core --workspace
 ```
 
-or with yarn:
+From another project (when published):
 
 ```bash
-yarn add @lai/core
-```
-
-or with pnpm:
-
-```bash
-pnpm add @lai/core
+pnpm add @synqworks/core
 ```
 
 ## Quick Start

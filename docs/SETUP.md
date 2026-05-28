@@ -1,273 +1,217 @@
-# LAI Monorepo Setup Guide
+# SynqWorks / Nolta — Setup Guide
 
 ## Prerequisites
 
-You need:
-- **Node.js** 18+ (check: `node --version`)
-- **pnpm** 9.0.0+ (check: `pnpm --version`)
-- **Rust** 1.70+ (for Tauri desktop app - check: `rustc --version`)
+| Requirement | Version | Needed for |
+|-------------|---------|------------|
+| Node.js | 20.9+ | All packages (Next.js 16 in Command Center requires >=20.9) |
+| pnpm | 11+ | Workspace install (`corepack enable` recommended) |
+| Rust | 1.70+ | `synqworks/lai` Tauri app only |
 
-### Install pnpm (if needed)
+Install pnpm if needed:
 
 ```bash
-npm install -g pnpm@9
+corepack enable
+corepack prepare pnpm@11.3.0 --activate
 ```
 
-### Install Rust (if needed)
+## Clone and install
 
 ```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source $HOME/.cargo/env
-```
-
-## Quick Start
-
-### 1. Clone or Navigate to Monorepo
-
-```bash
-cd /home/nixstation-remote/Projects/lai
-```
-
-### 2. Install Dependencies
-
-```bash
+cd /path/to/Nolta
 pnpm install
+pnpm build:core
+pnpm build:admin
 ```
 
-This will:
-- Install all dependencies for both packages
-- Create symlinks for internal packages (`@lai/core`)
-- Prepare development environment
+Command Center and the Admin Agent CLI depend on compiled `dist/` output from core and agent-admin. Run `pnpm build` to build all workspace packages, or build individually as above.
 
-**Expected output:** No errors, clean lockfile
+Workspace packages (from `pnpm-workspace.yaml`):
 
-### 3. Build Packages
+- `synqworks/core` — `@synqworks/core`
+- `synqworks/lai` — `linux-ai-assistant`
+- `packages/agents/admin` — `@synqworks/agent-admin`
+- `packages/command-center` — `@synqworks/command-center`
+
+Verify linking:
 
 ```bash
-# Build all packages
-pnpm build
-
-# Or build specific package
-pnpm build:core      # Just core AI engine
-pnpm build:lai       # Just desktop app
+ls -la synqworks/lai/node_modules/@synqworks/core
+# should symlink to ../../../core
 ```
 
-**Expected output:**
-- `packages/core/dist/` created with compiled JavaScript
-- `packages/lai/dist/` created with bundled assets
+### Native module: `better-sqlite3`
 
-### 4. Verify Linking
-
-Check that @lai/core is properly linked:
+Command Center and `@synqworks/core` use SQLite via `better-sqlite3`, which must compile during install. If the API exits immediately or you see `Could not locate the bindings file`:
 
 ```bash
-ls -la packages/lai/node_modules/@lai/core
+pnpm approve-builds   # enable better-sqlite3 when prompted
+pnpm install
+pnpm rebuild better-sqlite3
 ```
 
-Should show:
+The workspace `pnpm-workspace.yaml` should list `better-sqlite3: true` under `allowBuilds`.
+
+## Environment variables
+
+### Admin Agent & Command Center
+
+Put secrets in the **monorepo root** `.env` (gitignored) — Command Center loads it automatically:
+
+```bash
+# /path/to/Nolta/.env
+ANTHROPIC_API_KEY=sk-ant-...
 ```
-packages/lai/node_modules/@lai/core -> ../../../packages/core
+
+You can also `export ANTHROPIC_API_KEY=...` in your shell, or use `packages/command-center/.env.local` for package-only overrides.
+
+### Google Gmail + Calendar
+
+1. Create a project in [Google Cloud Console](https://console.cloud.google.com/).
+2. Enable **Gmail API** and **Google Calendar API**.
+3. Create **OAuth 2.0 Client ID** (Desktop app or Web with localhost redirect).
+4. Download the client JSON.
+
+Place the file at:
+
+```text
+~/.synqworks/gmail-credentials.json
 ```
 
-## Development
+Or, with a custom base directory:
 
-### Start Development Mode
+```bash
+export SYNQWORKS_HOME=/path/to/config-root
+# credentials → $SYNQWORKS_HOME/.synqworks/gmail-credentials.json
+# token (auto-created) → $SYNQWORKS_HOME/.synqworks/gmail-token.json
+```
 
-**Just @lai/core:**
+On first agent startup, a browser OAuth flow runs and saves the token. Gmail and Calendar share this token; Calendar scopes are included in the Gmail auth flow.
+
+### LAI desktop (optional providers)
+
+Create `synqworks/lai/.env.local` (or export in shell) as needed:
+
+```bash
+ANTHROPIC_API_KEY=...
+OPENAI_API_KEY=...
+# etc.
+```
+
+## Run Command Center
+
+```bash
+pnpm build:core
+pnpm build:admin
+pnpm --filter @synqworks/command-center dev
+```
+
+| Service | URL |
+|---------|-----|
+| Web UI | http://localhost:3001 |
+| API | http://localhost:3002 |
+| Health | http://localhost:3002/health |
+
+The Next.js app proxies `/api/*` to the Hono API (see `packages/command-center/next.config.ts`). Command Center uses **Next.js 16** and **React 19**.
+
+Optional port overrides (must match across API, Next rewrites, and `wait-on`):
+
+```bash
+export API_PORT=3003
+export WEB_PORT=3001
+pnpm --filter @synqworks/command-center dev
+```
+
+Root `.env` is loaded by the API on startup. Variables already set in your shell are **not** overwritten (e.g. `export ANTHROPIC_API_KEY=...` wins over `.env`).
+
+If the API fails with `EADDRINUSE` on port 3002, a previous API process is still running. `pnpm dev:api` runs a pre-step to free the port; you can also run `fuser -k 3002/tcp` manually.
+
+### Production start (Command Center)
+
+After `pnpm build:command-center`, run **both** the API and the web server (same as dev):
+
+```bash
+pnpm --filter @synqworks/command-center start
+```
+
+This runs `start:api` (Hono) and `start:web` (`next start`) via `concurrently`.
+
+SQLite state for approvals and memory defaults to `~/.synqworks/synqworks.db`.
+
+### UI routes
+
+- `/` — dashboard, run triage / calendar tasks
+- `/approvals` — approve or reject agent actions
+- `/chat` — freeform agent instructions
+- `/memory` — browse agent memory store
+
+## Run Admin Agent demo (CLI)
+
+No web UI; approvals via terminal `[y/n]`:
+
+```bash
+pnpm --filter @synqworks/agent-admin build
+node packages/agents/admin/dist/demo.js
+```
+
+Requires the same Google credentials and `ANTHROPIC_API_KEY` as Command Center.
+
+## Run @synqworks/core alone
+
 ```bash
 pnpm dev:core
+# watches TypeScript in synqworks/core
 ```
-(Watches TypeScript files for changes)
 
-**Just LAI desktop app:**
+Run tests:
+
 ```bash
+pnpm test:core
+```
+
+## Run Linux AI Assistant (Tauri)
+
+```bash
+# Install Rust if needed
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
 pnpm dev:lai
 ```
-(Starts Vite dev server with hot-reload)
 
-**Both in parallel:**
+Full desktop build:
+
 ```bash
-pnpm dev
+pnpm build:lai
+pnpm --filter linux-ai-assistant tauri build
 ```
 
-### Testing
+## Build individual packages
 
 ```bash
-# Run all tests
-pnpm test
-
-# Watch mode (rerun on changes)
-pnpm test:watch
-
-# Coverage report
-pnpm test:coverage
-```
-
-### Code Quality
-
-```bash
-# Lint all code
-pnpm lint
-
-# Format with Prettier
-pnpm format
-
-# Fix linting issues
-pnpm lint:fix
-```
-
-## Configuration Files
-
-### Root-Level
-
-| File | Purpose |
-|------|---------|
-| `package.json` | Workspace scripts, root dependencies |
-| `pnpm-workspace.yaml` | Declares packages in workspace |
-| `tsconfig.base.json` | Shared TypeScript settings |
-| `.gitignore` | Git exclusions |
-| `.eslintrc.js` | ESLint rules |
-| `.prettierrc.json` | Code formatting rules |
-
-### Per-Package
-
-Each package has its own:
-- `package.json` - Dependencies and scripts
-- `tsconfig.json` - Package-specific TypeScript config
-- `jest.config.js` / `vitest.config.ts` - Test configuration
-
-## Environment Variables
-
-### For @lai/core
-
-Create `packages/core/.env.local`:
-```bash
-# Optional: test mode
-NODE_ENV=development
-
-# Optional: Ollama local server
-OLLAMA_BASE_URL=http://localhost:11434
-```
-
-### For LAI Desktop App
-
-Create `packages/lai/.env.local`:
-```bash
-# Tauri dev options
-VITE_DEV_SERVER_HOST=localhost
-VITE_DEV_SERVER_PORT=5173
-```
-
-## Common Tasks
-
-### Adding a New Dependency
-
-To add to @lai/core:
-```bash
-cd packages/core
-pnpm add some-package
-```
-
-To add to LAI:
-```bash
-cd packages/lai
-pnpm add some-package
-```
-
-To add dev dependency:
-```bash
-pnpm add --save-dev some-package
-```
-
-### Cleaning Up
-
-Remove all build artifacts and dependencies:
-```bash
-pnpm clean
-```
-
-This runs `pnpm -r clean` (removes dist/), then deletes `node_modules/` and `pnpm-lock.yaml`.
-
-### Fresh Install
-
-```bash
-pnpm clean
-pnpm install
-pnpm build
+pnpm build:core
+pnpm --filter @synqworks/agent-admin build
+pnpm --filter @synqworks/command-center build
+pnpm build:lai
 ```
 
 ## Troubleshooting
 
-### "Cannot find module '@lai/core'"
+### `pnpm install` fails on missing packages
 
-**Problem:** TypeScript can't resolve @lai/core
+Ensure `pnpm-workspace.yaml` only lists existing directories (`synqworks/*`, `packages/agents/admin`, `packages/command-center`). Do not add `packages/core` or `packages/lai` — those paths are not used.
 
-**Solution:**
-```bash
-pnpm install
-pnpm build:core
-```
+### Calendar 403 / insufficient scopes
 
-Then restart your IDE's TypeScript server.
+Delete `~/.synqworks/gmail-token.json` and re-run; the agent will prompt for re-authorization with Calendar scopes.
 
-### "pnpm is not recognized"
+### OAuth port in use
 
-**Problem:** pnpm not installed globally
+Another process is bound to the redirect URI port from your Google client config. Stop it and retry.
 
-**Solution:**
-```bash
-npm install -g pnpm@9
-```
+### `@synqworks/core` changes not reflected
 
-### "@lai/core/dist/index.js not found"
+Rebuild core after changes: `pnpm build:core`, or use `pnpm dev:core` while developing dependents.
 
-**Problem:** Core package not built
+### Network timeouts during install
 
-**Solution:**
-```bash
-pnpm build:core
-```
-
-### "node_modules/@lai/core is not a symlink"
-
-**Problem:** Package wasn't linked correctly
-
-**Solution:**
-```bash
-rm -rf node_modules pnpm-lock.yaml
-pnpm install
-```
-
-### Build succeeds but changes don't show up
-
-**Problem:** Stale build artifacts
-
-**Solution:**
-```bash
-pnpm clean
-pnpm build
-```
-
-## Next Steps
-
-1. **Review the codebase:** Read `packages/core/src/index.ts` and `packages/lai/src/App.tsx`
-2. **Run tests:** `pnpm test` to ensure everything works
-3. **Start developing:** `pnpm dev` to begin making changes
-4. **Check docs:** See `ARCHITECTURE.md` for deep dive
-
-## Getting Help
-
-- Check `docs/TROUBLESHOOTING.md` for common issues
-- Review `docs/ARCHITECTURE.md` for system design
-- Look at test files (`__tests__/`) for usage examples
-
-## Project Status
-
-**Current Phase:** MVP Integration
-- ✅ Monorepo set up
-- ✅ Packages linked
-- [ ] Core fully integrated in LAI
-- [ ] Basic conversation UI working
-- [ ] Multi-provider switching tested
-
-See `tasks.md` for full project roadmap.
+Root `.npmrc` sets `network-timeout=100000` and `child-concurrency=2` for slower networks.

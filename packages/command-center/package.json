@@ -1,0 +1,42 @@
+{
+  "name": "@synqworks/command-center",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"pnpm dev:api\" \"pnpm dev:web\"",
+    "predev:api": "node scripts/free-dev-port.mjs",
+    "dev:api": "tsx src/api/server.ts",
+    "dev:web": "node scripts/wait-for-api.mjs && node scripts/run-next.mjs dev",
+    "build": "next build",
+    "start": "concurrently -n api,web -c blue,green \"pnpm start:api\" \"pnpm start:web\"",
+    "start:api": "tsx src/api/server.ts",
+    "start:web": "node scripts/run-next.mjs start"
+  },
+  "dependencies": {
+    "@synqworks/core": "workspace:*",
+    "@synqworks/agent-admin": "workspace:*",
+    "next": "16.2.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "hono": "^4.7.10",
+    "@hono/node-server": "^1.14.0",
+    "better-sqlite3": "^12.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "typescript": "^5.9.3",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.4",
+    "concurrently": "^9.1.2",
+    "wait-on": "^8.0.3",
+    "tailwindcss": "^3.4.17",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6"
+  }
+}

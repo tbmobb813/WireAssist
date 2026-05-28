@@ -1,297 +1,194 @@
-# LAI Monorepo Architecture
+# Architecture
 
 ## Overview
 
-The LAI monorepo is a **pnpm workspace** containing multiple interconnected packages for building privacy-first, multi-provider AI applications.
+**Nolta** is a pnpm monorepo for **SynqWorks**: a local-first AI stack with a shared core library, a desktop chat client, and an agent layer that performs real-world tasks (email, calendar) behind an approval gate.
+
+```mermaid
+flowchart TB
+  subgraph clients [Clients]
+    CC[Command Center UI<br/>Next.js :3001]
+    LAI[linux-ai-assistant<br/>Tauri + React]
+    CLI[Admin demo CLI]
+  end
+
+  subgraph agents [Agents]
+    AA[AdminAgent<br/>packages/agents/admin]
+  end
+
+  subgraph core [@synqworks/core]
+    MCP[MCPClient]
+    AQ[ApprovalQueue]
+    MS[MemoryStore]
+    EB[EventBus]
+    AI[AIClient / Providers]
+  end
+
+  subgraph external [External APIs]
+    G[Gmail API]
+    C[Google Calendar API]
+    CL[Anthropic Claude]
+  end
+
+  CC -->|REST + SSE| API[Hono API :3002]
+  API --> AA
+  CLI --> AA
+  LAI --> AI
+  AA --> MCP
+  AA --> AQ
+  AA --> MS
+  AA --> EB
+  AA --> CL
+  MCP --> G
+  MCP --> C
+```
 
 ## Packages
 
-### 1. `@lai/core` (packages/core/)
+### `@synqworks/core` (`synqworks/core/`)
 
-**Purpose:** Core AI engine with multi-provider support and data persistence.
+Foundation library used by LAI and SynqWorks agents.
 
-**Key Components:**
-- **Providers** - Abstract layer for different AI services (OpenAI, Anthropic, Gemini, Ollama)
-- **Storage** - SQLite-based conversation/message persistence with full-text search (FTS5)
-- **Context Builder** - Extracts context from files, git history, and workspace
-- **Privacy Controls** - Audit logging, optional encryption, data handling rules
-- **Streaming** - Provider-agnostic response streaming with buffering
+**Original LAI responsibilities:**
 
-**Responsibilities:**
-- ✅ Switch between AI providers seamlessly
-- ✅ Persist conversations and search history
-- ✅ Build rich context for better prompts
-- ✅ Handle streaming responses efficiently
-- ✅ Respect user privacy (local-first where possible)
+- Multi-provider AI (`AIClient`, OpenAI, Anthropic, Gemini, Ollama)
+- SQLite storage with FTS search
+- Context building (files, git, workspace)
+- Privacy controls and streaming
 
-**Dependencies:**
-- `better-sqlite3` - Local database
-- `node-fetch` - HTTP requests to API providers
-- Standard TypeScript ecosystem
+**SynqWorks agent platform additions:**
 
-### 2. `linux-ai-assistant` (packages/lai/)
+| Module | Role |
+|--------|------|
+| `agents/` | Agent types and registry |
+| `mcp/` | `MCPClient` — register and dispatch tool handlers |
+| `approval/` | `ApprovalQueue` — persist pending human approvals |
+| `memory/` | `MemoryStore` — agent memory in SQLite |
+| `events/` | `EventBus` — task lifecycle events for UI/SSE |
 
-**Purpose:** Native Linux desktop application built with Tauri + React.
+Entry point: `synqworks/core/src/index.ts`.
 
-**Key Components:**
-- **Tauri Backend** (Rust) - System integration, file watching, notifications
-- **React Frontend** - Conversation UI, settings, provider switching
-- **CLI Tool** - Command-line interface with terminal piping support
+### `linux-ai-assistant` (`synqworks/lai/`)
 
-**Responsibilities:**
-- ✅ System tray integration
-- ✅ Global keyboard shortcuts
-- ✅ File watching and quick-access
-- ✅ Conversation UI and management
-- ✅ Provider selection and configuration
-- ✅ CLI tool for terminal integration
+Native Linux desktop app (Tauri + React + Vite).
 
-**Dependencies:**
-- `@lai/core` - Core AI engine (workspace link)
-- `@tauri-apps/*` - Desktop framework
-- `react`, `zustand` - UI and state management
-- Standard web dev stack (vite, vitest, playwright)
+- Consumes `@synqworks/core` for chat and providers
+- System tray, shortcuts, CLI tooling
+- Independent from Command Center / Admin Agent
 
-## Monorepo Structure
+### `@synqworks/agent-admin` (`packages/agents/admin/`)
+
+Claude-powered agent for administrative work.
+
+| File | Role |
+|------|------|
+| `admin-agent.ts` | Task handlers: email triage, calendar review, freeform |
+| `base-agent.ts` | Anthropic completion helper |
+| `gmail-client.ts` | OAuth + Gmail API |
+| `calendar-client.ts` | Reuses Gmail OAuth token for Calendar API |
+| `mcp-setup.ts` | Registers `gmail_*` and `calendar_*` MCP tools |
+| `task-factory.ts` | Builds typed `AgentTask` objects |
+
+**Auth paths** (both clients):
+
+```ts
+const HOME_PATH = process.env.SYNQWORKS_HOME ?? os.homedir();
+// $HOME_PATH/.synqworks/gmail-credentials.json
+// $HOME_PATH/.synqworks/gmail-token.json
+```
+
+### `@synqworks/command-center` (`packages/command-center/`)
+
+Operational UI for running agents.
+
+| Layer | Tech | Port |
+|-------|------|------|
+| Web | Next.js 16 | 3001 |
+| API | Hono + `@hono/node-server` | 3002 |
+
+**API highlights:**
+
+- `POST /api/tasks/triage-email` — queue inbox triage
+- `POST /api/tasks/review-calendar` — queue calendar review
+- `POST /api/tasks/freeform` — ad-hoc instruction
+- `GET/POST /api/approvals/*` — approval queue
+- `GET /api/events` — SSE stream of agent events
+
+Bootstrap wires `setupAdminMCP` → `AdminAgent` with SQLite at `~/.synqworks/synqworks.db`.
+
+## Monorepo layout
 
 ```
-lai/
-├── .git                      # Single unified git history
-├── packages/
-│   ├── core/                # @lai/core
+Nolta/
+├── synqworks/
+│   ├── core/
 │   │   ├── src/
-│   │   │   ├── client.ts           # Main AIClient orchestrator
-│   │   │   ├── types.ts            # TypeScript interfaces
-│   │   │   ├── providers/          # AI provider implementations
-│   │   │   ├── storage/            # Database persistence
-│   │   │   ├── context/            # Context extraction
-│   │   │   ├── privacy/            # Privacy & security
-│   │   │   ├── streaming/          # Response streaming
-│   │   │   └── utils/              # Utilities
-│   │   ├── dist/            # Built output (tsconfig → tsc)
-│   │   ├── package.json
-│   │   ├── tsconfig.json
-│   │   └── jest.config.js
-│   └── lai/                 # linux-ai-assistant
-│       ├── src/             # React components
-│       ├── src-tauri/       # Rust backend
-│       ├── cli/             # CLI tool
-│       ├── playwright-e2e/  # E2E tests
-│       ├── package.json
-│       ├── vite.config.ts
-│       └── tauri.conf.json
-├── docs/                    # Monorepo documentation
-├── package.json             # Root workspace config
-├── pnpm-workspace.yaml      # Workspace declaration
-├── tsconfig.base.json       # Shared TypeScript config
-└── README.md                # Quick start guide
+│   │   │   ├── client.ts
+│   │   │   ├── providers/
+│   │   │   ├── storage/
+│   │   │   ├── agents/ memory/ approval/ mcp/ events/
+│   │   │   └── ...
+│   │   └── package.json          # @synqworks/core
+│   └── lai/
+│       ├── src/                  # React UI
+│       ├── src-tauri/            # Rust backend
+│       └── package.json          # linux-ai-assistant
+├── packages/
+│   ├── agents/admin/
+│   └── command-center/
+├── docs/
+├── pnpm-workspace.yaml
+├── tsconfig.base.json
+└── package.json
 ```
 
-## Package Management with pnpm
-
-### Workspace Setup
+## Workspace configuration
 
 ```yaml
 # pnpm-workspace.yaml
 packages:
-  - 'packages/core'
-  - 'packages/lai'
-
-onlyBuiltDependencies:
-  - better-sqlite3  # Built from source, not cached
+  - 'synqworks/core'
+  - 'synqworks/lai'
+  - 'packages/agents/admin'
+  - 'packages/command-center'
 ```
 
-### Dependency Resolution
-
-- **Internal dependencies** use `workspace:*` protocol in package.json
-  ```json
-  {
-    "dependencies": {
-      "@lai/core": "workspace:*"
-    }
-  }
-  ```
-- pnpm automatically creates symlinks to local packages
-- Changes in `@lai/core` are immediately reflected in `linux-ai-assistant`
-- No need for `npm link` or `npm install` after changes
-
-### Running Commands
-
-```bash
-# Install all dependencies
-pnpm install
-
-# Build all packages
-pnpm build
-
-# Build specific package
-pnpm build:core
-pnpm build:lai
-
-# Run tests across all packages
-pnpm test
-
-# Dev mode for specific package
-pnpm dev:core
-pnpm dev:lai
-
-# Run command in all packages
-pnpm -r test
-```
-
-## Build & Compilation Pipeline
-
-### @lai/core Build
-
-```
-src/
-  ↓ (TypeScript)
-tsc (tsconfig.json)
-  ↓
-dist/
-  ├── index.js       # Main exports
-  ├── index.d.ts     # TypeScript definitions
-  └── ...            # Built modules
-```
-
-**Entry point:** `dist/index.js`
-**Types:** `dist/index.d.ts`
-
-### linux-ai-assistant Build
-
-```
-src/ (React + TypeScript)
-  ↓ (Vite)
-vite build
-  ↓
-dist/
-  ├── index.html
-  ├── assets/        # JS, CSS chunks
-  └── ...
-
-src-tauri/ (Rust)
-  ↓ (Cargo + Tauri CLI)
-tauri build
-  ↓
-src-tauri/target/release/
-  └── linux-ai-assistant (binary)
-```
-
-## Development Workflow
-
-### Making Changes to @lai/core
-
-1. Edit files in `packages/core/src/`
-2. Run `pnpm build:core` (or `pnpm build` for all)
-3. Changes are immediately available to `linux-ai-assistant`
-4. No relink needed—pnpm symlink handles it
-
-### Making Changes to LAI
-
-1. Edit files in `packages/lai/src/` or `packages/lai/src-tauri/`
-2. Run `pnpm dev:lai` for dev mode (HMR with vite)
-3. Or `pnpm build:lai` for production build
-
-### Testing
-
-```bash
-# Test everything
-pnpm test
-
-# Test in watch mode
-pnpm test:watch
-
-# Coverage report
-pnpm test:coverage
-```
-
-## TypeScript Configuration
-
-### Root tsconfig.base.json
-
-Shared settings for all packages:
-- `target`: ES2020
-- `module`: ESNext
-- `strict`: true (no implicit any)
-- `lib`: DOM + ES2020
-
-### Path Aliases
+Internal dependencies use `workspace:*`:
 
 ```json
-{
-  "paths": {
-    "@lai/core": ["packages/core/src"],
-    "@lai/core/*": ["packages/core/src/*"]
-  }
-}
+"@synqworks/core": "workspace:*"
 ```
 
-Allows importing: `import { AIClient } from '@lai/core'`
+`better-sqlite3` is listed under `onlyBuiltDependencies` because it compiles native bindings.
 
-## Privacy & Security
+## Agent task flow
 
-- **Local-first by design:** Core supports local Ollama models
-- **Multi-provider:** Supports cloud (OpenAI, Anthropic, Gemini) and local (Ollama)
-- **Encryption optional:** Privacy controls for sensitive conversations
-- **Audit logging:** Track what data is sent where
+1. Client queues a task (`AgentTask` from task factory).
+2. `AdminAgent.run()` emits `agent:task_started` on `EventBus`.
+3. Agent calls Claude with declared tools; Claude may invoke MCP tools.
+4. MCP handlers call `GmailClient` / `CalendarClient`.
+5. Sensitive actions enqueue `ApprovalQueue` → `agent:waiting_approval`.
+6. User approves in UI or CLI → action executes → `agent:task_complete`.
 
-## Scaling & Future Considerations
+Email triage additionally emits `agent:triage_complete` with structured categories and proposed actions.
 
-### Adding UDP (United Dev Platform)
+## Data locations
 
-```
-packages/
-├── core/
-├── lai/
-└── udp/          # Web/mobile version
-    ├── web/      # React web app
-    └── mobile/   # React Native app
-```
+| Path | Contents |
+|------|----------|
+| `~/.synqworks/gmail-credentials.json` | Google OAuth client secret (user-provided) |
+| `~/.synqworks/gmail-token.json` | OAuth access + refresh token |
+| `~/.synqworks/synqworks.db` | Approvals + memory (Command Center) |
 
-Both `lai` and `udp` can share `@lai/core`:
-```json
-{
-  "dependencies": {
-    "@lai/core": "workspace:*"
-  }
-}
-```
+Override base directory with `SYNQWORKS_HOME`.
 
-### Database Evolution
+## TypeScript
 
-Current: `better-sqlite3` (sync, single-device)
-Future: Add async DB layer (for web/mobile)
+Shared options live in `tsconfig.base.json`. Each package extends it with its own `tsconfig.json`.
 
-### Open-Sourcing @lai/core
+Path aliases for LAI may map `@synqworks/core` to `synqworks/core/src` during development — check `synqworks/lai/tsconfig.json`.
 
-The monorepo structure makes it easy to:
-1. Publish `@lai/core` to npm independently
-2. Keep proprietary UI in `linux-ai-assistant`
-3. Allow others to build on top of core
+## What is not in this repo
 
-## Performance Considerations
-
-- **Workspace linking:** Zero overhead (symlinks)
-- **SQLite:** Fast local queries, FTS5 for search
-- **Streaming:** Reduces perceived latency
-- **Rust backend:** Efficient system integration
-
-## Troubleshooting
-
-**Q: Changes in @lai/core aren't reflected in LAI**
-- Run `pnpm install` again
-- Check symlink: `ls -la packages/lai/node_modules/@lai/core`
-
-**Q: Build fails with dependency errors**
-- Delete `pnpm-lock.yaml` and `node_modules/`
-- Run `pnpm install` again
-
-**Q: Type errors after changing @lai/core**
-- Run `pnpm build:core`
-- Restart TypeScript server in IDE
-
-## References
-
-- [pnpm Workspaces](https://pnpm.io/workspaces)
-- [TypeScript Project References](https://www.typescriptlang.org/docs/handbook/project-references.html)
-- [Monorepo Best Practices](https://monorepo.tools/)
+- `packages/core` and `packages/lai` — legacy paths from an earlier layout; packages live under `synqworks/`.
+- `@lai/core` — renamed to `@synqworks/core`.

@@ -45,13 +45,52 @@ export class MemoryStore {
     return id;
   }
 
+  /** Build a safe FTS5 MATCH string from arbitrary user/agent text. */
+  private toFtsQuery(raw: string): string | null {
+    const tokens = raw
+      .trim()
+      .split(/[^\w]+/)
+      .map(t => t.replace(/"/g, '""'))
+      .filter(t => t.length > 0);
+    if (tokens.length === 0) return null;
+    return tokens.map(t => `"${t}"`).join(' ');
+  }
+
+  listRecent(limit = 50, filters?: { agentRole?: AgentRole }): MemoryEntry[] {
+    let sql = `SELECT * FROM memories`;
+    const params: unknown[] = [];
+    if (filters?.agentRole) {
+      sql += ` WHERE agent_role = ?`;
+      params.push(filters.agentRole);
+    }
+    sql += ` ORDER BY created_at DESC LIMIT ?`;
+    params.push(limit);
+    const rows = this.db.prepare(sql).all(...params) as Array<{
+      id: string;
+      content: string;
+      agent_role: AgentRole;
+      tags: string;
+      created_at: string;
+    }>;
+    return rows.map(r => ({
+      id: r.id,
+      content: r.content,
+      agentRole: r.agent_role,
+      tags: JSON.parse(r.tags),
+      createdAt: new Date(r.created_at),
+    }));
+  }
+
   search(query: string, filters?: { agentRole?: AgentRole }): MemoryEntry[] {
+    const ftsQuery = this.toFtsQuery(query);
+    if (!ftsQuery) return [];
+
     let sql = `
       SELECT m.* FROM memories m
       JOIN memories_fts fts ON m.rowid = fts.rowid
       WHERE memories_fts MATCH ?
     `;
-    const params: unknown[] = [query];
+    const params: unknown[] = [ftsQuery];
 
     if (filters?.agentRole) {
       sql += ` AND m.agent_role = ?`;
@@ -59,7 +98,19 @@ export class MemoryStore {
     }
 
     sql += ` ORDER BY rank LIMIT 20`;
-    const rows = this.db.prepare(sql).all(...params) as any[];
+
+    let rows: Array<{
+      id: string;
+      content: string;
+      agent_role: AgentRole;
+      tags: string;
+      created_at: string;
+    }>;
+    try {
+      rows = this.db.prepare(sql).all(...params) as typeof rows;
+    } catch {
+      return [];
+    }
 
     return rows.map(r => ({
       id: r.id,
