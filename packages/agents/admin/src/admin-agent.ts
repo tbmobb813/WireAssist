@@ -139,7 +139,7 @@ export class AdminAgent extends BaseAgent {
     );
 
     // 3. Load memory context — who we know, past decisions
-    const context = this.loadContext('email contacts preferences ignore rules');
+    const context = await this.loadContext('email contacts preferences ignore rules');
 
     // 4. Ask Claude to triage
     const triagePrompt = `
@@ -257,7 +257,7 @@ Only return valid JSON. No markdown fences.`;
       maxResults: 50,
     }) as CalendarEvent[];
 
-    const context = this.loadContext('calendar preferences meeting preferences work hours');
+    const context = await this.loadContext('calendar preferences meeting preferences work hours');
 
     const reviewPrompt = `
 Review my calendar for the next ${daysAhead} days and identify:
@@ -376,7 +376,7 @@ Only return valid JSON. No markdown fences.`;
       input.type === 'freeform' && typeof input.prompt === 'string'
         ? input.prompt
         : task.description;
-    const context = this.loadContext(prompt);
+    const context = await this.loadContext(prompt);
     const response = await this.think(prompt, context);
 
     this.events.emit('agent:freeform_response', {
