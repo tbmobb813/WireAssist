@@ -19,6 +19,7 @@ function applyEnvFile(filePath: string) {
     ) {
       value = value.slice(1, -1);
     }
+    if (process.env[key] !== undefined) continue;
     process.env[key] = value;
   }
 }

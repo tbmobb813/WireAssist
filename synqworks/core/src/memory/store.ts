@@ -49,8 +49,8 @@ export class MemoryStore {
   private toFtsQuery(raw: string): string | null {
     const tokens = raw
       .trim()
-      .split(/\s+/)
-      .map(t => t.replace(/[^\w]/g, '').replace(/"/g, '""'))
+      .split(/[^\w]+/)
+      .map(t => t.replace(/"/g, '""'))
       .filter(t => t.length > 0);
     if (tokens.length === 0) return null;
     return tokens.map(t => `"${t}"`).join(' ');

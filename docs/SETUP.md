@@ -4,7 +4,7 @@
 
 | Requirement | Version | Needed for |
 |-------------|---------|------------|
-| Node.js | 18+ | All packages |
+| Node.js | 20.9+ | All packages (Next.js 16 in Command Center requires >=20.9) |
 | pnpm | 11+ | Workspace install (`corepack enable` recommended) |
 | Rust | 1.70+ | `synqworks/lai` Tauri app only |
 
@@ -114,7 +114,27 @@ pnpm --filter @synqworks/command-center dev
 
 The Next.js app proxies `/api/*` to the Hono API (see `packages/command-center/next.config.ts`). Command Center uses **Next.js 16** and **React 19**.
 
+Optional port overrides (must match across API, Next rewrites, and `wait-on`):
+
+```bash
+export API_PORT=3003
+export WEB_PORT=3001
+pnpm --filter @synqworks/command-center dev
+```
+
+Root `.env` is loaded by the API on startup. Variables already set in your shell are **not** overwritten (e.g. `export ANTHROPIC_API_KEY=...` wins over `.env`).
+
 If the API fails with `EADDRINUSE` on port 3002, a previous API process is still running. `pnpm dev:api` runs a pre-step to free the port; you can also run `fuser -k 3002/tcp` manually.
+
+### Production start (Command Center)
+
+After `pnpm build:command-center`, run **both** the API and the web server (same as dev):
+
+```bash
+pnpm --filter @synqworks/command-center start
+```
+
+This runs `start:api` (Hono) and `start:web` (`next start`) via `concurrently`.
 
 SQLite state for approvals and memory defaults to `~/.synqworks/synqworks.db`.
 

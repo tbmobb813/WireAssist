@@ -2,13 +2,18 @@
   "name": "@synqworks/command-center",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"pnpm dev:api\" \"pnpm dev:web\"",
-    "predev:api": "node scripts/free-dev-port.mjs 3002",
+    "predev:api": "node scripts/free-dev-port.mjs",
     "dev:api": "tsx src/api/server.ts",
-    "dev:web": "wait-on -t 60000 http-get://127.0.0.1:3002/health && next dev --port 3001",
+    "dev:web": "node scripts/wait-for-api.mjs && node scripts/run-next.mjs dev",
     "build": "next build",
-    "start": "next start"
+    "start": "concurrently -n api,web -c blue,green \"pnpm start:api\" \"pnpm start:web\"",
+    "start:api": "tsx src/api/server.ts",
+    "start:web": "node scripts/run-next.mjs start"
   },
   "dependencies": {
     "@synqworks/core": "workspace:*",
