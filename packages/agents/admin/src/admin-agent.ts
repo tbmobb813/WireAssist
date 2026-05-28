@@ -184,13 +184,13 @@ Only return valid JSON. No markdown fences.`;
 
     // Propose drafts for reply-needed emails
     for (const email of triage.categories.replyNeeded ?? []) {
-      const safeThreadId = validThreadIds.has(email.threadId) ? email.threadId : undefined;
+      if (!validThreadIds.has(email.threadId)) continue;
       proposedActions.push({
         id: randomUUID(),
         type: 'create_draft',
         label: `Draft reply to: "${email.subject}" from ${email.from}`,
         payload: {
-          threadId: safeThreadId,
+          threadId: email.threadId,
           body: email.draftReply,
         },
       });
@@ -474,4 +474,3 @@ interface CalendarReview {
   suggestions: { type: string; description: string; action: string }[];
   summary: string;
 }
-

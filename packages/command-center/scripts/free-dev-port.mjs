@@ -5,7 +5,9 @@
  */
 import { execSync } from 'node:child_process';
 
-const port = process.argv[2] ?? '3002';
+import { getApiPort } from './ports.mjs';
+
+const port = process.argv[2] ?? getApiPort();
 
 try {
   execSync(`fuser -k ${port}/tcp`, { stdio: 'ignore' });

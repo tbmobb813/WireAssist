@@ -34,12 +34,13 @@
       "@synqworks/agent-content/*": ["packages/agents/content/src/*"]
     }
   },
-  "include": ["synqworks", "packages/agents", "packages/synqpost-mcp"],
+  "include": ["synqworks", "packages/agents", "packages/synqpost-mcp", "packages/command-center"],
   "references": [
     { "path": "./synqworks/core" },
     { "path": "./synqworks/lai" },
     { "path": "./packages/agents/admin" },
     { "path": "./packages/synqpost-mcp" },
-    { "path": "./packages/agents/content" }
+    { "path": "./packages/agents/content" },
+    { "path": "./packages/command-center" }
   ]
 }

@@ -30,7 +30,7 @@ Nolta/
 
 ## Prerequisites
 
-- **Node.js** 18+
+- **Node.js** 20.9+ (required for Command Center / Next.js 16; 18+ may work for core and LAI only)
 - **pnpm** 11+ (see `packageManager` in root `package.json`)
 - **Rust** 1.70+ (only for the Tauri desktop app)
 - **Anthropic API key** (for the Admin Agent)
