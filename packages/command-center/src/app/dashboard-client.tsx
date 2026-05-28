@@ -87,8 +87,34 @@ function describeEvent(event: string, payload: unknown): { description: string; 
         role: 'admin',
       };
     }
+    case 'content_generated': {
+      const topic = typeof p.topic === 'string' ? p.topic : 'unknown topic';
+      const platform = typeof p.platform === 'string' ? p.platform : '';
+      return { description: `Generated ${platform} post: "${topic}" — awaiting approval`, role: 'content' };
+    }
+    case 'content_approved': {
+      const platform = typeof p.platform === 'string' ? p.platform : '';
+      const content = typeof p.content === 'string' ? p.content.slice(0, 60) : '';
+      return { description: `${platform} post approved: "${content}..."`, role: 'content' };
+    }
+    case 'content_plan_generated': {
+      const total = typeof p.totalGenerated === 'number' ? p.totalGenerated : 0;
+      return { description: `Content plan generated: ${total} ideas — awaiting approval`, role: 'content' };
+    }
+    case 'post_scheduled': {
+      const post = p.post as { platform?: string; scheduledAt?: string } | undefined;
+      const platform = post?.platform ?? '';
+      const date = post?.scheduledAt ? new Date(post.scheduledAt).toLocaleDateString() : '';
+      return { description: `${platform} post scheduled for ${date}`, role: 'content' };
+    }
+    case 'content_analyzed':
+      return { description: 'Content analysis complete', role: 'content' };
+    case 'scheduled_posts': {
+      const count = Array.isArray(p.posts) ? p.posts.length : 0;
+      return { description: `Loaded ${count} scheduled post${count !== 1 ? 's' : ''}`, role: 'content' };
+    }
     default:
-      return { description: event, role: 'admin' };
+      return { description: event, role: typeof p.agentRole === 'string' ? p.agentRole : 'admin' };
   }
 }
 

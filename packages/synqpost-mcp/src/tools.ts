@@ -1,6 +1,15 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { SynqPostStorage, Platform } from './storage';
+import { SynqPostStorage, Platform, PostStatus } from './storage';
 import type { MCPClient } from '@synqworks/core';
+
+function parseJson<T>(raw: string, context: string): T {
+  const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  try {
+    return JSON.parse(stripped) as T;
+  } catch {
+    throw new Error(`${context} returned unparseable JSON: ${stripped.slice(0, 200)}`);
+  }
+}
 
 const client = new Anthropic();
 
@@ -90,12 +99,12 @@ Return only valid JSON array. No markdown fences.`;
       .map(b => b.text)
       .join('');
 
-    const ideas = JSON.parse(raw) as Array<{
+    const ideas = parseJson<Array<{
       topic: string;
       angle: string;
       platform: Platform;
       suggestedDay?: string;
-    }>;
+    }>>(raw, 'content_generate_plan');
 
     const saved = ideas.map(idea =>
       storage.createIdea({
@@ -184,9 +193,6 @@ Return only valid JSON. No markdown fences.`;
       .map(b => b.text)
       .join('');
 
-    return JSON.parse(raw);
+    return parseJson(raw, 'content_analyze');
   });
 }
-
-// Re-export for convenience
-type PostStatus = import('./storage').PostStatus;
