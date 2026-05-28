@@ -8,7 +8,7 @@
 flowchart TB
   subgraph clients [Clients]
     CC[Command Center UI<br/>Next.js :3001]
-    LAI[linux-ai-assistant<br/>Tauri + React]
+    AIA[ai-assist<br/>Tauri + React]
     CLI[Admin demo CLI]
   end
 
@@ -33,7 +33,7 @@ flowchart TB
   CC -->|REST + SSE| API[Hono API :3002]
   API --> AA
   CLI --> AA
-  LAI --> AI
+  AIA --> AI
   AA --> MCP
   AA --> AQ
   AA --> MS
@@ -47,9 +47,9 @@ flowchart TB
 
 ### `@synqworks/core` (`synqworks/core/`)
 
-Foundation library used by LAI and SynqWorks agents.
+Foundation library used by AIA and SynqWorks agents.
 
-**Original LAI responsibilities:**
+**Original AIA responsibilities:**
 
 - Multi-provider AI (`AIClient`, OpenAI, Anthropic, Gemini, Ollama)
 - SQLite storage with FTS search
@@ -68,7 +68,7 @@ Foundation library used by LAI and SynqWorks agents.
 
 Entry point: `synqworks/core/src/index.ts`.
 
-### `linux-ai-assistant` (`synqworks/lai/`)
+### `ai-assist` (`synqworks/aia/`)
 
 Native Linux desktop app (Tauri + React + Vite).
 
@@ -129,10 +129,10 @@ Nolta/
 │   │   │   ├── agents/ memory/ approval/ mcp/ events/
 │   │   │   └── ...
 │   │   └── package.json          # @synqworks/core
-│   └── lai/
+│   └── aia/
 │       ├── src/                  # React UI
 │       ├── src-tauri/            # Rust backend
-│       └── package.json          # linux-ai-assistant
+│       └── package.json          # ai-assist
 ├── packages/
 │   ├── agents/admin/
 │   └── command-center/
@@ -148,7 +148,7 @@ Nolta/
 # pnpm-workspace.yaml
 packages:
   - 'synqworks/core'
-  - 'synqworks/lai'
+  - 'synqworks/aia'
   - 'packages/agents/admin'
   - 'packages/command-center'
 ```
@@ -186,9 +186,9 @@ Override base directory with `SYNQWORKS_HOME`.
 
 Shared options live in `tsconfig.base.json`. Each package extends it with its own `tsconfig.json`.
 
-Path aliases for LAI may map `@synqworks/core` to `synqworks/core/src` during development — check `synqworks/lai/tsconfig.json`.
+Path aliases for AIA may map `@synqworks/core` to `synqworks/core/src` during development — check `synqworks/aia/tsconfig.json`.
 
 ## What is not in this repo
 
-- `packages/core` and `packages/lai` — legacy paths from an earlier layout; packages live under `synqworks/`.
-- `@lai/core` — renamed to `@synqworks/core`.
+- `packages/core` and `packages/aia` — legacy paths from an earlier layout; packages live under `synqworks/`.
+- `@aia/core` — renamed to `@synqworks/core`.

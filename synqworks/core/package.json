@@ -1,7 +1,7 @@
 {
   "name": "@synqworks/core",
   "version": "0.1.0",
-  "description": "Core AI engine for LAI and UDP - multi-provider AI with privacy controls",
+  "description": "Core AI engine for AIA and UDP - multi-provider AI with privacy controls",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -47,6 +47,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/tbmobb813/lai-code.git"
+    "url": "https://github.com/tbmobb813/aia-code.git"
   }
 }

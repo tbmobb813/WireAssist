@@ -1,10 +1,10 @@
 # @synqworks/core
 
-Core AI engine for **SynqWorks** and the **Linux AI Assistant** — multi-provider AI with privacy controls, streaming, and the agent platform (MCP, approvals, memory, events).
+Core AI engine for **SynqWorks** and the **AI Assist** — multi-provider AI with privacy controls, streaming, and the agent platform (MCP, approvals, memory, events).
 
-> Package name in this monorepo: `@synqworks/core` (path: `synqworks/core/`). Older docs may refer to `@lai/core`.
+> Package name in this monorepo: `@synqworks/core` (path: `synqworks/core/`). Older docs may refer to `@aia/core`.
 
-[![license](https://img.shields.io/npm/l/@lai/core.svg)](https://github.com/tbmobb813/lai-core/blob/main/LICENSE)
+[![license](https://img.shields.io/npm/l/@aia/core.svg)](https://github.com/tbmobb813/aia-core/blob/main/LICENSE)
 
 ## Features
 
@@ -39,7 +39,7 @@ import {
   CoreStreamingProvider,
   SearchService,
   PrivacyService,
-} from '@lai/core';
+} from '@aia/core';
 
 // Initialize provider
 const provider = new CoreStreamingProvider({
@@ -63,7 +63,7 @@ console.log('Full response:', response);
 ### Search with Filtering
 
 ```typescript
-import { SearchService } from '@lai/core';
+import { SearchService } from '@aia/core';
 
 const searchService = new SearchService();
 
@@ -83,7 +83,7 @@ results.conversations.forEach((result) => {
 ### Privacy & Encryption
 
 ```typescript
-import { PrivacyService } from '@lai/core';
+import { PrivacyService } from '@aia/core';
 
 // Initialize encryption
 const privacyService = new PrivacyService();
@@ -109,7 +109,7 @@ const logs = privacyService.exportAuditLogs('csv');
 import {
   CoreStreamingProvider,
   ContextAwareProvider,
-} from '@lai/core';
+} from '@aia/core';
 
 const baseProvider = new CoreStreamingProvider({
   apiKey: process.env.OPENAI_API_KEY,
@@ -137,7 +137,7 @@ const response = await contextProvider.generateResponse(
 ### OpenAI
 
 ```typescript
-import { getCoreStreamingProvider } from '@lai/core';
+import { getCoreStreamingProvider } from '@aia/core';
 
 const provider = getCoreStreamingProvider({
   type: 'openai',
@@ -183,7 +183,7 @@ const provider = getCoreStreamingProvider({
 ## Database
 
 ```typescript
-import { Database } from '@lai/core';
+import { Database } from '@aia/core';
 
 const db = new Database(':memory:'); // or './conversations.db'
 
@@ -213,7 +213,7 @@ const messages = await db.messages.getByConversation('conv-123');
 ## Search
 
 ```typescript
-import { SearchService } from '@lai/core';
+import { SearchService } from '@aia/core';
 
 const search = new SearchService();
 
@@ -243,7 +243,7 @@ const history = search.getHistory(50);
 ## Privacy Controls
 
 ```typescript
-import { PrivacyService } from '@lai/core';
+import { PrivacyService } from '@aia/core';
 
 const privacy = new PrivacyService();
 
@@ -340,7 +340,7 @@ SQLite-based persistence layer.
 ## Architecture
 
 ```
-@lai/core
+@aia/core
 ├── Providers (OpenAI, Anthropic, Gemini, Ollama)
 ├── Streaming (Real-time response streaming)
 ├── Context (Workspace and file context injection)
@@ -445,9 +445,9 @@ MIT - see LICENSE file for details
 
 ## Support
 
-- 📖 [Documentation](https://github.com/tbmobb813/lai-core/wiki)
-- 🐛 [Issue Tracker](https://github.com/tbmobb813/lai-core/issues)
-- 💬 [Discussions](https://github.com/tbmobb813/lai-core/discussions)
+- 📖 [Documentation](https://github.com/tbmobb813/aia-core/wiki)
+- 🐛 [Issue Tracker](https://github.com/tbmobb813/aia-core/issues)
+- 💬 [Discussions](https://github.com/tbmobb813/aia-core/discussions)
 
 ## Changelog
 

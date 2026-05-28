@@ -1,4 +1,4 @@
-// @lai/core/src/types.ts
+// @aia/core/src/types.ts
 
 export type ProviderType = 'openai' | 'anthropic' | 'gemini' | 'ollama';
 

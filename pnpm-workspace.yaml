@@ -1,6 +1,6 @@
 packages:
   - 'synqworks/core'
-  - 'synqworks/lai'
+  - 'synqworks/aia'
   - 'packages/agents/admin'
   - 'packages/agents/content'
   - 'packages/synqpost-mcp'

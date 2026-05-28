@@ -1,4 +1,4 @@
-// @lai/core/src/providers/index.ts
+// @aia/core/src/providers/index.ts
 
 import { OpenAIProvider } from './openai';
 import { AnthropicProvider } from './anthropic';

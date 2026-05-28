@@ -1,4 +1,4 @@
-// @lai/core/src/index.ts
+// @aia/core/src/index.ts
 
 // Main client
 export { AIClient } from './client';

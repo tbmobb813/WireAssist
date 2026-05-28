@@ -9,10 +9,10 @@
 ## 🎯 Phase 2 Goal - Streaming Support Complete
 
 ### ✅ Core Streaming Integration
-- [x] Core streaming provider (`coreStreamingProvider.ts`) integrating @lai/core directly
+- [x] Core streaming provider (`coreStreamingProvider.ts`) integrating @aia/core directly
 - [x] Support for OpenAI, Anthropic, Gemini, and Ollama providers with streaming
 - [x] Proper API key validation for each provider
-- [x] Type-safe streaming with @lai/core's AsyncGenerator pattern
+- [x] Type-safe streaming with @aia/core's AsyncGenerator pattern
 
 ### ✅ Streaming Service Layer
 - [x] `StreamingService` for session management
@@ -45,7 +45,7 @@ Database Adapters:            15 tests
 Provider Integration:         30 tests
 E2E Message Flow:             9 tests
 Core Integration:             23 tests
-Existing LAI Tests:          154 tests
+Existing AIA Tests:          154 tests
 
 Total:                       283 tests (all passing)
 Test Files:                   44 files (43 passed, 1 skipped)
@@ -58,10 +58,10 @@ Test Files:                   44 files (43 passed, 1 skipped)
 ### New Streaming Components
 
 ```
-LAI App
+AIA App
 ├── lib/
 │   ├── providers/
-│   │   ├── coreStreamingProvider.ts    [NEW] Direct @lai/core streaming
+│   │   ├── coreStreamingProvider.ts    [NEW] Direct @aia/core streaming
 │   │   ├── hybridProvider.ts           [EXISTING] Provider selection
 │   │   ├── provider.ts                 [EXISTING] Provider interface
 │   │   └── mockProvider.ts             [EXISTING] Mock provider
@@ -89,9 +89,9 @@ ChatStore.sendMessage()
     ├─ Create optimistic assistant message (empty)
     ├─ Get CoreStreamingProvider instance
     ├─ Call provider.generateResponse() with onChunk callback
-    │   ├─ Provider uses @lai/core's ProviderFactory
+    │   ├─ Provider uses @aia/core's ProviderFactory
     │   ├─ Calls provider.stream() which returns AsyncGenerator
-    │   ├─ Uses @lai/core's handleStream() for chunk processing
+    │   ├─ Uses @aia/core's handleStream() for chunk processing
     │   └─ Calls onChunk for each chunk
     │
     ├─ onChunk callback
@@ -109,7 +109,7 @@ ChatStore.sendMessage()
 ## 🚀 Key Features Implemented
 
 ### 1. Core Streaming Provider
-- Directly uses @lai/core's `ProviderFactory` and `handleStream`
+- Directly uses @aia/core's `ProviderFactory` and `handleStream`
 - Supports all 4 providers natively:
   - **OpenAI:** GPT-4, GPT-3.5-turbo with real streaming
   - **Anthropic:** Claude 3 family with real streaming
@@ -254,14 +254,14 @@ const assistantContent = await provider.generateResponse(
 - Streaming doesn't affect database operations
 - Complete message stored after streaming finishes
 - Message status tracking ("streaming", "sent", "failed")
-- Works with both Tauri and @lai/core backends
+- Works with both Tauri and @aia/core backends
 
 ---
 
 ## ⚠️ Known Limitations
 
 1. **Tauri IPC Fallback:** Current provider.ts still uses Tauri IPC for OpenAI/Ollama streaming
-   - `CoreStreamingProvider` provides direct @lai/core alternative
+   - `CoreStreamingProvider` provides direct @aia/core alternative
    - Migration can be done incrementally
 
 2. **Model-Specific Streaming:** Some providers may not support streaming
@@ -345,13 +345,13 @@ await provider.generateResponse(convId, messages, (chunk) => {
 
 **Phase 2 is complete with full streaming support!** The monorepo now has:
 
-1. **Direct @lai/core streaming integration** via `CoreStreamingProvider`
+1. **Direct @aia/core streaming integration** via `CoreStreamingProvider`
 2. **Session management** with `StreamingService`
 3. **Real-time UI updates** through existing chatStore infrastructure
 4. **Comprehensive test coverage** with 52 new tests (all passing)
 5. **Multiple provider support** (OpenAI, Anthropic, Gemini, Ollama)
 
-The implementation leverages @lai/core's existing streaming capabilities while providing a clean LAI app integration layer. All streaming features work transparently with the existing chat interface, providing real-time feedback to users as AI responses are generated.
+The implementation leverages @aia/core's existing streaming capabilities while providing a clean AIA app integration layer. All streaming features work transparently with the existing chat interface, providing real-time feedback to users as AI responses are generated.
 
 **Status: READY FOR PRODUCTION** ✅
 

@@ -4,7 +4,7 @@ import Database from 'better-sqlite3';
 export class SettingsStore {
   private db: Database.Database;
 
-  constructor(storagePath: string = './data/lai.db') {
+  constructor(storagePath: string = './data/aia.db') {
     this.db = new Database(storagePath);
     this.initTables();
   }

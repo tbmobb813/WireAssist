@@ -1,4 +1,4 @@
-// @lai/core/src/client.ts
+// @aia/core/src/client.ts
 
 import { ProviderFactory } from './providers';
 import type { Provider } from './providers/base';

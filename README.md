@@ -9,7 +9,7 @@ The repository name is **Nolta**; product surfaces use **SynqWorks**.
 | Package | Path | Purpose |
 |---------|------|---------|
 | `@synqworks/core` | `synqworks/core/` | Shared AI engine, storage, agents, MCP, approval queue, memory |
-| `linux-ai-assistant` | `synqworks/lai/` | Tauri + React desktop app for local multi-provider chat |
+| `ai-assist` | `synqworks/aia/` | Tauri + React desktop app for local multi-provider chat |
 | `@synqworks/agent-admin` | `packages/agents/admin/` | Admin agent — Gmail + Google Calendar via Claude |
 | `@synqworks/command-center` | `packages/command-center/` | Next.js dashboard + Hono API to run agents and review approvals |
 
@@ -19,7 +19,7 @@ The repository name is **Nolta**; product surfaces use **SynqWorks**.
 Nolta/
 ├── synqworks/
 │   ├── core/                 # @synqworks/core
-│   └── lai/                  # linux-ai-assistant (Tauri)
+│   └── aia/                  # ai-assist (Tauri)
 ├── packages/
 │   ├── agents/admin/         # @synqworks/agent-admin
 │   └── command-center/       # @synqworks/command-center
@@ -30,7 +30,7 @@ Nolta/
 
 ## Prerequisites
 
-- **Node.js** 20.9+ (required for Command Center / Next.js 16; 18+ may work for core and LAI only)
+- **Node.js** 20.9+ (required for Command Center / Next.js 16; 18+ may work for core and AIA only)
 - **pnpm** 11+ (see `packageManager` in root `package.json`)
 - **Rust** 1.70+ (only for the Tauri desktop app)
 - **Anthropic API key** (for the Admin Agent)
@@ -73,12 +73,12 @@ pnpm --filter @synqworks/agent-admin build
 cd packages/agents/admin && node dist/demo.js
 ```
 
-### Linux AI Assistant (desktop)
+### AI Assist (desktop)
 
 ```bash
-pnpm dev:lai
+pnpm dev:aia
 # or
-pnpm --filter linux-ai-assistant dev
+pnpm --filter ai-assist dev
 ```
 
 Requires Rust and Tauri toolchain — see [docs/SETUP.md](docs/SETUP.md).
@@ -90,10 +90,10 @@ Requires Rust and Tauri toolchain — see [docs/SETUP.md](docs/SETUP.md).
 | `pnpm install` | Install all workspace dependencies |
 | `pnpm build` | Build all packages |
 | `pnpm build:core` | Build `@synqworks/core` only |
-| `pnpm build:lai` | Build desktop app only |
+| `pnpm build:aia` | Build desktop app only |
 | `pnpm dev` | Run `dev` in all packages (parallel) |
 | `pnpm dev:core` | Watch-build core |
-| `pnpm dev:lai` | Vite dev server for LAI |
+| `pnpm dev:aia` | Vite dev server for AIA |
 | `pnpm test` | Run tests across packages |
 | `pnpm --filter @synqworks/command-center dev` | Command Center API + web |
 
@@ -114,7 +114,7 @@ Gmail and Calendar share one OAuth token stored under `$SYNQWORKS_HOME/.synqwork
 |----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | Admin Agent, core providers | Claude API access |
 | `SYNQWORKS_HOME` | Gmail/Calendar clients | Base directory for `.synqworks/` config (default: user home) |
-| `OPENAI_API_KEY`, etc. | LAI / core providers | Optional; see core provider docs |
+| `OPENAI_API_KEY`, etc. | AIA / core providers | Optional; see core provider docs |
 
 Place Google OAuth client JSON at:
 
