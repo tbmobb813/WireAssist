@@ -306,10 +306,38 @@ app.get('/api/content/ideas', c => {
 });
 
 // ── MEMORY ────────────────────────────────────────────────────────────────
-app.get('/api/memory', c => {
+app.get('/api/memory', async c => {
   const query = (c.req.query('q') ?? '').trim();
   if (!query) return c.json(memory.listRecent());
-  return c.json(memory.search(query));
+  return c.json(await memory.searchAsync(query));
+});
+
+app.post('/api/memory/upgrade-embeddings', async c => {
+  if (!agentReady) return c.json({ error: 'not ready' }, 503);
+  const result = await memory.upgradeEmbeddings();
+  return c.json(result);
+});
+
+app.post('/api/memory/onboard', async c => {
+  if (!agentReady) return c.json({ error: 'not ready' }, 503);
+  const body = await c.req.json().catch(() => ({})) as { answers?: Record<string, string> };
+  const { answers } = body;
+  if (!answers || typeof answers !== 'object') {
+    return c.json({ error: 'answers object required' }, 400);
+  }
+  let stored = 0;
+  for (const [question, answer] of Object.entries(answers)) {
+    if (typeof answer === 'string' && answer.trim()) {
+      await memory.storeAsync({
+        content: `${question}: ${answer.trim()}`,
+        agentRole: 'admin',
+        tags: ['onboarding'],
+        createdAt: new Date(),
+      });
+      stored++;
+    }
+  }
+  return c.json({ ok: true, stored });
 });
 
 // ── SSE STREAM ────────────────────────────────────────────────────────────

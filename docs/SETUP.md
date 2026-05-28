@@ -124,7 +124,7 @@ pnpm --filter @synqworks/command-center dev
 
 Root `.env` is loaded by the API on startup. Variables already set in your shell are **not** overwritten (e.g. `export ANTHROPIC_API_KEY=...` wins over `.env`).
 
-If the API fails with `EADDRINUSE` on port 3002, a previous API process is still running. `pnpm dev:api` runs a pre-step to free the port; you can also run `fuser -k 3002/tcp` manually.
+If you see `EADDRINUSE` on port 3002 or 3001, a previous dev process is still running. `pnpm dev:command-center` runs pre-steps to free both ports; you can also run `fuser -k 3002/tcp` or `fuser -k 3001/tcp` manually.
 
 ### Production start (Command Center)
 

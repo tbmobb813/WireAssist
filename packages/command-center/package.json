@@ -7,8 +7,9 @@
   },
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"pnpm dev:api\" \"pnpm dev:web\"",
-    "predev:api": "node scripts/free-dev-port.mjs",
+    "predev:api": "node scripts/free-dev-port.mjs api",
     "dev:api": "tsx src/api/server.ts",
+    "predev:web": "node scripts/free-dev-port.mjs web",
     "dev:web": "node scripts/wait-for-api.mjs && node scripts/run-next.mjs dev",
     "build": "next build",
     "start": "concurrently -n api,web -c blue,green \"pnpm start:api\" \"pnpm start:web\"",

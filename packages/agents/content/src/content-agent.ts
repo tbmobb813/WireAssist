@@ -108,7 +108,7 @@ export class ContentAgent extends BaseAgent {
       tone?: string;
     };
 
-    const context = this.loadContext('business description products services audience');
+    const context = await this.loadContext('business description products services audience');
 
     const result = await this.useTool('content_generate', {
       topic, platform, tone, context,
@@ -157,7 +157,7 @@ export class ContentAgent extends BaseAgent {
       postsPerWeek?: number;
     };
 
-    const businessContext = this.loadContext('business description products services recent news');
+    const businessContext = await this.loadContext('business description products services recent news');
 
     const result = await this.useTool('content_generate_plan', {
       businessContext: businessContext || 'Solo business operator',
@@ -243,7 +243,7 @@ export class ContentAgent extends BaseAgent {
   // ─── FREEFORM ─────────────────────────────────────────────────
 
   private async handleFreeform(task: AgentTask): Promise<void> {
-    const context = this.loadContext(task.description);
+    const context = await this.loadContext(task.description);
     const response = await this.think(task.description, context);
     this.events.emit('agent:freeform_response', { taskId: task.id, response });
   }

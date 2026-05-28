@@ -315,6 +315,7 @@ export default function DashboardClient() {
           { href: '/content', label: 'CONTENT' },
           { href: '/chat', label: 'AGENT CHAT' },
           { href: '/memory', label: 'MEMORY' },
+          { href: '/onboarding', label: 'SETUP' },
         ].map(item => (
           <Link
             key={item.href}
