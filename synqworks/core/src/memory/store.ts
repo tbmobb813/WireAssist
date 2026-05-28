@@ -40,6 +40,12 @@ export class MemoryStore {
         VALUES (new.rowid, new.content, new.agent_role, new.tags);
       END;
     `);
+
+    // Migrate existing DBs that pre-date the embedding column
+    const cols = this.db.prepare('PRAGMA table_info(memories)').all() as Array<{ name: string }>;
+    if (!cols.some(c => c.name === 'embedding')) {
+      this.db.exec('ALTER TABLE memories ADD COLUMN embedding BLOB');
+    }
   }
 
   /** Synchronous store — embedding is generated fire-and-forget in the background. */
@@ -50,7 +56,9 @@ export class MemoryStore {
       VALUES (?, ?, ?, ?, ?)
     `).run(id, entry.content, entry.agentRole, JSON.stringify(entry.tags), entry.createdAt.toISOString());
 
-    this.backfillEmbedding(id, entry.content).catch(() => {});
+    this.backfillEmbedding(id, entry.content).catch(err => {
+      console.warn('[MemoryStore] Background embedding failed for entry', id, err instanceof Error ? err.message : err);
+    });
     return id;
   }
 
@@ -103,7 +111,9 @@ export class MemoryStore {
     // Prime cache for the next call (fire-and-forget)
     embed(query).then(vec => {
       this.cacheQueryVec(query, vec);
-    }).catch(() => {});
+    }).catch(err => {
+      console.warn('[MemoryStore] Query embedding cache-prime failed:', err instanceof Error ? err.message : err);
+    });
 
     return this.ftsSearch(query, filters);
   }

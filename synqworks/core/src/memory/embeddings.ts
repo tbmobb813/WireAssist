@@ -4,18 +4,28 @@ type EmbedderFn = (text: string, options: Record<string, unknown>) => Promise<an
 let _embedder: EmbedderFn | null = null;
 let _loading: Promise<EmbedderFn> | null = null;
 
+// Bypass TypeScript's CommonJS downlevelling of import() → require().
+// @xenova/transformers is ESM-only; require() would throw ERR_REQUIRE_ESM.
+const _dynamicImport = new Function('m', 'return import(m)') as (m: string) => Promise<unknown>;
+
 export async function getEmbedder(): Promise<EmbedderFn> {
   if (_embedder) return _embedder;
   if (_loading) return _loading;
 
   _loading = (async () => {
-    // Dynamic import keeps ESM-only @xenova/transformers out of the CommonJS require graph
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { pipeline, env } = await import('@xenova/transformers') as any;
-    // Silence noisy HuggingFace progress bars in server logs
-    env.allowLocalModels = false;
-    _embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-    return _embedder as EmbedderFn;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { pipeline, env } = await _dynamicImport('@xenova/transformers') as any;
+      // Silence HuggingFace download progress bars in server logs
+      env.allowLocalModels = false;
+      const embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2') as EmbedderFn;
+      _embedder = embedder;
+      return embedder;
+    } catch (err) {
+      // Reset so a later call can attempt to load again (e.g. after a transient network failure)
+      _loading = null;
+      throw err;
+    }
   })();
   return _loading;
 }
@@ -23,7 +33,7 @@ export async function getEmbedder(): Promise<EmbedderFn> {
 export async function embed(text: string): Promise<Float32Array> {
   const embedder = await getEmbedder();
   const output = await embedder(text, { pooling: 'mean', normalize: true });
-  // output.data is Float32Array; copy to ensure clean byteOffset=0 view
+  // Copy to ensure byteOffset=0 regardless of internal Tensor layout
   const raw: Float32Array = output.data;
   const copy = new Float32Array(raw.length);
   copy.set(raw);

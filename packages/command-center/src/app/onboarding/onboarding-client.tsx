@@ -24,10 +24,10 @@ export default function OnboardingClient() {
 
   const current = QUESTIONS[step];
   const isLast = step === QUESTIONS.length - 1;
-  const progress = ((step) / QUESTIONS.length) * 100;
+  const progress = ((step + 1) / QUESTIONS.length) * 100;
 
   const handleNext = () => {
-    if (!answers[current.key]?.trim()) return;
+    if (!answers[current.key]?.trim() || submitting) return;
     if (isLast) {
       handleSubmit();
     } else {
