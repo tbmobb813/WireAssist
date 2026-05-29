@@ -1,6 +1,6 @@
 # Nolta (SynqWorks)
 
-A pnpm monorepo for **SynqWorks** — a privacy-oriented AI platform with a multi-provider chat engine, a Linux desktop assistant, and an agent workforce that can triage email and manage calendar with human-in-the-loop approvals.
+A pnpm monorepo for **SynqWorks** — a privacy-oriented AI platform with a multi-provider chat engine, a desktop assistant, and an agent workforce that can triage email and manage calendar with human-in-the-loop approvals.
 
 The repository name is **Nolta**; product surfaces use **SynqWorks**.
 
