@@ -1,9 +1,9 @@
 {
-  "name": "ai-assist",
+  "name": "synqagent",
   "version": "0.1.0",
-  "description": "A native cross-platform AI assistant with multi-provider support and privacy-focused local processing",
+  "description": "SynqAgent — AI workforce desktop app for solo operators. Built by SynqWorks.",
   "type": "module",
-  "homepage": "https://github.com/tbmobb813/Linux-AI-Assistant---Project",
+  "homepage": "https://synqworks.techtrendwire.com",
   "repository": {
     "type": "git",
     "url": "https://github.com/tbmobb813/Linux-AI-Assistant---Project.git"
@@ -19,21 +19,17 @@
   "keywords": [
     "ai",
     "assistant",
-    "linux",
     "desktop",
     "tauri",
     "rust",
     "react",
-    "chatgpt",
     "claude",
-    "gemini",
-    "ollama",
+    "synqworks",
     "privacy",
     "local-ai",
     "multi-provider",
-    "cli",
-    "ipc",
-    "development-tools"
+    "solo-operator",
+    "ai-workforce"
   ],
   "scripts": {
     "dev": "vite",

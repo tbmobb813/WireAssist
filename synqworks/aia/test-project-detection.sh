@@ -9,7 +9,7 @@ echo ""
 
 # Test 1: Current directory (should detect Rust)
 echo "Test 1: Current directory (Rust project)"
-echo "Expected: Rust project with name 'linux-ai-assistant'"
+echo "Expected: Rust project with name 'synqagent'"
 echo ""
 
 # We'll manually test this in the UI since it requires the Tauri app running
@@ -64,7 +64,7 @@ echo "📝 Manual Testing Instructions"
 echo "=============================="
 echo ""
 echo "1. Start the Tauri app in dev mode:"
-echo "   cd linux-ai-assistant && pnpm run tauri dev"
+echo "   cd synqagent && pnpm run tauri dev"
 echo ""
 echo "2. Test each directory by setting it as the project root"
 echo "   or by opening a terminal in each directory"

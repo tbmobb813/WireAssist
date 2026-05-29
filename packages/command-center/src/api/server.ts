@@ -12,6 +12,7 @@ import {
 } from '@synqworks/core';
 import { AdminAgent, setupAdminMCP, AdminTasks } from '@synqworks/agent-admin';
 import { ContentAgent, ContentTasks } from '@synqworks/agent-content';
+import { ResearchAgent, ResearchTasks, setupResearchMCP } from '@synqworks/agent-research';
 import { registerSynqPostTools, SynqPostStorage } from '@synqworks/synqpost-mcp';
 
 const HOME_PATH = process.env.SYNQWORKS_HOME ?? os.homedir();
@@ -25,8 +26,33 @@ let approval: ApprovalQueue;
 let memory: MemoryStore;
 let agent: AdminAgent;
 let contentAgent: ContentAgent;
+let researchAgent: ResearchAgent;
 let synqpostStorage: SynqPostStorage;
 let agentReady = false;
+
+// ── License tier gating ────────────────────────────────────────────────────
+import Database from 'better-sqlite3';
+let licenseDb: InstanceType<typeof Database> | null = null;
+
+const TIER_RANK: Record<string, number> = { trial: 0, solo: 1, operator: 2, workforce: 3 };
+
+function currentTier(): string {
+  if (!licenseDb) return 'trial';
+  const row = licenseDb
+    .prepare('SELECT tier, expires_grace_at FROM licenses ORDER BY verified_at DESC LIMIT 1')
+    .get() as { tier: string; expires_grace_at: string } | undefined;
+  if (!row) return 'trial';
+  return new Date(row.expires_grace_at) > new Date() ? row.tier : 'trial';
+}
+
+function tierGate(minTier: string): { allowed: boolean; error?: string } {
+  const tier = currentTier();
+  if ((TIER_RANK[tier] ?? 0) < (TIER_RANK[minTier] ?? 99)) {
+    const label = minTier.charAt(0).toUpperCase() + minTier.slice(1);
+    return { allowed: false, error: `This feature requires the ${label} plan or higher.` };
+  }
+  return { allowed: true };
+}
 
 function anthropicConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
@@ -63,6 +89,16 @@ function queueAgentTask(task: Parameters<AdminAgent['run']>[0]) {
 /** Run one content task at a time. */
 let contentTaskChain: Promise<void> = Promise.resolve();
 
+/** Run one research task at a time. */
+let researchTaskChain: Promise<void> = Promise.resolve();
+
+function queueResearchTask(task: Parameters<ResearchAgent['run']>[0]) {
+  researchTaskChain = researchTaskChain
+    .then(() => researchAgent.run(task))
+    .catch(logAgentTaskError);
+  return task;
+}
+
 function queueContentTask(task: Parameters<ContentAgent['run']>[0]) {
   contentTaskChain = contentTaskChain
     .then(() => contentAgent.run(task))
@@ -83,6 +119,18 @@ function openStores() {
     approval = new ApprovalQueue(DB_PATH);
     memory = new MemoryStore(DB_PATH);
     synqpostStorage = new SynqPostStorage(DB_PATH);
+    licenseDb = new Database(DB_PATH);
+    licenseDb.exec(`
+      CREATE TABLE IF NOT EXISTS licenses (
+        key TEXT PRIMARY KEY,
+        tier TEXT NOT NULL DEFAULT 'trial',
+        status TEXT NOT NULL DEFAULT 'inactive',
+        customer_email TEXT,
+        activations_remaining INTEGER,
+        verified_at TEXT NOT NULL,
+        expires_grace_at TEXT NOT NULL
+      )
+    `);
   } catch (err) {
     console.error(`❌ ${sqliteSetupHint()}`);
     throw err;
@@ -124,14 +172,19 @@ events.on('agent:content_plan_generated', p => broadcast('content_plan_generated
 events.on('agent:post_scheduled', p => broadcast('post_scheduled', p));
 events.on('agent:content_analyzed', p => broadcast('content_analyzed', p));
 events.on('agent:scheduled_posts', p => broadcast('scheduled_posts', p));
+events.on('agent:research_complete', p => broadcast('research_complete', p));
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 async function bootstrap() {
   openStores();
 
-  // Content Agent tools — registered independently; always available
+  // Content Agent tools
   registerSynqPostTools(mcp, synqpostStorage);
   contentAgent = new ContentAgent({ approval, memory, mcp, events });
+
+  // Research Agent tools
+  setupResearchMCP(mcp);
+  researchAgent = new ResearchAgent({ approval, memory, mcp, events });
 
   // Admin Agent tools — may fail if Gmail credentials are absent; surface a warning but continue
   try {
@@ -175,6 +228,11 @@ app.get('/api/agent/status', c => {
       role: 'content',
       name: 'Content Agent',
       status: contentAgent?.status ?? 'idle',
+    },
+    research: {
+      role: 'research',
+      name: 'Research Agent',
+      status: researchAgent?.status ?? 'idle',
     },
   });
 });
@@ -255,6 +313,8 @@ function isValidPlatform(p: unknown): p is 'twitter' | 'linkedin' | 'instagram' 
 app.post('/api/tasks/generate-post', async c => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const tg = tierGate('operator');
+  if (!tg.allowed) return c.json({ error: tg.error }, 403);
   const { topic, platform, tone } = await c.req.json();
   if (!topic || typeof topic !== 'string') return c.json({ error: 'topic required' }, 400);
   if (!isValidPlatform(platform)) {
@@ -271,6 +331,8 @@ app.post('/api/tasks/generate-post', async c => {
 app.post('/api/tasks/generate-plan', async c => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const tg = tierGate('operator');
+  if (!tg.allowed) return c.json({ error: tg.error }, 403);
   const body = await c.req.json().catch(() => ({}));
   const platforms: unknown[] = Array.isArray(body.platforms)
     ? body.platforms
@@ -286,6 +348,105 @@ app.post('/api/tasks/generate-plan', async c => {
   );
   queueContentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// ── RESEARCH TASKS ────────────────────────────────────────────────────────
+app.post('/api/tasks/research-topic', async c => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const tg = tierGate('workforce');
+  if (!tg.allowed) return c.json({ error: tg.error }, 403);
+  const { query, depth } = await c.req.json();
+  if (!query || typeof query !== 'string') return c.json({ error: 'query required' }, 400);
+  const task = ResearchTasks.researchTopic(query, depth === 'deep' ? 'deep' : 'quick');
+  queueResearchTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/synthesize', async c => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const tg = tierGate('workforce');
+  if (!tg.allowed) return c.json({ error: tg.error }, 403);
+  const { topic } = await c.req.json();
+  if (!topic || typeof topic !== 'string') return c.json({ error: 'topic required' }, 400);
+  const task = ResearchTasks.synthesizeFindings(topic);
+  queueResearchTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// ── LICENSE ───────────────────────────────────────────────────────────────
+app.get('/api/license/status', c => {
+  return c.json({ tier: currentTier() });
+});
+
+app.post('/api/license/activate', async c => {
+  const { key } = await c.req.json() as { key?: string };
+  if (!key || typeof key !== 'string' || !key.trim()) {
+    return c.json({ error: 'key required' }, 400);
+  }
+
+  const lsApiKey = process.env.LS_API_KEY;
+  if (!lsApiKey) {
+    return c.json({ error: 'LS_API_KEY not configured on this server' }, 503);
+  }
+
+  let tier = 'unknown';
+  let status = 'inactive';
+  let customerEmail: string | null = null;
+  let activationsRemaining: number | null = null;
+
+  try {
+    const res = await fetch(
+      `https://api.lemonsqueezy.com/v1/licenses/validate`,
+      {
+        method: 'POST',
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': `Bearer ${lsApiKey}` },
+        body: JSON.stringify({ license_key: key.trim() }),
+      },
+    );
+    const data = await res.json() as {
+      valid?: boolean;
+      license_key?: { status: string; activation_limit: number; activations_count: number };
+      meta?: { customer_email: string; variant_id: number };
+      error?: string;
+    };
+
+    if (!data.valid) {
+      return c.json({ error: data.error ?? 'Invalid license key' }, 400);
+    }
+
+    status = data.license_key?.status ?? 'active';
+    customerEmail = data.meta?.customer_email ?? null;
+    const variantId = String(data.meta?.variant_id ?? '');
+    activationsRemaining = data.license_key
+      ? (data.license_key.activation_limit - data.license_key.activations_count)
+      : null;
+
+    if (variantId === (process.env.LS_VARIANT_WORKFORCE ?? '')) tier = 'workforce';
+    else if (variantId === (process.env.LS_VARIANT_OPERATOR ?? '')) tier = 'operator';
+    else if (variantId === (process.env.LS_VARIANT_SOLO ?? '')) tier = 'solo';
+    else tier = 'solo'; // fallback for any valid key
+  } catch (err) {
+    console.error('[license] LemonSqueezy API error:', err);
+    return c.json({ error: 'Failed to reach LemonSqueezy API' }, 503);
+  }
+
+  const now = new Date().toISOString();
+  const grace = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  licenseDb?.prepare(`
+    INSERT INTO licenses (key, tier, status, customer_email, activations_remaining, verified_at, expires_grace_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET
+      tier = excluded.tier, status = excluded.status,
+      customer_email = excluded.customer_email,
+      activations_remaining = excluded.activations_remaining,
+      verified_at = excluded.verified_at,
+      expires_grace_at = excluded.expires_grace_at
+  `).run(key.trim(), tier, status, customerEmail, activationsRemaining, now, grace);
+
+  return c.json({ tier, status, activationsRemaining });
 });
 
 // ── CONTENT DATA ──────────────────────────────────────────────────────────

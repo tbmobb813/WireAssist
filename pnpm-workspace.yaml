@@ -5,6 +5,8 @@ packages:
   - 'packages/agents/content'
   - 'packages/synqpost-mcp'
   - 'packages/command-center'
+  - 'packages/marketing'
+  - 'packages/agents/research'
 
 allowBuilds:
   better-sqlite3: true

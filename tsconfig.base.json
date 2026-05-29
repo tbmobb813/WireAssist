@@ -31,7 +31,9 @@
       "@synqworks/synqpost-mcp": ["packages/synqpost-mcp/src"],
       "@synqworks/synqpost-mcp/*": ["packages/synqpost-mcp/src/*"],
       "@synqworks/agent-content": ["packages/agents/content/src"],
-      "@synqworks/agent-content/*": ["packages/agents/content/src/*"]
+      "@synqworks/agent-content/*": ["packages/agents/content/src/*"],
+      "@synqworks/agent-research": ["packages/agents/research/src"],
+      "@synqworks/agent-research/*": ["packages/agents/research/src/*"]
     }
   },
   "include": ["synqworks", "packages/agents", "packages/synqpost-mcp", "packages/command-center"],
@@ -41,6 +43,7 @@
     { "path": "./packages/agents/admin" },
     { "path": "./packages/synqpost-mcp" },
     { "path": "./packages/agents/content" },
+    { "path": "./packages/agents/research" },
     { "path": "./packages/command-center" }
   ]
 }

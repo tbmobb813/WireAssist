@@ -1,5 +1,5 @@
 #!/bin/bash
-# Linux AI Assistant CLI Installation Script
+# SynqAgent CLI Installation Script
 # This script installs the 'lai' CLI tool for terminal access to the desktop assistant
 
 set -e
@@ -12,10 +12,10 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Installation configuration
-CLI_NAME="lai"
-BINARY_NAME="linux-ai-cli"
+CLI_NAME="synqagent"
+BINARY_NAME="synqagent-cli"
 INSTALL_DIR="/usr/local/bin"
-CONFIG_DIR="$HOME/.config/lai"
+CONFIG_DIR="$HOME/.config/synqagent"
 VERSION="0.1.0"
 
 # GitHub release information
@@ -25,7 +25,7 @@ RELEASE_URL="https://github.com/$REPO/releases/latest"
 print_header() {
     echo -e "${BLUE}"
     echo "╔════════════════════════════════════════════════╗"
-    echo "║          Linux AI Assistant CLI               ║"
+    echo "║          SynqAgent CLI               ║"
     echo "║             Installation Script               ║"
     echo "╚════════════════════════════════════════════════╝"
     echo -e "${NC}"
@@ -116,7 +116,7 @@ download_binary() {
         exit 1
     fi
 
-    cd "Linux-AI-Assistant---Project/linux-ai-assistant/cli"
+    cd "Linux-AI-Assistant---Project/synqworks/aia/cli"
 
     # Check if Rust is installed
     if ! command -v cargo &> /dev/null; then
@@ -140,7 +140,7 @@ download_binary() {
     fi
 
     print_success "Binary built successfully"
-    echo "$temp_dir/Linux-AI-Assistant---Project/linux-ai-assistant/cli/$BINARY_PATH"
+    echo "$temp_dir/Linux-AI-Assistant---Project/synqworks/aia/cli/$BINARY_PATH"
 }
 
 install_binary() {
@@ -172,7 +172,7 @@ setup_config() {
 
     # Create default configuration file
     cat > "$CONFIG_DIR/config.toml" << EOF
-# Linux AI Assistant CLI Configuration
+# SynqAgent CLI Configuration
 # See: https://github.com/$REPO
 
 [connection]
@@ -236,7 +236,7 @@ show_usage() {
     print_info "Configuration: $CONFIG_DIR/config.toml"
     print_info "Documentation: https://github.com/$REPO"
     echo
-    print_info "Make sure the Linux AI Desktop Assistant is running for CLI commands to work!"
+    print_info "Make sure the SynqAgent Desktop is running for CLI commands to work!"
 }
 
 main() {
@@ -265,7 +265,7 @@ main() {
 case "${1:-}" in
     --help|-h)
         print_header
-        echo "Linux AI Assistant CLI Installation Script"
+        echo "SynqAgent CLI Installation Script"
         echo
         echo "Usage: $0 [OPTIONS]"
         echo
@@ -280,7 +280,7 @@ case "${1:-}" in
         ;;
     --uninstall)
         print_header
-        print_step "Uninstalling Linux AI Assistant CLI..."
+        print_step "Uninstalling SynqAgent CLI..."
 
         if [[ -f "$INSTALL_DIR/$CLI_NAME" ]]; then
             if [[ -w "$INSTALL_DIR" ]]; then

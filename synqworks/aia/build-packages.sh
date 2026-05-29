@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ##
-# Linux AI Assistant - Build All Packages Script
+# SynqAgent - Build All Packages Script
 # Builds AppImage, DEB, and RPM packages for distribution
 ##
 
@@ -14,7 +14,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-PROJECT_NAME="linux-ai-assistant"
+PROJECT_NAME="synqagent"
 VERSION=$(grep '"version"' package.json | head -1 | sed 's/.*"version"[": ]*\([^"]*\).*/\1/')
 BUILD_DIR="src-tauri/target/release/bundle"
 OUTPUT_DIR="dist/packages"
@@ -142,7 +142,7 @@ generate_report() {
     local report_file="$OUTPUT_DIR/BUILD_REPORT.txt"
 
     cat > "$report_file" << EOF
-Linux AI Assistant - Build Report
+SynqAgent - Build Report
 ==================================
 Build Date: $(date)
 Version: $VERSION
@@ -191,7 +191,7 @@ display_summary() {
 
 # Main execution
 main() {
-    print_info "Linux AI Assistant - Package Builder"
+    print_info "SynqAgent - Package Builder"
     print_info "Version: $VERSION"
     echo ""
 

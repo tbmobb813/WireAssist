@@ -1,4 +1,5 @@
-import { useState, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../lib/stores/settingsStore";
 import { useUiStore } from "../lib/stores/uiStore";
 import { withErrorHandling } from "../lib/utils/errorHandler";
@@ -42,6 +43,7 @@ export default function Settings({ onClose }: Props): JSX.Element {
   const [showDocumentSearch, setShowDocumentSearch] = useState(false);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showUsageAnalytics, setShowUsageAnalytics] = useState(false);
+  const [showLicensePanel, setShowLicensePanel] = useState(false);
 
   const validate = (s: string): string | null => {
     if (!s.trim()) return "Shortcut can't be empty";
@@ -311,6 +313,23 @@ export default function Settings({ onClose }: Props): JSX.Element {
             </button>
           </div>
 
+          {/* License & API Keys - Special Highlight */}
+          <button
+            onClick={() => setShowLicensePanel(true)}
+            className="
+              w-full group flex items-center justify-center p-4
+              bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/20
+              border border-amber-200 dark:border-amber-700
+              rounded-lg shadow-sm
+              hover:shadow-md hover:from-amber-100 hover:to-yellow-100 dark:hover:from-amber-900/30 dark:hover:to-yellow-900/30
+              transition-all duration-200
+              text-amber-700 dark:text-amber-300
+            "
+          >
+            <span className="mr-3 text-lg">🔑</span>
+            <span className="font-medium">License &amp; API Keys</span>
+          </button>
+
           {/* Usage Analytics - Special Highlight */}
           <button
             onClick={() => setShowUsageAnalytics(true)}
@@ -546,6 +565,244 @@ export default function Settings({ onClose }: Props): JSX.Element {
           </Suspense>
         </div>
       )}
+
+      {/* License & API Keys Panel */}
+      {showLicensePanel && (
+        <LicensePanel onClose={() => setShowLicensePanel(false)} />
+      )}
+    </div>
+  );
+}
+
+type LicensePanelProps = { onClose: () => void };
+
+type LicenseStatus = {
+  tier: string;
+  status: string;
+  customer_email?: string;
+  activations_remaining?: number;
+  verified_at?: string;
+  expires_grace_at?: string;
+};
+
+function LicensePanel({ onClose }: LicensePanelProps) {
+  const addToast = useUiStore((s) => s.addToast);
+
+  const [anthropicKey, setAnthropicKey] = useState("");
+  const [braveKey, setBraveKey] = useState("");
+  const [licenseKey, setLicenseKey] = useState("");
+  const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
+  const [activating, setActivating] = useState(false);
+  const [savingAnthropicKey, setSavingAnthropicKey] = useState(false);
+  const [savingBraveKey, setSavingBraveKey] = useState(false);
+  const [activateError, setActivateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    invoke<LicenseStatus>("get_license_status")
+      .then(setLicenseStatus)
+      .catch(() => {});
+  }, []);
+
+  const saveAnthropicKey = async () => {
+    if (!anthropicKey.trim()) return;
+    setSavingAnthropicKey(true);
+    try {
+      await invoke("set_api_key", { provider: "anthropic", key: anthropicKey.trim() });
+      addToast({ message: "Anthropic API key saved", type: "success", ttl: 2000 });
+      setAnthropicKey("");
+    } catch (e) {
+      addToast({ message: `Failed to save key: ${e}`, type: "error", ttl: 3000 });
+    } finally {
+      setSavingAnthropicKey(false);
+    }
+  };
+
+  const saveBraveKey = async () => {
+    if (!braveKey.trim()) return;
+    setSavingBraveKey(true);
+    try {
+      await invoke("set_api_key", { provider: "brave", key: braveKey.trim() });
+      addToast({ message: "Brave Search API key saved", type: "success", ttl: 2000 });
+      setBraveKey("");
+    } catch (e) {
+      addToast({ message: `Failed to save key: ${e}`, type: "error", ttl: 3000 });
+    } finally {
+      setSavingBraveKey(false);
+    }
+  };
+
+  const activateLicense = async () => {
+    if (!licenseKey.trim()) return;
+    setActivating(true);
+    setActivateError(null);
+    try {
+      await invoke("verify_license", { key: licenseKey.trim() });
+      addToast({ message: "License activated successfully", type: "success", ttl: 3000 });
+      setLicenseKey("");
+      const status = await invoke<LicenseStatus>("get_license_status");
+      setLicenseStatus(status);
+    } catch (e) {
+      setActivateError(String(e));
+    } finally {
+      setActivating(false);
+    }
+  };
+
+  const tierColor: Record<string, string> = {
+    trial: "text-gray-500 dark:text-gray-400",
+    solo: "text-blue-600 dark:text-blue-400",
+    operator: "text-purple-600 dark:text-purple-400",
+    workforce: "text-amber-600 dark:text-amber-400",
+  };
+
+  const tierLabel: Record<string, string> = {
+    trial: "Trial",
+    solo: "Solo",
+    operator: "Operator",
+    workforce: "Workforce",
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
+      onClick={onClose}
+    >
+      <div
+        className="w-[420px] bg-white dark:bg-gray-900 border border-gray-200/70 dark:border-gray-700/60 rounded-xl shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-gray-800/50 dark:to-gray-700/50 px-6 py-4 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
+              <span className="text-white text-sm">🔑</span>
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">License &amp; API Keys</h2>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Manage your keys and subscription</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-all duration-200"
+          >
+            <span className="text-lg">✕</span>
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+          {/* Tier status */}
+          <div className="bg-gray-50/50 dark:bg-gray-800/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-700/50">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Current Plan</p>
+            {licenseStatus ? (
+              <div className="flex items-center justify-between">
+                <span className={`text-lg font-bold ${tierColor[licenseStatus.tier] ?? tierColor.trial}`}>
+                  {tierLabel[licenseStatus.tier] ?? licenseStatus.tier}
+                </span>
+                {licenseStatus.expires_grace_at && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    Valid until {new Date(licenseStatus.expires_grace_at).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="text-sm text-gray-500 dark:text-gray-400">Loading...</span>
+            )}
+          </div>
+
+          {/* Anthropic API Key */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Anthropic API Key
+            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Stored securely in your OS keyring. Leave blank to keep the existing key.
+            </p>
+            <div className="flex space-x-2">
+              <input
+                type="password"
+                value={anthropicKey}
+                onChange={(e) => setAnthropicKey(e.target.value)}
+                placeholder="sk-ant-..."
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+              />
+              <button
+                onClick={saveAnthropicKey}
+                disabled={savingAnthropicKey || !anthropicKey.trim()}
+                className="px-3 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-all duration-200"
+              >
+                {savingAnthropicKey ? "..." : "Save"}
+              </button>
+            </div>
+          </div>
+
+          {/* Brave Search API Key */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Brave Search API Key
+            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Required for the Research Agent. Stored securely in your OS keyring.
+            </p>
+            <div className="flex space-x-2">
+              <input
+                type="password"
+                value={braveKey}
+                onChange={(e) => setBraveKey(e.target.value)}
+                placeholder="BSA..."
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+              />
+              <button
+                onClick={saveBraveKey}
+                disabled={savingBraveKey || !braveKey.trim()}
+                className="px-3 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-all duration-200"
+              >
+                {savingBraveKey ? "..." : "Save"}
+              </button>
+            </div>
+          </div>
+
+          {/* License Key */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              License Key
+            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Enter your SynqWorks license key to unlock Solo, Operator, or Workforce features.
+            </p>
+            <div className="flex space-x-2">
+              <input
+                type="text"
+                value={licenseKey}
+                onChange={(e) => setLicenseKey(e.target.value)}
+                placeholder="XXXX-XXXX-XXXX-XXXX"
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 font-mono"
+              />
+              <button
+                onClick={activateLicense}
+                disabled={activating || !licenseKey.trim()}
+                className="px-3 py-2 text-sm font-medium bg-amber-600 hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-all duration-200"
+              >
+                {activating ? "..." : "Activate"}
+              </button>
+            </div>
+            {activateError && (
+              <p className="text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded">
+                {activateError}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-gray-50/50 dark:bg-gray-800/30 border-t border-gray-200/50 dark:border-gray-700/50 px-6 py-3 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
+          >
+            Done
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

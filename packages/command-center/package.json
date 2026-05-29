@@ -20,6 +20,7 @@
     "@hono/node-server": "^1.14.0",
     "@synqworks/agent-admin": "workspace:*",
     "@synqworks/agent-content": "workspace:*",
+    "@synqworks/agent-research": "workspace:*",
     "@synqworks/core": "workspace:*",
     "@synqworks/synqpost-mcp": "workspace:*",
     "better-sqlite3": "^12.4.1",
