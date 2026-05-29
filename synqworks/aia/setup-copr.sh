@@ -161,7 +161,7 @@ mkdir -p %{buildroot}%{_datadir}/icons/hicolor/128x128/apps
 mkdir -p %{buildroot}%{_datadir}/licenses/%{name}
 
 # Install binary
-install -m 755 synqagent/src-tauri/target/release/app %{buildroot}%{_bindir}/%{name}
+install -m 755 synqagent/src-tauri/target/release/synqagent-app %{buildroot}%{_bindir}/%{name}
 
 # Install desktop file
 install -m 644 synqagent/synqagent.desktop %{buildroot}%{_datadir}/applications/%{name}.desktop

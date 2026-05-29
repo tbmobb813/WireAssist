@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../lib/stores/settingsStore";
 import { useUiStore } from "../lib/stores/uiStore";
@@ -597,18 +597,17 @@ function LicensePanel({ onClose }: LicensePanelProps) {
   const [savingBraveKey, setSavingBraveKey] = useState(false);
   const [activateError, setActivateError] = useState<string | null>(null);
 
-  // Load status on mount
-  useState(() => {
+  useEffect(() => {
     invoke<LicenseStatus>("get_license_status")
       .then(setLicenseStatus)
       .catch(() => {});
-  });
+  }, []);
 
   const saveAnthropicKey = async () => {
     if (!anthropicKey.trim()) return;
     setSavingAnthropicKey(true);
     try {
-      await invoke("set_api_key", { service: "anthropic", key: anthropicKey.trim() });
+      await invoke("set_api_key", { provider: "anthropic", key: anthropicKey.trim() });
       addToast({ message: "Anthropic API key saved", type: "success", ttl: 2000 });
       setAnthropicKey("");
     } catch (e) {
@@ -622,7 +621,7 @@ function LicensePanel({ onClose }: LicensePanelProps) {
     if (!braveKey.trim()) return;
     setSavingBraveKey(true);
     try {
-      await invoke("set_api_key", { service: "brave", key: braveKey.trim() });
+      await invoke("set_api_key", { provider: "brave", key: braveKey.trim() });
       addToast({ message: "Brave Search API key saved", type: "success", ttl: 2000 });
       setBraveKey("");
     } catch (e) {

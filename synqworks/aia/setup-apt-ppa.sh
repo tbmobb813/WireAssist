@@ -223,12 +223,12 @@ export DH_VERBOSE = 1
 
 override_dh_auto_build:
 	cd $(CURDIR)/synqagent && npm run build
-	cd $(CURDIR)/synqagent && cargo build --release -p app
+	cd $(CURDIR)/synqagent && cargo build --release -p synqagent-app
 
 override_dh_auto_install:
 	dh_auto_install
 	mkdir -p debian/synqagent/usr/bin
-	install -m 755 synqagent/src-tauri/target/release/app \
+	install -m 755 synqagent/src-tauri/target/release/synqagent-app \
 		debian/synqagent/usr/bin/synqagent
 	mkdir -p debian/synqagent/usr/share/applications
 	install -m 644 synqagent/synqagent.desktop \

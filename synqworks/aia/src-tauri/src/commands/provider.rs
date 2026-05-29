@@ -65,10 +65,19 @@ pub fn provider_openai_generate(
 fn get_keyring_secret(service: &str) -> Option<String> {
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     {
-        if let Ok(entry) = keyring::Entry::new("synqagent", service) {
-            if let Ok(secret) = entry.get_password() {
-                if !secret.is_empty() {
-                    return Some(secret);
+        // Try current service name first, then fall back to old name for existing installs
+        for app_name in &["synqagent", "linux-ai-assistant"] {
+            if let Ok(entry) = keyring::Entry::new(app_name, service) {
+                if let Ok(secret) = entry.get_password() {
+                    if !secret.is_empty() {
+                        // Migrate to new service name if found under old name
+                        if *app_name != "synqagent" {
+                            if let Ok(new_entry) = keyring::Entry::new("synqagent", service) {
+                                let _ = new_entry.set_password(&secret);
+                            }
+                        }
+                        return Some(secret);
+                    }
                 }
             }
         }

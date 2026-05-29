@@ -28,6 +28,10 @@ fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 }
 
 fn open_db(path: &PathBuf) -> Result<Connection, String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create license DB directory: {}", e))?;
+    }
     let conn = Connection::open(path).map_err(|e| format!("Failed to open license DB: {}", e))?;
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS licenses (

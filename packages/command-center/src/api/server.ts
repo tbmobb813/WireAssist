@@ -89,6 +89,16 @@ function queueAgentTask(task: Parameters<AdminAgent['run']>[0]) {
 /** Run one content task at a time. */
 let contentTaskChain: Promise<void> = Promise.resolve();
 
+/** Run one research task at a time. */
+let researchTaskChain: Promise<void> = Promise.resolve();
+
+function queueResearchTask(task: Parameters<ResearchAgent['run']>[0]) {
+  researchTaskChain = researchTaskChain
+    .then(() => researchAgent.run(task))
+    .catch(logAgentTaskError);
+  return task;
+}
+
 function queueContentTask(task: Parameters<ContentAgent['run']>[0]) {
   contentTaskChain = contentTaskChain
     .then(() => contentAgent.run(task))
@@ -349,7 +359,7 @@ app.post('/api/tasks/research-topic', async c => {
   const { query, depth } = await c.req.json();
   if (!query || typeof query !== 'string') return c.json({ error: 'query required' }, 400);
   const task = ResearchTasks.researchTopic(query, depth === 'deep' ? 'deep' : 'quick');
-  researchAgent.run(task).catch(logAgentTaskError);
+  queueResearchTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
@@ -361,7 +371,7 @@ app.post('/api/tasks/synthesize', async c => {
   const { topic } = await c.req.json();
   if (!topic || typeof topic !== 'string') return c.json({ error: 'topic required' }, 400);
   const task = ResearchTasks.synthesizeFindings(topic);
-  researchAgent.run(task).catch(logAgentTaskError);
+  queueResearchTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
 

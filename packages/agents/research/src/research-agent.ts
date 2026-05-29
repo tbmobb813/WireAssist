@@ -26,6 +26,7 @@ export class ResearchAgent extends BaseAgent {
   }
 
   async run(task: AgentTask): Promise<void> {
+    if (this.status === 'running') return;
     this.status = 'running';
     this.events.emit('agent:task_started', { agentRole: this.role, taskId: task.id, description: task.description });
 
