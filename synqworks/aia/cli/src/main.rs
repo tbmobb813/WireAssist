@@ -12,10 +12,10 @@ const BUFFER_SIZE: usize = 4096;
 
 #[derive(Parser)]
 #[command(name = "lai")]
-#[command(about = "Linux AI Assistant CLI - Terminal companion for the Linux AI Desktop Assistant")]
+#[command(about = "SynqAgent CLI - Terminal companion for the Linux AI Desktop Assistant")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(long_about = "
-Linux AI Assistant CLI provides command-line access to the desktop AI assistant.
+SynqAgent CLI provides command-line access to the desktop AI assistant.
 
 Examples:
   lai ask \"How do I optimize this SQL query?\"

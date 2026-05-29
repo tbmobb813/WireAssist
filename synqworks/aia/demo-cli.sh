@@ -1,5 +1,5 @@
 #!/bin/bash
-# Demo script for Linux AI Assistant CLI features
+# Demo script for SynqAgent CLI features
 
 set -e
 
@@ -10,7 +10,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${BOLD}${BLUE}=================================${NC}"
-echo -e "${BOLD}${BLUE}Linux AI Assistant CLI Demo${NC}"
+echo -e "${BOLD}${BLUE}SynqAgent CLI Demo${NC}"
 echo -e "${BOLD}${BLUE}=================================${NC}\n"
 
 # Check if CLI exists

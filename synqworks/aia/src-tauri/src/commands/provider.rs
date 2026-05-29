@@ -65,7 +65,7 @@ pub fn provider_openai_generate(
 fn get_keyring_secret(service: &str) -> Option<String> {
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     {
-        if let Ok(entry) = keyring::Entry::new("linux-ai-assistant", service) {
+        if let Ok(entry) = keyring::Entry::new("synqagent", service) {
             if let Ok(secret) = entry.get_password() {
                 if !secret.is_empty() {
                     return Some(secret);
@@ -87,7 +87,7 @@ fn prefer_keyring_or_env(service: &str, env_name: &str) -> Result<String, String
 pub fn set_api_key(provider: String, key: String) -> Result<(), String> {
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     {
-        let entry = keyring::Entry::new("linux-ai-assistant", &provider)
+        let entry = keyring::Entry::new("synqagent", &provider)
             .map_err(|e| format!("keyring entry error: {}", e))?;
         entry
             .set_password(&key)
@@ -102,7 +102,7 @@ pub fn set_api_key(provider: String, key: String) -> Result<(), String> {
 pub fn get_api_key(provider: String) -> Result<String, String> {
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     {
-        let entry = keyring::Entry::new("linux-ai-assistant", &provider)
+        let entry = keyring::Entry::new("synqagent", &provider)
             .map_err(|e| format!("keyring entry error: {}", e))?;
         let val = entry
             .get_password()

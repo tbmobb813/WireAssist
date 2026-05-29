@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ##############################################################################
-# Copr Repository Setup Script for Linux AI Assistant
+# Copr Repository Setup Script for SynqAgent
 #
 # This script sets up a Copr repository for distributing RPM packages
 # across Fedora, RHEL, and derivative distributions. It handles:
@@ -25,7 +25,7 @@
 #   - rpmbuild, rpmdevtools
 #   - Fedora build environment
 #
-# Author: Linux AI Assistant Team
+# Author: SynqAgent Team
 # Date: October 2025
 ##############################################################################
 
@@ -39,7 +39,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-COPR_PROJECT="linux-ai-assistant"
+COPR_PROJECT="synqagent"
 COPR_USER="${COPR_USER:-tbmobb813}"
 COPR_CHROOTS=("fedora-39-x86_64" "fedora-40-x86_64" "rhel-9-x86_64")
 SPEC_VERSION="0.1.0"
@@ -102,11 +102,11 @@ create_spec_file() {
     
     mkdir -p "$RPM_BUILD_DIR"
     
-    cat > "$RPM_BUILD_DIR/linux-ai-assistant.spec" << 'EOF'
+    cat > "$RPM_BUILD_DIR/synqagent.spec" << 'EOF'
 %global debug_package %{nil}
 %global _build_id_links none
 
-Name:           linux-ai-assistant
+Name:           synqagent
 Version:        0.1.0
 Release:        1%{?dist}
 Summary:        Native Linux AI Desktop Assistant
@@ -149,7 +149,7 @@ Supports multiple AI providers:
 %autosetup -n Linux-AI-Assistant---Project-v%{version}
 
 %build
-cd linux-ai-assistant
+cd synqagent
 npm install --production
 cd src-tauri
 cargo build --release
@@ -161,13 +161,13 @@ mkdir -p %{buildroot}%{_datadir}/icons/hicolor/128x128/apps
 mkdir -p %{buildroot}%{_datadir}/licenses/%{name}
 
 # Install binary
-install -m 755 linux-ai-assistant/src-tauri/target/release/app %{buildroot}%{_bindir}/%{name}
+install -m 755 synqagent/src-tauri/target/release/app %{buildroot}%{_bindir}/%{name}
 
 # Install desktop file
-install -m 644 linux-ai-assistant/linux-ai-assistant.desktop %{buildroot}%{_datadir}/applications/%{name}.desktop
+install -m 644 synqagent/synqagent.desktop %{buildroot}%{_datadir}/applications/%{name}.desktop
 
 # Install icon
-install -m 644 linux-ai-assistant/src-tauri/icons/128x128.png %{buildroot}%{_datadir}/icons/hicolor/128x128/apps/%{name}.png
+install -m 644 synqagent/src-tauri/icons/128x128.png %{buildroot}%{_datadir}/icons/hicolor/128x128/apps/%{name}.png
 
 # Install license
 install -m 644 LICENSE %{buildroot}%{_datadir}/licenses/%{name}/
@@ -193,7 +193,7 @@ gtk-update-icon-cache -q %{_datadir}/icons/hicolor &> /dev/null || true
 %{_datadir}/icons/hicolor/128x128/apps/%{name}.png
 
 %changelog
-* Mon Oct 28 2025 Linux AI Assistant Team <linux-ai@example.com> - 0.1.0-1
+* Mon Oct 28 2025 SynqAgent Team <hello@synqworks.io> - 0.1.0-1
 - Initial release
 - Multi-provider AI support
 - Local model support via Ollama
@@ -220,7 +220,7 @@ init_copr_project() {
     log_info "Creating Copr project: $COPR_PROJECT"
     
     # Check if project already exists
-    if copr-cli get-package "$COPR_USER/$COPR_PROJECT" linux-ai-assistant 2>/dev/null; then
+    if copr-cli get-package "$COPR_USER/$COPR_PROJECT" synqagent 2>/dev/null; then
         log_warn "Project already exists"
     else
         # Create new project with appropriate settings
@@ -229,7 +229,7 @@ init_copr_project() {
             --chroot fedora-40-x86_64 \
             --chroot rhel-9-x86_64 \
             --description "Native Linux AI Desktop Assistant" \
-            --instructions "Install with: dnf copr enable $COPR_USER/$COPR_PROJECT && dnf install linux-ai-assistant" \
+            --instructions "Install with: dnf copr enable $COPR_USER/$COPR_PROJECT && dnf install synqagent" \
             --repo-priority 100 \
             || log_warn "Project creation returned non-zero (may already exist)"
     fi
@@ -260,18 +260,18 @@ build_rpm_package() {
     mkdir -p ~/rpmbuild/{SOURCES,SPECS,BUILD,SRPMS,RPMS}
     
     # Copy spec file
-    cp "$RPM_BUILD_DIR/linux-ai-assistant.spec" ~/rpmbuild/SPECS/
+    cp "$RPM_BUILD_DIR/synqagent.spec" ~/rpmbuild/SPECS/
     
     # Download source
     log_info "Downloading source..."
     cd ~/rpmbuild/SOURCES
     wget -q https://github.com/tbmobb813/Linux-AI-Assistant---Project/archive/v${SPEC_VERSION}.tar.gz \
-        -O linux-ai-assistant-${SPEC_VERSION}.tar.gz || true
+        -O synqagent-${SPEC_VERSION}.tar.gz || true
     
     # Build RPM
     log_info "Building RPM (this may take a while)..."
     cd ~/rpmbuild
-    rpmbuild -ba SPECS/linux-ai-assistant.spec 2>&1 | tee build.log || {
+    rpmbuild -ba SPECS/synqagent.spec 2>&1 | tee build.log || {
         log_error "Build failed. See build.log for details."
         return 1
     }
@@ -280,8 +280,8 @@ build_rpm_package() {
     
     # Copy built packages
     mkdir -p "$RPM_BUILD_DIR/dist"
-    cp SRPMS/linux-ai-assistant*.src.rpm "$RPM_BUILD_DIR/dist/"
-    cp RPMS/*/linux-ai-assistant*.rpm "$RPM_BUILD_DIR/dist/" 2>/dev/null || true
+    cp SRPMS/synqagent*.src.rpm "$RPM_BUILD_DIR/dist/"
+    cp RPMS/*/synqagent*.rpm "$RPM_BUILD_DIR/dist/" 2>/dev/null || true
     
     log_info "Built packages:"
     ls -lh "$RPM_BUILD_DIR/dist/"
@@ -295,7 +295,7 @@ submit_to_copr() {
         source "$COPR_CONFIG"
     fi
     
-    local srpm_path="${RPM_BUILD_DIR}/dist/linux-ai-assistant-${SPEC_VERSION}-${SPEC_RELEASE}.src.rpm"
+    local srpm_path="${RPM_BUILD_DIR}/dist/synqagent-${SPEC_VERSION}-${SPEC_RELEASE}.src.rpm"
     
     if [ ! -f "$srpm_path" ]; then
         log_error "SRPM not found: $srpm_path"
@@ -332,14 +332,14 @@ verify_copr_setup() {
     fi
     
     # Check Copr project
-    if copr-cli get-package "$COPR_USER/$COPR_PROJECT" linux-ai-assistant 2>/dev/null; then
+    if copr-cli get-package "$COPR_USER/$COPR_PROJECT" synqagent 2>/dev/null; then
         log_success "Copr project found: $COPR_USER/$COPR_PROJECT"
     else
         log_warn "Could not verify Copr project (may not exist yet)"
     fi
     
     # Check spec file
-    if [ -f "$RPM_BUILD_DIR/linux-ai-assistant.spec" ]; then
+    if [ -f "$RPM_BUILD_DIR/synqagent.spec" ]; then
         log_success "RPM spec file found"
     else
         log_warn "RPM spec file not found"
@@ -368,7 +368,7 @@ verify_copr_setup() {
 
 show_help() {
     cat << EOF
-${BLUE}Linux AI Assistant - Copr Repository Setup${NC}
+${BLUE}SynqAgent - Copr Repository Setup${NC}
 
 ${YELLOW}Usage:${NC}
   $0 [command]
@@ -401,7 +401,7 @@ ${YELLOW}Environment Variables:${NC}
 
 ${YELLOW}Installation for Users:${NC}
   dnf copr enable $COPR_USER/$COPR_PROJECT
-  dnf install linux-ai-assistant
+  dnf install synqagent
 
 ${YELLOW}Documentation:${NC}
   See REPOSITORY_SETUP.md for detailed setup instructions

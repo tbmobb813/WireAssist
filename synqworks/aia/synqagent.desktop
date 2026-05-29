@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=SynqAgent
+Comment=AI workforce desktop app for solo operators — built by SynqWorks
+Exec=synqagent
+Icon=synqagent
+Terminal=false
+Categories=Utility;Office;Chat;
+Keywords=AI;assistant;agent;workforce;synqworks;
+StartupNotify=true
+StartupWMClass=synqagent

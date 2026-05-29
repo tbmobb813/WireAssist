@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ##############################################################################
-# APT PPA Setup Script for Linux AI Assistant
+# APT PPA Setup Script for SynqAgent
 # 
 # This script sets up an APT PPA (Personal Package Archive) for distributing
 # Debian packages across Ubuntu and Debian systems. It handles:
@@ -25,7 +25,7 @@
 #   - debhelper, devscripts, dput
 #   - Ubuntu build environment or pbuilder
 #
-# Author: Linux AI Assistant Team
+# Author: SynqAgent Team
 # Date: October 2025
 ##############################################################################
 
@@ -39,11 +39,11 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-PPA_NAME="linux-ai-assistant"
+PPA_NAME="synqagent"
 LAUNCHPAD_USER="${LAUNCHPAD_USER:-tbmobb813}"
 UBUNTU_RELEASES=("focal" "jammy" "noble")  # 20.04 LTS, 22.04 LTS, 24.04 LTS
-GPG_EMAIL="${GPG_EMAIL:-linux-ai@example.com}"
-GPG_NAME="${GPG_NAME:-Linux AI Assistant Builder}"
+GPG_EMAIL="${GPG_EMAIL:-hello@synqworks.io}"
+GPG_NAME="${GPG_NAME:-SynqAgent Builder}"
 DEBIAN_DIST="unstable"
 
 # Directories
@@ -173,17 +173,17 @@ create_debian_package() {
     
     # Create debian/control
     cat > debian/control << 'EOF'
-Source: linux-ai-assistant
+Source: synqagent
 Section: utils
 Priority: optional
-Maintainer: Linux AI Assistant Team <linux-ai@example.com>
+Maintainer: SynqAgent Team <hello@synqworks.io>
 Build-Depends: debhelper (>= 13), node-npm, cargo, rustc
 Standards-Version: 4.6.0
 Homepage: https://github.com/tbmobb813/Linux-AI-Assistant---Project
 Vcs-Git: https://github.com/tbmobb813/Linux-AI-Assistant---Project.git
 Vcs-Browser: https://github.com/tbmobb813/Linux-AI-Assistant---Project
 
-Package: linux-ai-assistant
+Package: synqagent
 Architecture: any
 Depends: libwebkit2gtk-4.0-37 (>= 2.38.0), libgtk-3-0 (>= 3.18), libayatana-appindicator3-1
 Recommends: ollama
@@ -201,7 +201,7 @@ EOF
 
     # Create debian/changelog
     cat > debian/changelog << EOF
-linux-ai-assistant (0.1.0-1ubuntu1) focal; urgency=medium
+synqagent (0.1.0-1ubuntu1) focal; urgency=medium
 
   * Initial release
   * Multi-provider AI support
@@ -209,7 +209,7 @@ linux-ai-assistant (0.1.0-1ubuntu1) focal; urgency=medium
   * Privacy-respecting architecture
   * Developer-optimized workflows
 
- -- Linux AI Assistant Team <linux-ai@example.com>  $(date -R)
+ -- SynqAgent Team <hello@synqworks.io>  $(date -R)
 EOF
 
     # Create debian/rules
@@ -222,20 +222,20 @@ export DH_VERBOSE = 1
 	dh $@
 
 override_dh_auto_build:
-	cd $(CURDIR)/linux-ai-assistant && npm run build
-	cd $(CURDIR)/linux-ai-assistant && cargo build --release -p app
+	cd $(CURDIR)/synqagent && npm run build
+	cd $(CURDIR)/synqagent && cargo build --release -p app
 
 override_dh_auto_install:
 	dh_auto_install
-	mkdir -p debian/linux-ai-assistant/usr/bin
-	install -m 755 linux-ai-assistant/src-tauri/target/release/app \
-		debian/linux-ai-assistant/usr/bin/linux-ai-assistant
-	mkdir -p debian/linux-ai-assistant/usr/share/applications
-	install -m 644 linux-ai-assistant/linux-ai-assistant.desktop \
-		debian/linux-ai-assistant/usr/share/applications/
-	mkdir -p debian/linux-ai-assistant/usr/share/icons/hicolor/128x128/apps
-	install -m 644 linux-ai-assistant/src-tauri/icons/128x128.png \
-		debian/linux-ai-assistant/usr/share/icons/hicolor/128x128/apps/linux-ai-assistant.png
+	mkdir -p debian/synqagent/usr/bin
+	install -m 755 synqagent/src-tauri/target/release/app \
+		debian/synqagent/usr/bin/synqagent
+	mkdir -p debian/synqagent/usr/share/applications
+	install -m 644 synqagent/synqagent.desktop \
+		debian/synqagent/usr/share/applications/
+	mkdir -p debian/synqagent/usr/share/icons/hicolor/128x128/apps
+	install -m 644 synqagent/src-tauri/icons/128x128.png \
+		debian/synqagent/usr/share/icons/hicolor/128x128/apps/synqagent.png
 EOF
 
     chmod +x debian/rules
@@ -243,12 +243,12 @@ EOF
     # Create debian/copyright
     cat > debian/copyright << EOF
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: Linux AI Assistant
+Upstream-Name: SynqAgent
 Upstream-Contact: tbmobb813 <tbmobb813@users.noreply.github.com>
 Source: https://github.com/tbmobb813/Linux-AI-Assistant---Project
 
 Files: *
-Copyright: 2025 Linux AI Assistant Contributors
+Copyright: 2025 SynqAgent Contributors
 License: MIT
 
 License: MIT
@@ -312,7 +312,7 @@ upload_to_ppa() {
     
     # Create dput configuration
     cat > ~/.dput.cf << EOF
-[linux-ai-assistant-ppa]
+[synqagent-ppa]
 fqdn = ppa.launchpad.net
 method = sftp
 incoming = ~$LAUNCHPAD_USER/ppa/ubuntu/
@@ -327,8 +327,8 @@ EOF
         cd "$DEB_BUILD_DIR/.."
         
         # Sign and upload
-        if dput -U linux-ai-assistant-ppa \
-            "linux-ai-assistant_0.1.0-1ubuntu1_source.changes"; then
+        if dput -U synqagent-ppa \
+            "synqagent_0.1.0-1ubuntu1_source.changes"; then
             log_success "Uploaded to $release successfully"
         else
             log_warn "Upload to $release failed"
@@ -394,7 +394,7 @@ verify_ppa_setup() {
 
 show_help() {
     cat << EOF
-${BLUE}Linux AI Assistant - APT PPA Setup${NC}
+${BLUE}SynqAgent - APT PPA Setup${NC}
 
 ${YELLOW}Usage:${NC}
   $0 [command]

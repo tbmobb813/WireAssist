@@ -6,6 +6,7 @@ pub mod conversations;
 pub mod export;
 pub mod git;
 pub mod health;
+pub mod license;
 pub mod messages;
 pub mod performance;
 pub mod profiles;

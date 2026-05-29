@@ -88,8 +88,8 @@ pub fn run() {
                     // Make the builder mutable so we can optionally attach an icon at runtime
                     let mut tray_builder = TrayIconBuilder::with_id("main")
                         .menu(&menu)
-                        .tooltip("Linux AI Assistant")
-                        .title("Linux AI Assistant")
+                        .tooltip("SynqAgent")
+                        .title("SynqAgent")
                         .on_menu_event(|app, event| {
                             let id = event.id().0.clone();
                             match id.as_str() {
@@ -352,6 +352,9 @@ pub fn run() {
             commands::updater::check_for_updates,
             commands::updater::download_and_install_update,
             commands::updater::get_current_version,
+            // license
+            commands::license::get_license_status,
+            commands::license::verify_license,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

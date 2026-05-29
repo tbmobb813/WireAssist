@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; }
+
+@keyframes pulse-orb {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.08); }
+}
+
+.orb { animation: pulse-orb 4s ease-in-out infinite; }
+.orb-delay { animation: pulse-orb 4s ease-in-out infinite; animation-delay: 2s; }

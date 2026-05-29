@@ -102,7 +102,7 @@ async fn check_github_releases(_current_version: &str) -> Result<VersionInfo, St
 
     match client
         .get(url)
-        .header("User-Agent", "linux-ai-assistant")
+        .header("User-Agent", "synqagent")
         .send()
         .await
     {
@@ -179,7 +179,7 @@ async fn download_release(version: &str) -> Result<String, String> {
 
     let response = client
         .get(&url)
-        .header("User-Agent", "linux-ai-assistant")
+        .header("User-Agent", "synqagent")
         .send()
         .await
         .map_err(|e| format!("Failed to fetch release info: {}", e))?;
@@ -220,14 +220,14 @@ async fn download_release(version: &str) -> Result<String, String> {
         .await
         .map_err(|e| format!("Failed to read download content: {}", e))?;
 
-    // Save to a standard location (~/.local/share/linux-ai-assistant/)
+    // Save to a standard location (~/.local/share/synqagent/)
     let mut save_dir = dirs::home_dir().ok_or("Failed to get home directory".to_string())?;
-    save_dir.push(".local/share/linux-ai-assistant");
+    save_dir.push(".local/share/synqagent");
 
     std::fs::create_dir_all(&save_dir)
         .map_err(|e| format!("Failed to create download directory: {}", e))?;
 
-    let filename = format!("linux-ai-assistant-{}.AppImage", version);
+    let filename = format!("synqagent-{}.AppImage", version);
     let mut temp_path = save_dir;
     temp_path.push(&filename);
 

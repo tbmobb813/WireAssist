@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Performance Benchmark Script for Linux AI Assistant
+# Performance Benchmark Script for SynqAgent
 # Measures key performance metrics against Phase 6 targets
 
 set -e
 
-echo "🚀 Linux AI Assistant - Performance Benchmark"
+echo "🚀 SynqAgent - Performance Benchmark"
 echo "=============================================="
 echo ""
 
@@ -50,7 +50,7 @@ measure_startup_time() {
         local elapsed=0
 
         while [ $elapsed -lt $timeout ] && [ $window_ready = false ]; do
-            if xdotool search --name "Linux AI Assistant" >/dev/null 2>&1; then
+            if xdotool search --name "SynqAgent" >/dev/null 2>&1; then
                 window_ready=true
                 local end_time=$(date +%s.%N)
                 local startup_time=$(echo "$end_time - $start_time" | bc)
