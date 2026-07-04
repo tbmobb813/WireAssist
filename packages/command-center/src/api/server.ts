@@ -385,6 +385,10 @@ app.post('/api/license/activate', async (c) => {
     return c.json({ error: 'key required' }, 400);
   }
 
+  if (!licenseDb) {
+    return c.json({ error: 'License store not available' }, 503);
+  }
+
   const lsApiKey = process.env.LS_API_KEY;
   if (!lsApiKey) {
     return c.json({ error: 'LS_API_KEY not configured on this server' }, 503);
@@ -435,9 +439,10 @@ app.post('/api/license/activate', async (c) => {
   const now = new Date().toISOString();
   const grace = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  licenseDb
-    ?.prepare(
-      `
+  try {
+    licenseDb
+      .prepare(
+        `
     INSERT INTO licenses (key, tier, status, customer_email, activations_remaining, verified_at, expires_grace_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(key) DO UPDATE SET
@@ -447,8 +452,12 @@ app.post('/api/license/activate', async (c) => {
       verified_at = excluded.verified_at,
       expires_grace_at = excluded.expires_grace_at
   `
-    )
-    .run(key.trim(), tier, status, customerEmail, activationsRemaining, now, grace);
+      )
+      .run(key.trim(), tier, status, customerEmail, activationsRemaining, now, grace);
+  } catch (err) {
+    console.error('[license] failed to persist license:', err);
+    return c.json({ error: 'Failed to store license' }, 503);
+  }
 
   return c.json({ tier, status, activationsRemaining });
 });
