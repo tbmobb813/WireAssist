@@ -1,4 +1,4 @@
-// One-time portfolio seed. Run: npx tsx scripts/seed-portfolio.ts [dbPath]
+// One-time portfolio seed. Run: pnpm exec tsx scripts/seed-portfolio.ts [dbPath]
 // Idempotent-ish: UNIQUE(name) makes re-runs fail loudly rather than duplicate.
 import { PortfolioStore } from '../src/portfolio/store';
 
