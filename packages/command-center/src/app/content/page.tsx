@@ -4,7 +4,7 @@ import { useAgentEvents } from '@/hooks/useAgentEvents';
 import Link from 'next/link';
 
 const PLATFORMS = ['twitter', 'linkedin', 'instagram', 'threads'] as const;
-type Platform = typeof PLATFORMS[number];
+type Platform = (typeof PLATFORMS)[number];
 
 interface ScheduledPost {
   id: string;
@@ -34,21 +34,28 @@ export default function ContentPage() {
     if (res.ok) setPosts(await res.json());
   }, []);
 
-  useEffect(() => { fetchPosts(); }, [fetchPosts]);
+  useEffect(() => {
+    fetchPosts();
+  }, [fetchPosts]);
 
-  useAgentEvents(useCallback((e) => {
-    if (e.event === 'content_generated') {
-      const p = e.payload as { content: string };
-      setLastGenerated(p.content);
-      setGenerating(false);
-    }
-    if (e.event === 'post_scheduled') {
-      fetchPosts();
-    }
-    if (e.event === 'task_failed' && e.payload.agentRole === 'content') {
-      setGenerating(false);
-    }
-  }, [fetchPosts]));
+  useAgentEvents(
+    useCallback(
+      (e) => {
+        if (e.event === 'content_generated') {
+          const p = e.payload as { content: string };
+          setLastGenerated(p.content);
+          setGenerating(false);
+        }
+        if (e.event === 'post_scheduled') {
+          fetchPosts();
+        }
+        if (e.event === 'task_failed' && e.payload.agentRole === 'content') {
+          setGenerating(false);
+        }
+      },
+      [fetchPosts]
+    )
+  );
 
   const generatePost = async () => {
     if (!topic.trim() || generating) return;
@@ -73,14 +80,19 @@ export default function ContentPage() {
   };
 
   // Group posts by date for calendar view
-  const postsByDate = posts.reduce((acc, post) => {
-    const date = new Date(post.scheduledAt).toLocaleDateString('en-US', {
-      weekday: 'short', month: 'short', day: 'numeric',
-    });
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(post);
-    return acc;
-  }, {} as Record<string, ScheduledPost[]>);
+  const postsByDate = posts.reduce(
+    (acc, post) => {
+      const date = new Date(post.scheduledAt).toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      });
+      if (!acc[date]) acc[date] = [];
+      acc[date].push(post);
+      return acc;
+    },
+    {} as Record<string, ScheduledPost[]>
+  );
 
   return (
     <div className="min-h-screen p-8">
@@ -91,9 +103,11 @@ export default function ContentPage() {
       </div>
 
       <div className="mb-8">
-        <div className="text-xs tracking-widest text-amber mb-2">SYNQWORKS // CONTENT</div>
+        <div className="text-xs tracking-widest text-amber mb-2">WIREASSIST // CONTENT</div>
         <h1 className="text-3xl font-black">CONTENT AGENT</h1>
-        <p className="text-gray-500 text-sm mt-2">Generate, schedule, and manage your content pipeline.</p>
+        <p className="text-gray-500 text-sm mt-2">
+          Generate, schedule, and manage your content pipeline.
+        </p>
       </div>
 
       <div className="grid grid-cols-3 gap-6">
@@ -102,19 +116,22 @@ export default function ContentPage() {
           <div className="text-xs tracking-widest text-gray-500 mb-2">GENERATE</div>
 
           {/* Single post */}
-          <div className="rounded-lg border p-4" style={{ background: '#0d0d1a', borderColor: '#1e2040' }}>
+          <div
+            className="rounded-lg border p-4"
+            style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
+          >
             <div className="text-xs tracking-widest text-gray-500 mb-3">SINGLE POST</div>
             <input
               type="text"
               value={topic}
-              onChange={e => setTopic(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && generatePost()}
+              onChange={(e) => setTopic(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && generatePost()}
               placeholder="Topic or idea..."
               className="w-full rounded px-3 py-2 text-sm mb-3 outline-none"
               style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
             />
             <div className="flex gap-2 mb-3 flex-wrap">
-              {PLATFORMS.map(p => (
+              {PLATFORMS.map((p) => (
                 <button
                   key={p}
                   onClick={() => setPlatform(p)}
@@ -145,7 +162,10 @@ export default function ContentPage() {
           </div>
 
           {/* Weekly plan */}
-          <div className="rounded-lg border p-4" style={{ background: '#0d0d1a', borderColor: '#1e2040' }}>
+          <div
+            className="rounded-lg border p-4"
+            style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
+          >
             <div className="text-xs tracking-widest text-gray-500 mb-3">WEEKLY PLAN</div>
             <p className="text-xs text-gray-600 mb-3">
               Generate a full week of content ideas across LinkedIn and Twitter. 3 posts/week.
@@ -167,7 +187,10 @@ export default function ContentPage() {
 
           {/* Last generated preview */}
           {lastGenerated && (
-            <div className="rounded-lg border p-4" style={{ background: '#0d0d1a', borderColor: '#00ff9d30' }}>
+            <div
+              className="rounded-lg border p-4"
+              style={{ background: '#0d0d1a', borderColor: '#00ff9d30' }}
+            >
               <div className="text-xs tracking-widest mb-2" style={{ color: '#00ff9d' }}>
                 GENERATED — CHECK APPROVALS
               </div>
@@ -207,7 +230,7 @@ export default function ContentPage() {
                   >
                     {date}
                   </div>
-                  {datePosts.map(post => (
+                  {datePosts.map((post) => (
                     <div
                       key={post.id}
                       className="px-4 py-3 flex items-start gap-3"

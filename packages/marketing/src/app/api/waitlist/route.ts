@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const WAITLIST_AUDIENCE = process.env.RESEND_AUDIENCE_ID;
+// Lazy — never construct Resend at module scope. Next.js collects page data
+// at build time and must not require secrets to compile.
+function getResend(): Resend {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    throw new Error('RESEND_API_KEY is not set');
+  }
+  return new Resend(key);
+}
 
 // In-memory rate limiter: max 3 submissions per IP per 10 minutes, 1 per email ever
 const ipHits = new Map<string, { count: number; resetAt: number }>();
@@ -24,10 +31,27 @@ function checkRateLimit(ip: string, email: string): 'ok' | 'ip' | 'duplicate' {
   return 'ok';
 }
 
-export async function POST(req: NextRequest) {
-  const { email } = await req.json() as { email?: string };
+/** Linear-time shape check — avoids ReDoS-prone email regexes. */
+function isValidEmail(value: string): boolean {
+  if (value.length < 3 || value.length > 254) return false;
+  const at = value.indexOf('@');
+  if (at <= 0 || at !== value.lastIndexOf('@')) return false;
+  const local = value.slice(0, at);
+  const domain = value.slice(at + 1);
+  if (!local || local.length > 64) return false;
+  const dot = domain.indexOf('.');
+  if (dot <= 0 || dot === domain.length - 1) return false;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code <= 32 || code === 127) return false;
+  }
+  return true;
+}
 
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+export async function POST(req: NextRequest) {
+  const { email } = (await req.json()) as { email?: string };
+
+  if (!email || !isValidEmail(email)) {
     return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
   }
 
@@ -50,14 +74,16 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    if (WAITLIST_AUDIENCE) {
-      await resend.contacts.create({ email, audienceId: WAITLIST_AUDIENCE });
+    const resend = getResend();
+    const audienceId = process.env.RESEND_AUDIENCE_ID;
+    if (audienceId) {
+      await resend.contacts.create({ email, audienceId });
     } else {
       await resend.emails.send({
-        from: 'SynqWorks <waitlist@synqworks.techtrendwire.com>',
+        from: 'WireAssist <waitlist@wireassist.techtrendwire.com>',
         to: email,
-        subject: "You're on the SynqWorks waitlist",
-        text: `Hey,\n\nYou're on the SynqWorks waitlist. We'll reach out when we launch.\n\n— The SynqWorks Team`,
+        subject: "You're on the WireAssist waitlist",
+        text: `Hey,\n\nYou're on the WireAssist waitlist. We'll reach out when we launch.\n\n— The WireAssist Team`,
       });
     }
     seenEmails.add(email.toLowerCase());

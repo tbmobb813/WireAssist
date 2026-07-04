@@ -1,6 +1,6 @@
 # Privacy Controls Implementation - Complete ✅
 
-> **Historical document.** AIA app paths are now under `synqworks/aia/` (e.g. `synqworks/aia/src/lib/services/encryptionService.ts`).
+> **Historical document.** AIA app paths are now under `wireassist/aia/` (e.g. `wireassist/aia/src/lib/services/encryptionService.ts`).
 
 **Status:** Privacy controls fully implemented with encryption and audit logging
 **Date:** November 6, 2024
@@ -11,6 +11,7 @@
 ## 🎯 Overview
 
 Privacy controls have been implemented with three core services:
+
 1. **EncryptionService** - Data encryption/decryption with AES-256-GCM
 2. **AuditService** - Operation logging and audit trail
 3. **PrivacyService** - Unified interface managing encryption and audit logging
@@ -20,9 +21,11 @@ Privacy controls have been implemented with three core services:
 ## 🔐 Key Features Implemented
 
 ### 1. Encryption Service
+
 **Location:** `packages/aia/src/lib/services/encryptionService.ts`
 
 **Features:**
+
 - ✅ AES-256-GCM encryption with authenticated encryption
 - ✅ PBKDF2 key derivation from passwords
 - ✅ Random IV and salt generation for each encryption
@@ -32,6 +35,7 @@ Privacy controls have been implemented with three core services:
 - ✅ Master key backup/restore as hex strings
 
 **Key Methods:**
+
 ```typescript
 initialize(password: string): void         // Initialize with password
 encrypt(data: string): EncryptedData       // Encrypt string
@@ -43,6 +47,7 @@ clear(): void                              // Clear keys from memory
 ```
 
 **Security Features:**
+
 - Uses authenticated encryption (GCM mode) - detects tampering
 - Derives unique key for each encryption (PBKDF2 with random salt)
 - 100,000 iterations for key derivation
@@ -50,9 +55,11 @@ clear(): void                              // Clear keys from memory
 - 128-bit IVs and salts
 
 ### 2. Audit Service
+
 **Location:** `packages/aia/src/lib/services/auditService.ts`
 
 **Features:**
+
 - ✅ Track all search operations
 - ✅ Log filter applications
 - ✅ Record result views
@@ -63,6 +70,7 @@ clear(): void                              // Clear keys from memory
 - ✅ Statistics and reporting
 
 **Log Types:**
+
 - `search` - Search queries with results count
 - `filter` - Filter application
 - `view_result` - Viewing search results
@@ -71,6 +79,7 @@ clear(): void                              // Clear keys from memory
 - `export` - Exporting results
 
 **Key Methods:**
+
 ```typescript
 logSearch(query: string, resultCount: number, executionTimeMs: number, status?, errorMessage?): void
 logFilter(filters: Record<string, unknown>, status?, errorMessage?): void
@@ -90,23 +99,26 @@ clearOldLogs(ageMs: number): number
 ```
 
 **Audit Statistics:**
+
 ```typescript
 interface AuditStats {
-  totalLogs: number
-  searchCount: number
-  filterCount: number
-  deleteCount: number
-  errorCount: number
-  averageExecutionTime: number
-  oldestLog: number | null
-  newestLog: number | null
+  totalLogs: number;
+  searchCount: number;
+  filterCount: number;
+  deleteCount: number;
+  errorCount: number;
+  averageExecutionTime: number;
+  oldestLog: number | null;
+  newestLog: number | null;
 }
 ```
 
 ### 3. Privacy Service
+
 **Location:** `packages/aia/src/lib/services/privacyService.ts`
 
 **Features:**
+
 - ✅ Unified privacy configuration management
 - ✅ Optional query encryption
 - ✅ Optional result encryption
@@ -116,19 +128,21 @@ interface AuditStats {
 - ✅ Audit log export with privacy controls
 
 **Privacy Settings:**
+
 ```typescript
 interface PrivacySettings {
-  encryptionEnabled: boolean          // Master encryption flag
-  auditLoggingEnabled: boolean        // Master audit logging flag
-  autoDeleteHistoryDays?: number      // Auto-delete searches after N days
-  encryptQueryStrings: boolean        // Encrypt search queries
-  encryptResults: boolean             // Encrypt result data
-  anonymizeIpAddress: boolean         // Hide IPs in logs
-  dataRetentionDays: number           // Keep logs for N days (default: 90)
+  encryptionEnabled: boolean; // Master encryption flag
+  auditLoggingEnabled: boolean; // Master audit logging flag
+  autoDeleteHistoryDays?: number; // Auto-delete searches after N days
+  encryptQueryStrings: boolean; // Encrypt search queries
+  encryptResults: boolean; // Encrypt result data
+  anonymizeIpAddress: boolean; // Hide IPs in logs
+  dataRetentionDays: number; // Keep logs for N days (default: 90)
 }
 ```
 
 **Key Methods:**
+
 ```typescript
 // Encryption control
 initializeEncryption(password: string): void
@@ -186,6 +200,7 @@ async search(query: string, options: SearchOptions = {}): Promise<SearchResultSe
 ## 📊 Test Coverage
 
 ### Encryption Service Tests (35 tests)
+
 - ✅ Initialization and key derivation
 - ✅ Encryption/decryption for strings
 - ✅ Encryption/decryption for objects
@@ -197,6 +212,7 @@ async search(query: string, options: SearchOptions = {}): Promise<SearchResultSe
 - ✅ Memory management (key clearing)
 
 ### Audit Service Tests (28 tests)
+
 - ✅ Search logging
 - ✅ Filter logging
 - ✅ History deletion tracking
@@ -208,6 +224,7 @@ async search(query: string, options: SearchOptions = {}): Promise<SearchResultSe
 - ✅ Chronological ordering
 
 ### Privacy Service Tests (13 tests)
+
 - ✅ Encryption initialization
 - ✅ Settings management
 - ✅ Query encryption/decryption
@@ -224,6 +241,7 @@ async search(query: string, options: SearchOptions = {}): Promise<SearchResultSe
 ## 🚀 Usage Examples
 
 ### Basic Encryption Setup
+
 ```typescript
 import { privacyService } from './lib/services/privacyService';
 
@@ -239,6 +257,7 @@ const decrypted = privacyService.decryptQuery(encrypted);
 ```
 
 ### Audit Logging
+
 ```typescript
 // Log a search operation
 privacyService.logSearch('search query', 5, 150);
@@ -254,6 +273,7 @@ const csv = privacyService.exportAuditLogs('csv');
 ```
 
 ### Privacy Settings
+
 ```typescript
 // Get current settings
 const settings = privacyService.getSettings();
@@ -273,6 +293,7 @@ console.log(`Total audit logs: ${status.totalAuditLogs}`);
 ```
 
 ### Data Retention
+
 ```typescript
 // Enforce retention policy (delete logs older than retention period)
 const deletedCount = privacyService.enforceRetention();
@@ -316,6 +337,7 @@ Privacy Control System
 ## 🔒 Security Considerations
 
 ### Encryption Features
+
 - **Algorithm:** AES-256-GCM (authenticated encryption)
 - **Key Derivation:** PBKDF2 with SHA-256, 100,000 iterations
 - **IV/Salt:** Cryptographically random, 128 bits
@@ -323,6 +345,7 @@ Privacy Control System
 - **Key Management:** Derived from passwords, clearable from memory
 
 ### Audit Security
+
 - **Immutable Logs:** Once logged, cannot be modified
 - **Chronological:** Timestamps ensure order
 - **Traceable:** Each log has unique ID
@@ -330,6 +353,7 @@ Privacy Control System
 - **Retentionable:** Old logs can be purged per policy
 
 ### Privacy Controls
+
 - **Encryption Optional:** Users can disable encryption
 - **Audit Optional:** Users can disable audit logging
 - **Anonymization:** IP addresses can be hidden
@@ -388,22 +412,23 @@ Full Test Suite:      501 tests passing
 
 ## 📊 Metrics
 
-| Metric | Value |
-|--------|-------|
-| Lines of Code (Services) | ~600 |
-| Lines of Code (Tests) | ~850 |
-| Test Coverage | 100% of privacy code |
-| Encryption Standard | AES-256-GCM |
-| Key Derivation | PBKDF2-SHA256 |
-| PBKDF2 Iterations | 100,000 |
-| Max Audit Logs | 1000 |
-| Default Retention | 90 days |
+| Metric                   | Value                |
+| ------------------------ | -------------------- |
+| Lines of Code (Services) | ~600                 |
+| Lines of Code (Tests)    | ~850                 |
+| Test Coverage            | 100% of privacy code |
+| Encryption Standard      | AES-256-GCM          |
+| Key Derivation           | PBKDF2-SHA256        |
+| PBKDF2 Iterations        | 100,000              |
+| Max Audit Logs           | 1000                 |
+| Default Retention        | 90 days              |
 
 ---
 
 ## ✨ What's Ready for Next Phase
 
 ✅ Foundation for:
+
 - **Key Management UI** - Password change, key backup
 - **Audit Log Viewer** - Search and filter audit logs
 - **Privacy Dashboard** - Settings and status display
@@ -424,6 +449,7 @@ Full Test Suite:      501 tests passing
 5. **Comprehensive Testing** - 76 tests covering all scenarios
 
 The implementation allows users to:
+
 - Encrypt sensitive search queries
 - Track all search operations
 - Export audit logs for compliance
@@ -438,6 +464,7 @@ The implementation allows users to:
 ## Next Steps
 
 The privacy controls are complete. Next phase options:
+
 1. **Publish @aia/core to npm** - Release shared package
 2. **Privacy Dashboard UI** - Settings interface
 3. **Compliance Reports** - Audit reporting

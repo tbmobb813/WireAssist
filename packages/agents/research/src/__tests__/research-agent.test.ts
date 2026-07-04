@@ -1,4 +1,4 @@
-import type { AgentTask, IApprovalQueue, MemoryStore, MCPClient, EventBus } from '@synqworks/core';
+import type { AgentTask, IApprovalQueue, MemoryStore, MCPClient, EventBus } from '@wireassist/core';
 import { ResearchAgent } from '../research-agent';
 
 function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
@@ -15,9 +15,22 @@ function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
   };
 }
 
-const memoryEntry = { id: 'm1', content: 'prior research context', agentRole: 'research' as const, tags: [], createdAt: new Date() };
+const memoryEntry = {
+  id: 'm1',
+  content: 'prior research context',
+  agentRole: 'research' as const,
+  tags: [],
+  createdAt: new Date(),
+};
 
-function makeDeps(overrides: { approval?: Partial<IApprovalQueue>; memory?: Partial<MemoryStore>; mcp?: Partial<MCPClient>; events?: Partial<EventBus> } = {}) {
+function makeDeps(
+  overrides: {
+    approval?: Partial<IApprovalQueue>;
+    memory?: Partial<MemoryStore>;
+    mcp?: Partial<MCPClient>;
+    events?: Partial<EventBus>;
+  } = {}
+) {
   return {
     approval: {
       request: jest.fn().mockResolvedValue(true),
@@ -35,10 +48,20 @@ function makeDeps(overrides: { approval?: Partial<IApprovalQueue>; memory?: Part
       ...overrides.memory,
     } as unknown as MemoryStore,
     mcp: {
-      call: jest.fn().mockResolvedValue({ results: [
-        { title: 'AI Trends 2026', url: 'https://example.com/1', description: 'Key AI trends this year.' },
-        { title: 'LLM Landscape', url: 'https://example.com/2', description: 'Overview of LLM providers.' },
-      ]}),
+      call: jest.fn().mockResolvedValue({
+        results: [
+          {
+            title: 'AI Trends 2026',
+            url: 'https://example.com/1',
+            description: 'Key AI trends this year.',
+          },
+          {
+            title: 'LLM Landscape',
+            url: 'https://example.com/2',
+            description: 'Overview of LLM providers.',
+          },
+        ],
+      }),
       register: jest.fn(),
       listTools: jest.fn().mockReturnValue(['brave_search']),
       ...overrides.mcp,
@@ -72,7 +95,10 @@ describe('ResearchAgent.run() — research_topic', () => {
     // Mock think to avoid real Anthropic call
     (agent as any).think = jest.fn().mockResolvedValue('AI is growing fast.');
     await agent.run(makeTask());
-    expect(deps.events.emit).toHaveBeenCalledWith('agent:task_started', expect.objectContaining({ agentRole: 'research', taskId: 'task-r1' }));
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:task_started',
+      expect.objectContaining({ agentRole: 'research', taskId: 'task-r1' })
+    );
   });
 
   it('calls brave_search tool with query and resultCount', async () => {
@@ -80,7 +106,10 @@ describe('ResearchAgent.run() — research_topic', () => {
     const agent = new ResearchAgent(deps);
     (agent as any).think = jest.fn().mockResolvedValue('Summary here.');
     await agent.run(makeTask());
-    expect(deps.mcp.call).toHaveBeenCalledWith('brave_search', { query: 'AI trends 2026', count: 3 });
+    expect(deps.mcp.call).toHaveBeenCalledWith('brave_search', {
+      query: 'AI trends 2026',
+      count: 3,
+    });
   });
 
   it('emits agent:research_complete after search', async () => {
@@ -88,11 +117,14 @@ describe('ResearchAgent.run() — research_topic', () => {
     const agent = new ResearchAgent(deps);
     (agent as any).think = jest.fn().mockResolvedValue('Findings: AI is booming.');
     await agent.run(makeTask());
-    expect(deps.events.emit).toHaveBeenCalledWith('agent:research_complete', expect.objectContaining({
-      agentRole: 'research',
-      taskId: 'task-r1',
-      summary: 'Findings: AI is booming.',
-    }));
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:research_complete',
+      expect.objectContaining({
+        agentRole: 'research',
+        taskId: 'task-r1',
+        summary: 'Findings: AI is booming.',
+      })
+    );
   });
 
   it('proposes action to store findings', async () => {
@@ -100,10 +132,12 @@ describe('ResearchAgent.run() — research_topic', () => {
     const agent = new ResearchAgent(deps);
     (agent as any).think = jest.fn().mockResolvedValue('Findings.');
     await agent.run(makeTask());
-    expect(deps.approval.request).toHaveBeenCalledWith(expect.objectContaining({
-      taskId: 'task-r1',
-      agentRole: 'research',
-    }));
+    expect(deps.approval.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task-r1',
+        agentRole: 'research',
+      })
+    );
   });
 
   it('stores to memory when approved', async () => {
@@ -111,10 +145,12 @@ describe('ResearchAgent.run() — research_topic', () => {
     const agent = new ResearchAgent(deps);
     (agent as any).think = jest.fn().mockResolvedValue('Findings stored.');
     await agent.run(makeTask());
-    expect(deps.memory.store).toHaveBeenCalledWith(expect.objectContaining({
-      agentRole: 'research',
-      tags: expect.arrayContaining(['research', 'findings']),
-    }));
+    expect(deps.memory.store).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentRole: 'research',
+        tags: expect.arrayContaining(['research', 'findings']),
+      })
+    );
   });
 
   it('does NOT store to memory when rejected', async () => {
@@ -126,10 +162,19 @@ describe('ResearchAgent.run() — research_topic', () => {
   });
 
   it('handles empty search results gracefully', async () => {
-    const deps = makeDeps({ mcp: { call: jest.fn().mockResolvedValue({ results: [] }), register: jest.fn(), listTools: jest.fn().mockReturnValue(['brave_search']) } });
+    const deps = makeDeps({
+      mcp: {
+        call: jest.fn().mockResolvedValue({ results: [] }),
+        register: jest.fn(),
+        listTools: jest.fn().mockReturnValue(['brave_search']),
+      },
+    });
     const agent = new ResearchAgent(deps);
     await agent.run(makeTask());
-    expect(deps.events.emit).toHaveBeenCalledWith('agent:research_complete', expect.objectContaining({ summary: 'No results found.' }));
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:research_complete',
+      expect.objectContaining({ summary: 'No results found.' })
+    );
     expect(deps.memory.store).not.toHaveBeenCalled();
   });
 
@@ -138,7 +183,10 @@ describe('ResearchAgent.run() — research_topic', () => {
     const agent = new ResearchAgent(deps);
     (agent as any).think = jest.fn().mockResolvedValue('Done.');
     await agent.run(makeTask());
-    expect(deps.events.emit).toHaveBeenCalledWith('agent:task_complete', expect.objectContaining({ taskId: 'task-r1' }));
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:task_complete',
+      expect.objectContaining({ taskId: 'task-r1' })
+    );
   });
 });
 
@@ -150,16 +198,31 @@ describe('ResearchAgent.run() — synthesize_findings', () => {
     const task = makeTask({ input: { type: 'synthesize_findings', topic: 'AI tools' } });
     await agent.run(task);
     expect(deps.memory.searchAsync).toHaveBeenCalledWith('AI tools', { agentRole: 'research' });
-    expect(deps.events.emit).toHaveBeenCalledWith('agent:research_complete', expect.objectContaining({ summary: 'Synthesized result.' }));
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:research_complete',
+      expect.objectContaining({ summary: 'Synthesized result.' })
+    );
   });
 
   it('emits research_complete with no-memory message when context is empty', async () => {
-    const deps = makeDeps({ memory: { searchAsync: jest.fn().mockResolvedValue([]), search: jest.fn().mockReturnValue([]), store: jest.fn().mockReturnValue('x'), storeAsync: jest.fn().mockResolvedValue('x'), listRecent: jest.fn().mockReturnValue([]), upgradeEmbeddings: jest.fn().mockResolvedValue({ upgraded: 0, total: 0 }) } });
+    const deps = makeDeps({
+      memory: {
+        searchAsync: jest.fn().mockResolvedValue([]),
+        search: jest.fn().mockReturnValue([]),
+        store: jest.fn().mockReturnValue('x'),
+        storeAsync: jest.fn().mockResolvedValue('x'),
+        listRecent: jest.fn().mockReturnValue([]),
+        upgradeEmbeddings: jest.fn().mockResolvedValue({ upgraded: 0, total: 0 }),
+      },
+    });
     const agent = new ResearchAgent(deps);
     const task = makeTask({ input: { type: 'synthesize_findings', topic: 'niche topic' } });
     await agent.run(task);
-    expect(deps.events.emit).toHaveBeenCalledWith('agent:research_complete', expect.objectContaining({
-      summary: expect.stringContaining('No existing research found'),
-    }));
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:research_complete',
+      expect.objectContaining({
+        summary: expect.stringContaining('No existing research found'),
+      })
+    );
   });
 });

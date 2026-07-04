@@ -1,6 +1,6 @@
 # AIA Monorepo Setup
 
-> **Historical document.** The repo layout has moved to `synqworks/core`, `synqworks/aia`, and `packages/agents/*`. See [README.md](./README.md) and [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for the current structure.
+> **Historical document.** The repo layout has moved to `wireassist/core`, `wireassist/aia`, and `packages/agents/*`. See [README.md](./README.md) and [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for the current structure.
 
 This monorepo is the **primary source of truth** for AIA development.
 
@@ -43,18 +43,21 @@ aia/ (monorepo root)
 ## Key Integration Points
 
 ### 1. @aia/core Package
+
 - **Source:** `packages/core/src`
 - **Built to:** `packages/core/dist`
 - **Export:** Main entry point exports all public APIs
 - **Usage:** Imported as `@aia/core` via workspace symlink
 
 ### 2. AIA App Database Adapters
+
 - **Location:** `packages/aia/src/lib/api/`
   - `core-adapter.ts` - Maps @aia/core to AIA API format
   - `database-core.ts` - Core-backed database implementation
   - `database-hybrid.ts` - Switches between Tauri and Core
 
 ### 3. Shared Configuration
+
 - **TypeScript:** `tsconfig.base.json` at root
 - **ESLint:** `.eslintrc.js` at root
 - **Prettier:** `.prettierrc.json` at root
@@ -62,11 +65,13 @@ aia/ (monorepo root)
 ## Development Workflow
 
 ### Install Dependencies
+
 ```bash
 pnpm install
 ```
 
 ### Run Tests
+
 ```bash
 # All packages
 pnpm test
@@ -77,6 +82,7 @@ pnpm test:aia
 ```
 
 ### Build
+
 ```bash
 # All packages
 pnpm build
@@ -87,6 +93,7 @@ pnpm build:aia
 ```
 
 ### Development Mode
+
 ```bash
 # Run all packages in watch mode
 pnpm dev
@@ -101,11 +108,13 @@ pnpm dev:aia
 These are maintained separately but should reference this monorepo:
 
 ### `/aia-core` (deprecated)
+
 - Original standalone @aia/core repository
 - Now superseded by `packages/core/` in monorepo
 - **Action:** Keep as backup/archive, don't commit new changes here
 
 ### `ai-assist - l.a.i.` (deprecated)
+
 - Original AIA app repository
 - Now superseded by `packages/aia/` in monorepo
 - **Action:** Keep as backup/archive, don't commit new changes here
@@ -113,6 +122,7 @@ These are maintained separately but should reference this monorepo:
 ## Phase 1: MVP Integration Status
 
 ✅ **Completed:**
+
 - [x] Monorepo structure with pnpm workspaces
 - [x] @aia/core linked via workspace symlink
 - [x] Core integration tests (23 tests)
@@ -122,6 +132,7 @@ These are maintained separately but should reference this monorepo:
 - [x] Type safety and full TypeScript support
 
 🔄 **In Progress:**
+
 - [ ] End-to-end message flow (user → provider → storage)
 - [ ] Streaming response integration
 - [ ] Search integration with @aia/core SearchEngine

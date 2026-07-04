@@ -8,7 +8,7 @@ import {
   type MemoryStore,
   type MCPClient,
   type EventBus,
-} from '@synqworks/core';
+} from '@wireassist/core';
 
 export abstract class BaseAgent {
   protected config: AgentConfig;
@@ -61,7 +61,7 @@ export abstract class BaseAgent {
 
     return response.content
       .filter((b): b is TextBlock => b.type === 'text')
-      .map(b => b.text)
+      .map((b) => b.text)
       .join('');
   }
 
@@ -100,14 +100,9 @@ export abstract class BaseAgent {
   }
 
   // Call an MCP tool — Gmail, Calendar, etc.
-  protected async useTool(
-    toolName: string,
-    params: Record<string, unknown>
-  ): Promise<unknown> {
+  protected async useTool(toolName: string, params: Record<string, unknown>): Promise<unknown> {
     if (!this.config.tools.includes(toolName)) {
-      throw new Error(
-        `Agent "${this.name}" is not authorized to use tool: ${toolName}`
-      );
+      throw new Error(`Agent "${this.name}" is not authorized to use tool: ${toolName}`);
     }
     return this.mcp.call(toolName, params);
   }
@@ -117,7 +112,7 @@ export abstract class BaseAgent {
     try {
       const memories = await this.memory.searchAsync(query, { agentRole: this.role });
       if (memories.length === 0) return '';
-      return memories.map(m => m.content).join('\n\n');
+      return memories.map((m) => m.content).join('\n\n');
     } catch {
       return '';
     }

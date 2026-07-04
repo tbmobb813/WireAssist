@@ -1,7 +1,14 @@
-import { BaseAgent } from '@synqworks/agent-admin';
-import type { AgentConfig, AgentTask, IApprovalQueue, MemoryStore, MCPClient, EventBus } from '@synqworks/core';
+import { BaseAgent } from '@wireassist/agent-admin';
+import type {
+  AgentConfig,
+  AgentTask,
+  IApprovalQueue,
+  MemoryStore,
+  MCPClient,
+  EventBus,
+} from '@wireassist/core';
 
-const SYSTEM_PROMPT = `You are a Research Agent for SynqWorks. Your job is to find, synthesize, and present information clearly and accurately.
+const SYSTEM_PROMPT = `You are a Research Agent for WireAssist. Your job is to find, synthesize, and present information clearly and accurately.
 
 Principles:
 - Summarize search results into concise, actionable findings
@@ -18,17 +25,30 @@ const DEFAULT_CONFIG: AgentConfig = {
   maxTokens: 2048,
 };
 
-interface BraveResult { title: string; url: string; description: string; }
+interface BraveResult {
+  title: string;
+  url: string;
+  description: string;
+}
 
 export class ResearchAgent extends BaseAgent {
-  constructor(deps: { approval: IApprovalQueue; memory: MemoryStore; mcp: MCPClient; events: EventBus }) {
+  constructor(deps: {
+    approval: IApprovalQueue;
+    memory: MemoryStore;
+    mcp: MCPClient;
+    events: EventBus;
+  }) {
     super(DEFAULT_CONFIG, deps);
   }
 
   async run(task: AgentTask): Promise<void> {
     if (this.status === 'running') return;
     this.status = 'running';
-    this.events.emit('agent:task_started', { agentRole: this.role, taskId: task.id, description: task.description });
+    this.events.emit('agent:task_started', {
+      agentRole: this.role,
+      taskId: task.id,
+      description: task.description,
+    });
 
     try {
       switch (task.input.type as string) {
@@ -45,7 +65,11 @@ export class ResearchAgent extends BaseAgent {
       this.events.emit('agent:task_complete', { agentRole: this.role, taskId: task.id });
     } catch (error) {
       this.status = 'error';
-      this.events.emit('agent:task_failed', { agentRole: this.role, taskId: task.id, error: String(error) });
+      this.events.emit('agent:task_failed', {
+        agentRole: this.role,
+        taskId: task.id,
+        error: String(error),
+      });
       throw error;
     }
   }
@@ -55,31 +79,46 @@ export class ResearchAgent extends BaseAgent {
 
     const context = await this.loadContext(query);
 
-    const searchResult = await this.useTool('brave_search', { query, count: resultCount }) as { results: BraveResult[] };
+    const searchResult = (await this.useTool('brave_search', { query, count: resultCount })) as {
+      results: BraveResult[];
+    };
     const { results } = searchResult;
 
     if (results.length === 0) {
-      this.events.emit('agent:research_complete', { agentRole: this.role, taskId: task.id, summary: 'No results found.' });
+      this.events.emit('agent:research_complete', {
+        agentRole: this.role,
+        taskId: task.id,
+        summary: 'No results found.',
+      });
       return;
     }
 
-    const resultsText = results.map((r, i) =>
-      `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.description}`
-    ).join('\n\n');
+    const resultsText = results
+      .map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.description}`)
+      .join('\n\n');
 
     const summary = await this.think(
       `Research query: "${query}"\n\nSearch results:\n${resultsText}`,
-      context ? `Existing context from memory:\n${context}` : undefined,
+      context ? `Existing context from memory:\n${context}` : undefined
     );
 
-    this.events.emit('agent:research_complete', { agentRole: this.role, taskId: task.id, summary, sources: results.map(r => r.url) });
+    this.events.emit('agent:research_complete', {
+      agentRole: this.role,
+      taskId: task.id,
+      summary,
+      sources: results.map((r) => r.url),
+    });
 
-    const approved = await this.proposeAction(task, `Store research findings for: ${query}`, { summary, sources: results.map(r => r.url) });
+    const approved = await this.proposeAction(task, `Store research findings for: ${query}`, {
+      summary,
+      sources: results.map((r) => r.url),
+    });
     if (approved) {
-      this.remember(
-        `Research on "${query}":\n\n${summary}`,
-        ['research', 'findings', ...query.toLowerCase().split(' ').slice(0, 3)],
-      );
+      this.remember(`Research on "${query}":\n\n${summary}`, [
+        'research',
+        'findings',
+        ...query.toLowerCase().split(' ').slice(0, 3),
+      ]);
     }
   }
 
@@ -88,16 +127,24 @@ export class ResearchAgent extends BaseAgent {
 
     const context = await this.loadContext(topic);
     if (!context) {
-      this.events.emit('agent:research_complete', { agentRole: this.role, taskId: task.id, summary: `No existing research found for: ${topic}` });
+      this.events.emit('agent:research_complete', {
+        agentRole: this.role,
+        taskId: task.id,
+        summary: `No existing research found for: ${topic}`,
+      });
       return;
     }
 
     const synthesis = await this.think(
       `Synthesize all available research on the topic: "${topic}"`,
-      `Memory context:\n${context}`,
+      `Memory context:\n${context}`
     );
 
-    this.events.emit('agent:research_complete', { agentRole: this.role, taskId: task.id, summary: synthesis });
+    this.events.emit('agent:research_complete', {
+      agentRole: this.role,
+      taskId: task.id,
+      summary: synthesis,
+    });
 
     const approved = await this.proposeAction(task, `Store synthesis for: ${topic}`, { synthesis });
     if (approved) {

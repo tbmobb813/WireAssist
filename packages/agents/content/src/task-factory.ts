@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
-import type { AgentTask } from '@synqworks/core';
-import type { Platform } from '@synqworks/synqpost-mcp';
+import type { AgentTask } from '@wireassist/core';
+import type { Platform } from '@wireassist/trendpost-mcp';
 
 export const ContentTasks = {
   generatePost(topic: string, platform: Platform, tone?: string): AgentTask {
@@ -29,7 +29,12 @@ export const ContentTasks = {
     };
   },
 
-  schedulePost(content: string, platform: Platform, scheduledAt: string, tags?: string[]): AgentTask {
+  schedulePost(
+    content: string,
+    platform: Platform,
+    scheduledAt: string,
+    tags?: string[]
+  ): AgentTask {
     return {
       id: randomUUID(),
       agentRole: 'content',

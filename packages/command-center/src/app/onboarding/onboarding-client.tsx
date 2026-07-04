@@ -3,16 +3,58 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const QUESTIONS = [
-  { key: 'business_description', label: 'What does your business do?', placeholder: 'e.g. I run a print-on-demand apparel brand selling on Etsy and my own site.' },
-  { key: 'target_customers', label: 'Who are your target customers?', placeholder: 'e.g. Tech-savvy millennials who like minimalist streetwear.' },
-  { key: 'products_services', label: 'What products or services do you offer?', placeholder: 'e.g. T-shirts, hoodies, and digital art prints.' },
-  { key: 'platforms', label: 'What platforms do you sell or operate on?', placeholder: 'e.g. Etsy, Gumroad, Instagram, LinkedIn.' },
-  { key: 'goals', label: 'What are your main business goals this year?', placeholder: 'e.g. Hit $5k/month revenue and grow Instagram to 10k followers.' },
-  { key: 'challenges', label: 'What is your biggest challenge right now?', placeholder: 'e.g. Finding time to create content while fulfilling orders.' },
-  { key: 'content_voice', label: 'How would you describe your content style and voice?', placeholder: 'e.g. Direct, educational, no corporate fluff. I post about the behind-the-scenes of running solo.' },
-  { key: 'content_topics', label: 'What topics do you most want to post about?', placeholder: 'e.g. Product drops, workflow tips, lessons from running a one-person business.' },
-  { key: 'key_contacts', label: 'Who are your most important clients, partners, or collaborators?', placeholder: 'e.g. My main supplier is PrintifyPro. I collaborate with @designer_x on product drops.' },
-  { key: 'success_definition', label: 'What does a successful week look like for you?', placeholder: 'e.g. 3 orders fulfilled, 2 content posts published, inbox zero by Friday.' },
+  {
+    key: 'business_description',
+    label: 'What does your business do?',
+    placeholder: 'e.g. I run a print-on-demand apparel brand selling on Etsy and my own site.',
+  },
+  {
+    key: 'target_customers',
+    label: 'Who are your target customers?',
+    placeholder: 'e.g. Tech-savvy millennials who like minimalist streetwear.',
+  },
+  {
+    key: 'products_services',
+    label: 'What products or services do you offer?',
+    placeholder: 'e.g. T-shirts, hoodies, and digital art prints.',
+  },
+  {
+    key: 'platforms',
+    label: 'What platforms do you sell or operate on?',
+    placeholder: 'e.g. Etsy, Gumroad, Instagram, LinkedIn.',
+  },
+  {
+    key: 'goals',
+    label: 'What are your main business goals this year?',
+    placeholder: 'e.g. Hit $5k/month revenue and grow Instagram to 10k followers.',
+  },
+  {
+    key: 'challenges',
+    label: 'What is your biggest challenge right now?',
+    placeholder: 'e.g. Finding time to create content while fulfilling orders.',
+  },
+  {
+    key: 'content_voice',
+    label: 'How would you describe your content style and voice?',
+    placeholder:
+      'e.g. Direct, educational, no corporate fluff. I post about the behind-the-scenes of running solo.',
+  },
+  {
+    key: 'content_topics',
+    label: 'What topics do you most want to post about?',
+    placeholder: 'e.g. Product drops, workflow tips, lessons from running a one-person business.',
+  },
+  {
+    key: 'key_contacts',
+    label: 'Who are your most important clients, partners, or collaborators?',
+    placeholder:
+      'e.g. My main supplier is PrintifyPro. I collaborate with @designer_x on product drops.',
+  },
+  {
+    key: 'success_definition',
+    label: 'What does a successful week look like for you?',
+    placeholder: 'e.g. 3 orders fulfilled, 2 content posts published, inbox zero by Friday.',
+  },
 ];
 
 export default function OnboardingClient() {
@@ -31,7 +73,7 @@ export default function OnboardingClient() {
     if (isLast) {
       handleSubmit();
     } else {
-      setStep(s => s + 1);
+      setStep((s) => s + 1);
     }
   };
 
@@ -46,7 +88,11 @@ export default function OnboardingClient() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(typeof data.error === 'string' ? data.error : 'Failed to save — is the API server running?');
+        setError(
+          typeof data.error === 'string'
+            ? data.error
+            : 'Failed to save — is the API server running?'
+        );
         setSubmitting(false);
         return;
       }
@@ -62,7 +108,7 @@ export default function OnboardingClient() {
       <div className="w-full max-w-xl">
         {/* Header */}
         <div className="mb-10 text-center">
-          <div className="text-xs tracking-widest text-accent mb-2">SYNQWORKS // SETUP</div>
+          <div className="text-xs tracking-widest text-accent mb-2">WIREASSIST // SETUP</div>
           <h1 className="text-3xl font-black">TELL YOUR AGENTS ABOUT YOUR BUSINESS</h1>
           <p className="text-gray-500 text-sm mt-3">
             Your answers are stored as long-term memory so every agent starts with full context.
@@ -72,7 +118,9 @@ export default function OnboardingClient() {
         {/* Progress bar */}
         <div className="mb-8">
           <div className="flex justify-between text-xs text-gray-600 mb-2">
-            <span>Question {step + 1} of {QUESTIONS.length}</span>
+            <span>
+              Question {step + 1} of {QUESTIONS.length}
+            </span>
             <span>{Math.round(progress)}%</span>
           </div>
           <div className="h-1 rounded-full" style={{ background: '#1e2040' }}>
@@ -93,8 +141,8 @@ export default function OnboardingClient() {
             autoFocus
             rows={4}
             value={answers[current.key] ?? ''}
-            onChange={e => setAnswers(prev => ({ ...prev, [current.key]: e.target.value }))}
-            onKeyDown={e => {
+            onChange={(e) => setAnswers((prev) => ({ ...prev, [current.key]: e.target.value }))}
+            onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleNext();
             }}
             placeholder={current.placeholder}
@@ -109,7 +157,10 @@ export default function OnboardingClient() {
         </div>
 
         {error && (
-          <div className="mb-4 text-xs text-red-400 border border-red-900 rounded px-4 py-3" style={{ background: '#1a0a0a' }}>
+          <div
+            className="mb-4 text-xs text-red-400 border border-red-900 rounded px-4 py-3"
+            style={{ background: '#1a0a0a' }}
+          >
             {error}
           </div>
         )}
@@ -117,7 +168,7 @@ export default function OnboardingClient() {
         <div className="flex gap-3">
           {step > 0 && (
             <button
-              onClick={() => setStep(s => s - 1)}
+              onClick={() => setStep((s) => s - 1)}
               disabled={submitting}
               className="px-5 py-3 rounded-lg text-xs tracking-widest border"
               style={{ borderColor: '#1e2040', color: '#475569' }}

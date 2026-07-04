@@ -1,0 +1,36 @@
+version: 2
+updates:
+  # npm monorepo root (pnpm workspace)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # npm desktop package (frozen Tauri app)
+  - package-ecosystem: "npm"
+    directory: "/wireassist/aia"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # cargo for desktop Tauri crate
+  - package-ecosystem: "cargo"
+    directory: "/wireassist/aia/src-tauri"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # cargo for desktop CLI crate
+  - package-ecosystem: "cargo"
+    directory: "/wireassist/aia/cli"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5

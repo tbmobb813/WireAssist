@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 
 import readline from 'readline';
-import { MemoryStore, MCPClient, EventBus, type IApprovalQueue } from '@synqworks/core';
+import { MemoryStore, MCPClient, EventBus, type IApprovalQueue } from '@wireassist/core';
 import { AdminAgent } from './admin-agent';
 import { setupAdminMCP } from './mcp-setup';
 import { AdminTasks } from './admin-tasks';
@@ -56,8 +56,10 @@ class CliApprovalQueue implements IApprovalQueue {
 }
 
 async function runDemo(): Promise<void> {
-  console.log('=== SynqWorks Admin Agent Demo ===');
-  console.log('This demo triages Gmail and reviews calendar; approvals are [y/n] in the terminal.\n');
+  console.log('=== WireAssist Admin Agent Demo ===');
+  console.log(
+    'This demo triages Gmail and reviews calendar; approvals are [y/n] in the terminal.\n'
+  );
 
   // Core dependencies
   const memory = new MemoryStore(':memory:');
@@ -113,4 +115,3 @@ runDemo().catch((err) => {
   console.error('Demo failed:', err);
   process.exitCode = 1;
 });
-

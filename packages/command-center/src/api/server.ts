@@ -2,21 +2,17 @@ import './load-env';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { cors } from 'hono/cors';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import {
-  ApprovalQueue,
-  MemoryStore,
-  MCPClient,
-  EventBus,
-} from '@synqworks/core';
-import { AdminAgent, setupAdminMCP, AdminTasks } from '@synqworks/agent-admin';
-import { ContentAgent, ContentTasks } from '@synqworks/agent-content';
-import { ResearchAgent, ResearchTasks, setupResearchMCP } from '@synqworks/agent-research';
-import { registerSynqPostTools, SynqPostStorage } from '@synqworks/synqpost-mcp';
+import { ApprovalQueue, MemoryStore, MCPClient, EventBus } from '@wireassist/core';
+import { AdminAgent, setupAdminMCP, AdminTasks } from '@wireassist/agent-admin';
+import { ContentAgent, ContentTasks } from '@wireassist/agent-content';
+import { ResearchAgent, ResearchTasks, setupResearchMCP } from '@wireassist/agent-research';
+import { registerTrendPostTools, TrendPostStorage } from '@wireassist/trendpost-mcp';
 
-const HOME_PATH = process.env.SYNQWORKS_HOME ?? os.homedir();
-const DB_PATH = path.join(HOME_PATH, '.synqworks', 'synqworks.db');
+const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
+const DB_PATH = path.join(HOME_PATH, '.wireassist', 'wireassist.db');
 
 // ── Shared state ───────────────────────────────────────────────────────────
 const mcp = new MCPClient();
@@ -27,7 +23,7 @@ let memory: MemoryStore;
 let agent: AdminAgent;
 let contentAgent: ContentAgent;
 let researchAgent: ResearchAgent;
-let synqpostStorage: SynqPostStorage;
+let trendpostStorage: TrendPostStorage;
 let agentReady = false;
 
 // ── License tier gating ────────────────────────────────────────────────────
@@ -69,7 +65,7 @@ function logAgentTaskError(err: unknown) {
   const message = err instanceof Error ? err.message : String(err);
   if (message.includes('Could not resolve authentication method')) {
     console.error(
-      '❌ Anthropic auth failed — set ANTHROPIC_API_KEY in the environment where you run pnpm dev:command-center',
+      '❌ Anthropic auth failed — set ANTHROPIC_API_KEY in the environment where you run pnpm dev:command-center'
     );
     return;
   }
@@ -80,9 +76,7 @@ function logAgentTaskError(err: unknown) {
 let adminTaskChain: Promise<void> = Promise.resolve();
 
 function queueAgentTask(task: Parameters<AdminAgent['run']>[0]) {
-  adminTaskChain = adminTaskChain
-    .then(() => agent.run(task))
-    .catch(logAgentTaskError);
+  adminTaskChain = adminTaskChain.then(() => agent.run(task)).catch(logAgentTaskError);
   return task;
 }
 
@@ -100,9 +94,7 @@ function queueResearchTask(task: Parameters<ResearchAgent['run']>[0]) {
 }
 
 function queueContentTask(task: Parameters<ContentAgent['run']>[0]) {
-  contentTaskChain = contentTaskChain
-    .then(() => contentAgent.run(task))
-    .catch(logAgentTaskError);
+  contentTaskChain = contentTaskChain.then(() => contentAgent.run(task)).catch(logAgentTaskError);
   return task;
 }
 
@@ -116,9 +108,10 @@ function sqliteSetupHint(): string {
 
 function openStores() {
   try {
+    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
     approval = new ApprovalQueue(DB_PATH);
     memory = new MemoryStore(DB_PATH);
-    synqpostStorage = new SynqPostStorage(DB_PATH);
+    trendpostStorage = new TrendPostStorage(DB_PATH);
     licenseDb = new Database(DB_PATH);
     licenseDb.exec(`
       CREATE TABLE IF NOT EXISTS licenses (
@@ -154,32 +147,32 @@ function broadcast(event: string, payload: unknown) {
   if (recentActivity.length > MAX_ACTIVITY) recentActivity.pop();
 
   const data = `data: ${JSON.stringify({ event, payload })}\n\n`;
-  sseClients.forEach(send => send(data));
+  sseClients.forEach((send) => send(data));
 }
 
 // Wire EventBus → SSE broadcasts
-events.on('agent:task_started', p => broadcast('task_started', p));
-events.on('agent:task_complete', p => broadcast('task_complete', p));
-events.on('agent:task_failed', p => broadcast('task_failed', p));
-events.on('agent:waiting_approval', p => broadcast('waiting_approval', p));
-events.on('agent:approval_resolved', p => broadcast('approval_resolved', p));
-events.on('agent:triage_complete', p => broadcast('triage_complete', p));
-events.on('agent:calendar_review_complete', p => broadcast('calendar_review_complete', p));
-events.on('agent:freeform_response', p => broadcast('freeform_response', p));
-events.on('agent:content_generated', p => broadcast('content_generated', p));
-events.on('agent:content_approved', p => broadcast('content_approved', p));
-events.on('agent:content_plan_generated', p => broadcast('content_plan_generated', p));
-events.on('agent:post_scheduled', p => broadcast('post_scheduled', p));
-events.on('agent:content_analyzed', p => broadcast('content_analyzed', p));
-events.on('agent:scheduled_posts', p => broadcast('scheduled_posts', p));
-events.on('agent:research_complete', p => broadcast('research_complete', p));
+events.on('agent:task_started', (p) => broadcast('task_started', p));
+events.on('agent:task_complete', (p) => broadcast('task_complete', p));
+events.on('agent:task_failed', (p) => broadcast('task_failed', p));
+events.on('agent:waiting_approval', (p) => broadcast('waiting_approval', p));
+events.on('agent:approval_resolved', (p) => broadcast('approval_resolved', p));
+events.on('agent:triage_complete', (p) => broadcast('triage_complete', p));
+events.on('agent:calendar_review_complete', (p) => broadcast('calendar_review_complete', p));
+events.on('agent:freeform_response', (p) => broadcast('freeform_response', p));
+events.on('agent:content_generated', (p) => broadcast('content_generated', p));
+events.on('agent:content_approved', (p) => broadcast('content_approved', p));
+events.on('agent:content_plan_generated', (p) => broadcast('content_plan_generated', p));
+events.on('agent:post_scheduled', (p) => broadcast('post_scheduled', p));
+events.on('agent:content_analyzed', (p) => broadcast('content_analyzed', p));
+events.on('agent:scheduled_posts', (p) => broadcast('scheduled_posts', p));
+events.on('agent:research_complete', (p) => broadcast('research_complete', p));
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 async function bootstrap() {
   openStores();
 
   // Content Agent tools
-  registerSynqPostTools(mcp, synqpostStorage);
+  registerTrendPostTools(mcp, trendpostStorage);
   contentAgent = new ContentAgent({ approval, memory, mcp, events });
 
   // Research Agent tools
@@ -193,17 +186,17 @@ async function bootstrap() {
   } catch (err) {
     console.warn(
       '⚠️  Admin Agent unavailable (Gmail/Calendar credentials missing or invalid).',
-      err instanceof Error ? err.message : err,
+      err instanceof Error ? err.message : err
     );
   }
 
   agentReady = true;
   if (!anthropicConfigured()) {
     console.warn(
-      '⚠️  ANTHROPIC_API_KEY is not set — dashboard loads, but triage/chat/calendar tasks will fail until you export it.',
+      '⚠️  ANTHROPIC_API_KEY is not set — dashboard loads, but triage/chat/calendar tasks will fail until you export it.'
     );
   }
-  console.log('✅ SynqWorks API server ready');
+  console.log('✅ WireAssist API server ready');
 }
 
 // ── Hono app ───────────────────────────────────────────────────────────────
@@ -212,12 +205,12 @@ const app = new Hono();
 app.use('*', cors({ origin: 'http://localhost:3001' }));
 
 // Health check
-app.get('/health', c =>
-  c.json({ status: 'ok', agentReady, anthropicConfigured: anthropicConfigured() }),
+app.get('/health', (c) =>
+  c.json({ status: 'ok', agentReady, anthropicConfigured: anthropicConfigured() })
 );
 
 // ── AGENT STATUS ──────────────────────────────────────────────────────────
-app.get('/api/agent/status', c => {
+app.get('/api/agent/status', (c) => {
   return c.json({
     admin: {
       role: 'admin',
@@ -238,10 +231,10 @@ app.get('/api/agent/status', c => {
 });
 
 // Recent agent events (for activity feed on load / missed SSE)
-app.get('/api/activity', c => {
+app.get('/api/activity', (c) => {
   const taskId = c.req.query('taskId');
   if (!taskId) return c.json(recentActivity);
-  const filtered = recentActivity.filter(r => {
+  const filtered = recentActivity.filter((r) => {
     const p = r.payload as { taskId?: string };
     return p?.taskId === taskId;
   });
@@ -249,19 +242,19 @@ app.get('/api/activity', c => {
 });
 
 // ── APPROVAL QUEUE ────────────────────────────────────────────────────────
-app.get('/api/approvals', c => {
+app.get('/api/approvals', (c) => {
   if (!agentReady) return c.json([]);
   return c.json(approval.getPending());
 });
 
-app.post('/api/approvals/:id/approve', c => {
+app.post('/api/approvals/:id/approve', (c) => {
   const { id } = c.req.param();
   approval.resolve(id, true);
   broadcast('approval_resolved', { id, approved: true });
   return c.json({ ok: true });
 });
 
-app.post('/api/approvals/:id/reject', c => {
+app.post('/api/approvals/:id/reject', (c) => {
   const { id } = c.req.param();
   approval.resolve(id, false);
   broadcast('approval_resolved', { id, approved: false });
@@ -269,11 +262,14 @@ app.post('/api/approvals/:id/reject', c => {
 });
 
 function adminAgentRequired() {
-  return { error: 'Admin Agent unavailable — Gmail/Calendar credentials are not configured. See docs/SETUP.md.' };
+  return {
+    error:
+      'Admin Agent unavailable — Gmail/Calendar credentials are not configured. See docs/SETUP.md.',
+  };
 }
 
 // ── TASKS ─────────────────────────────────────────────────────────────────
-app.post('/api/tasks/triage-email', async c => {
+app.post('/api/tasks/triage-email', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!agent) return c.json(adminAgentRequired(), 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
@@ -282,7 +278,7 @@ app.post('/api/tasks/triage-email', async c => {
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
-app.post('/api/tasks/review-calendar', async c => {
+app.post('/api/tasks/review-calendar', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!agent) return c.json(adminAgentRequired(), 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
@@ -292,7 +288,7 @@ app.post('/api/tasks/review-calendar', async c => {
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
-app.post('/api/tasks/freeform', async c => {
+app.post('/api/tasks/freeform', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!agent) return c.json(adminAgentRequired(), 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
@@ -310,7 +306,7 @@ function isValidPlatform(p: unknown): p is 'twitter' | 'linkedin' | 'instagram' 
   return typeof p === 'string' && VALID_PLATFORMS.has(p);
 }
 
-app.post('/api/tasks/generate-post', async c => {
+app.post('/api/tasks/generate-post', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const tg = tierGate('operator');
@@ -328,7 +324,7 @@ app.post('/api/tasks/generate-post', async c => {
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
-app.post('/api/tasks/generate-plan', async c => {
+app.post('/api/tasks/generate-plan', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const tg = tierGate('operator');
@@ -337,21 +333,26 @@ app.post('/api/tasks/generate-plan', async c => {
   const platforms: unknown[] = Array.isArray(body.platforms)
     ? body.platforms
     : ['linkedin', 'twitter'];
-  const invalidPlatform = platforms.find(p => !isValidPlatform(p));
+  const invalidPlatform = platforms.find((p) => !isValidPlatform(p));
   if (invalidPlatform) {
-    return c.json({ error: `invalid platform "${invalidPlatform}". Must be one of: ${[...VALID_PLATFORMS].join(', ')}` }, 400);
+    return c.json(
+      {
+        error: `invalid platform "${invalidPlatform}". Must be one of: ${[...VALID_PLATFORMS].join(', ')}`,
+      },
+      400
+    );
   }
   const task = ContentTasks.generatePlan(
     platforms as ('twitter' | 'linkedin' | 'instagram' | 'threads')[],
     body.weeksAhead ?? 1,
-    body.postsPerWeek ?? 3,
+    body.postsPerWeek ?? 3
   );
   queueContentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
 // ── RESEARCH TASKS ────────────────────────────────────────────────────────
-app.post('/api/tasks/research-topic', async c => {
+app.post('/api/tasks/research-topic', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const tg = tierGate('workforce');
@@ -363,7 +364,7 @@ app.post('/api/tasks/research-topic', async c => {
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
-app.post('/api/tasks/synthesize', async c => {
+app.post('/api/tasks/synthesize', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const tg = tierGate('workforce');
@@ -376,14 +377,18 @@ app.post('/api/tasks/synthesize', async c => {
 });
 
 // ── LICENSE ───────────────────────────────────────────────────────────────
-app.get('/api/license/status', c => {
+app.get('/api/license/status', (c) => {
   return c.json({ tier: currentTier() });
 });
 
-app.post('/api/license/activate', async c => {
-  const { key } = await c.req.json() as { key?: string };
+app.post('/api/license/activate', async (c) => {
+  const { key } = (await c.req.json()) as { key?: string };
   if (!key || typeof key !== 'string' || !key.trim()) {
     return c.json({ error: 'key required' }, 400);
+  }
+
+  if (!licenseDb) {
+    return c.json({ error: 'License store not available' }, 503);
   }
 
   const lsApiKey = process.env.LS_API_KEY;
@@ -397,15 +402,16 @@ app.post('/api/license/activate', async c => {
   let activationsRemaining: number | null = null;
 
   try {
-    const res = await fetch(
-      `https://api.lemonsqueezy.com/v1/licenses/validate`,
-      {
-        method: 'POST',
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': `Bearer ${lsApiKey}` },
-        body: JSON.stringify({ license_key: key.trim() }),
+    const res = await fetch(`https://api.lemonsqueezy.com/v1/licenses/validate`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${lsApiKey}`,
       },
-    );
-    const data = await res.json() as {
+      body: JSON.stringify({ license_key: key.trim() }),
+    });
+    const data = (await res.json()) as {
       valid?: boolean;
       license_key?: { status: string; activation_limit: number; activations_count: number };
       meta?: { customer_email: string; variant_id: number };
@@ -420,7 +426,7 @@ app.post('/api/license/activate', async c => {
     customerEmail = data.meta?.customer_email ?? null;
     const variantId = String(data.meta?.variant_id ?? '');
     activationsRemaining = data.license_key
-      ? (data.license_key.activation_limit - data.license_key.activations_count)
+      ? data.license_key.activation_limit - data.license_key.activations_count
       : null;
 
     if (variantId === (process.env.LS_VARIANT_WORKFORCE ?? '')) tier = 'workforce';
@@ -435,7 +441,10 @@ app.post('/api/license/activate', async c => {
   const now = new Date().toISOString();
   const grace = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  licenseDb?.prepare(`
+  try {
+    licenseDb
+      .prepare(
+        `
     INSERT INTO licenses (key, tier, status, customer_email, activations_remaining, verified_at, expires_grace_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(key) DO UPDATE SET
@@ -444,44 +453,52 @@ app.post('/api/license/activate', async c => {
       activations_remaining = excluded.activations_remaining,
       verified_at = excluded.verified_at,
       expires_grace_at = excluded.expires_grace_at
-  `).run(key.trim(), tier, status, customerEmail, activationsRemaining, now, grace);
+  `
+      )
+      .run(key.trim(), tier, status, customerEmail, activationsRemaining, now, grace);
+  } catch (err) {
+    console.error('[license] failed to persist license:', err);
+    return c.json({ error: 'Failed to store license' }, 503);
+  }
 
   return c.json({ tier, status, activationsRemaining });
 });
 
 // ── CONTENT DATA ──────────────────────────────────────────────────────────
-app.get('/api/content/posts', c => {
+app.get('/api/content/posts', (c) => {
   if (!agentReady) return c.json([]);
   const raw = parseInt(c.req.query('daysAhead') ?? '14', 10);
   const daysAhead = Number.isFinite(raw) && raw > 0 ? raw : 14;
   const now = new Date();
-  return c.json(synqpostStorage.listPosts({
-    from: now,
-    to: new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000),
-  }));
+  return c.json(
+    trendpostStorage.listPosts({
+      from: now,
+      to: new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000),
+    })
+  );
 });
 
-app.get('/api/content/ideas', c => {
+app.get('/api/content/ideas', (c) => {
   if (!agentReady) return c.json([]);
-  return c.json(synqpostStorage.listIdeas());
+  return c.json(trendpostStorage.listIdeas());
 });
 
 // ── MEMORY ────────────────────────────────────────────────────────────────
-app.get('/api/memory', async c => {
+app.get('/api/memory', async (c) => {
   const query = (c.req.query('q') ?? '').trim();
   if (!query) return c.json(memory.listRecent());
   return c.json(await memory.searchAsync(query));
 });
 
-app.post('/api/memory/upgrade-embeddings', async c => {
+app.post('/api/memory/upgrade-embeddings', async (c) => {
   if (!agentReady) return c.json({ error: 'not ready' }, 503);
   const result = await memory.upgradeEmbeddings();
   return c.json(result);
 });
 
-app.post('/api/memory/onboard', async c => {
+app.post('/api/memory/onboard', async (c) => {
   if (!agentReady) return c.json({ error: 'not ready' }, 503);
-  const body = await c.req.json().catch(() => ({})) as { answers?: Record<string, string> };
+  const body = (await c.req.json().catch(() => ({}))) as { answers?: Record<string, string> };
   const { answers } = body;
   if (!answers || typeof answers !== 'object') {
     return c.json({ error: 'answers object required' }, 400);
@@ -502,7 +519,7 @@ app.post('/api/memory/onboard', async c => {
 });
 
 // ── SSE STREAM ────────────────────────────────────────────────────────────
-app.get('/api/events', c => {
+app.get('/api/events', (c) => {
   const { readable, writable } = new TransformStream();
   const writer = writable.getWriter();
   const encoder = new TextEncoder();
@@ -528,7 +545,7 @@ app.get('/api/events', c => {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
     },
   });
 });
@@ -549,7 +566,7 @@ server.on('error', (err: NodeJS.ErrnoException) => {
     console.error(
       `❌ Port ${API_PORT} is already in use.\n` +
         `   Stop the other process: fuser -k ${API_PORT}/tcp\n` +
-        `   Or use another port: API_PORT=3003 pnpm dev:api`,
+        `   Or use another port: API_PORT=3003 pnpm dev:api`
     );
     process.exit(1);
   }
