@@ -47,7 +47,7 @@ jobs:
         run: pnpm --filter @wireassist/core test:coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: wireassist/core/coverage/coverage-final.json
           fail_ci_if_error: false
