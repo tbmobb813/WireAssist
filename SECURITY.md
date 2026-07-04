@@ -17,7 +17,7 @@ We take the security of WireAssist seriously. If you believe you have found a se
 
 **Please do NOT report security vulnerabilities through public GitHub issues.**
 
-Instead, please send an email to: **[security@wireassist.techtrendwire.com]** (replace with actual security email)
+Instead, please send an email to: [security@wireassist.techtrendwire.com](mailto:security@wireassist.techtrendwire.com)
 
 Please include the following information in your report:
 
@@ -123,7 +123,7 @@ In the event of a security incident:
 
 ## Security Contact Information
 
-- **Security Email**: [security@wireassist.techtrendwire.com] (replace with actual)
+- **Security Email**: [security@wireassist.techtrendwire.com](mailto:security@wireassist.techtrendwire.com)
 - **Response Time**: 48 hours for acknowledgment
 - **Languages**: English
 
