@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest an idea to improve L.A.I.A.
+labels: [enhancement]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Start with your use case; keep the proposal minimal.
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Your use case / problem
+      placeholder: What are you trying to do today? What’s hard?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Minimal proposal
+      description: Smallest change that solves your use case
+      placeholder: Add /edit command to let me fix typos in my last message
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, mockups, links, etc.

@@ -1,5 +1,5 @@
 {
-  "name": "@synqworks/command-center",
+  "name": "@wireassist/command-center",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -14,15 +14,17 @@
     "build": "next build",
     "start": "concurrently -n api,web -c blue,green \"pnpm start:api\" \"pnpm start:web\"",
     "start:api": "tsx src/api/server.ts",
-    "start:web": "node scripts/run-next.mjs start"
+    "start:web": "node scripts/run-next.mjs start",
+    "test": "jest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@hono/node-server": "^1.14.0",
-    "@synqworks/agent-admin": "workspace:*",
-    "@synqworks/agent-content": "workspace:*",
-    "@synqworks/agent-research": "workspace:*",
-    "@synqworks/core": "workspace:*",
-    "@synqworks/synqpost-mcp": "workspace:*",
+    "@wireassist/agent-admin": "workspace:*",
+    "@wireassist/agent-content": "workspace:*",
+    "@wireassist/agent-research": "workspace:*",
+    "@wireassist/core": "workspace:*",
+    "@wireassist/trendpost-mcp": "workspace:*",
     "better-sqlite3": "^12.4.1",
     "hono": "^4.7.10",
     "next": "16.2.6",

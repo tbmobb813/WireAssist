@@ -22,15 +22,18 @@ function payloadTaskId(payload: unknown): string | undefined {
   return typeof p?.taskId === 'string' ? p.taskId : undefined;
 }
 
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default function ChatClient() {
-  const [messages, setMessages] = useState<Message[]>([{
-    id: '0',
-    role: 'agent',
-    content: "Admin Agent online. I can triage your inbox, review your calendar, draft emails, or schedule events. What do you need?",
-    time: new Date(),
-  }]);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: '0',
+      role: 'agent',
+      content:
+        'Admin Agent online. I can triage your inbox, review your calendar, draft emails, or schedule events. What do you need?',
+      time: new Date(),
+    },
+  ]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -46,16 +49,22 @@ export default function ChatClient() {
     pendingTaskId.current = null;
   }, []);
 
-  const addAgentMessage = useCallback((content: string, taskId?: string) => {
-    setMessages(prev => [...prev, {
-      id: Math.random().toString(36).slice(2),
-      role: 'agent',
-      content,
-      time: new Date(),
-      taskId,
-    }]);
-    finishSending();
-  }, [finishSending]);
+  const addAgentMessage = useCallback(
+    (content: string, taskId?: string) => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Math.random().toString(36).slice(2),
+          role: 'agent',
+          content,
+          time: new Date(),
+          taskId,
+        },
+      ]);
+      finishSending();
+    },
+    [finishSending]
+  );
 
   const markHandled = useCallback((taskId: string, event: string) => {
     handledEvents.current.add(`${taskId}:${event}`);
@@ -87,7 +96,7 @@ export default function ChatClient() {
           const p = payload as { summary?: string; totalEmails?: number };
           addAgentMessage(
             `Triage complete. ${p.summary ?? ''}\n\nProcessed ${p.totalEmails ?? 0} emails. Check the Approvals tab for proposed actions.`,
-            taskId,
+            taskId
           );
           markHandled(taskId, event);
           return true;
@@ -102,7 +111,7 @@ export default function ChatClient() {
           return false;
       }
     },
-    [addAgentMessage, markHandled, wasHandled],
+    [addAgentMessage, markHandled, wasHandled]
   );
 
   const scanActivity = useCallback(
@@ -121,7 +130,7 @@ export default function ChatClient() {
 
       return sawComplete ? 'complete' : 'pending';
     },
-    [applyTaskEvent],
+    [applyTaskEvent]
   );
 
   const pollForTask = useCallback(
@@ -138,7 +147,7 @@ export default function ChatClient() {
           if (completePolls >= 3) {
             addAgentMessage(
               'The agent finished but the UI did not receive the reply. Refresh and try again, or check the dashboard activity feed.',
-              taskId,
+              taskId
             );
             return;
           }
@@ -148,18 +157,26 @@ export default function ChatClient() {
       }
 
       if (pendingTaskId.current === taskId) {
-        addAgentMessage('Timed out waiting for a response. The agent may still be running — check the dashboard.', taskId);
+        addAgentMessage(
+          'Timed out waiting for a response. The agent may still be running — check the dashboard.',
+          taskId
+        );
       }
     },
-    [addAgentMessage, scanActivity],
+    [addAgentMessage, scanActivity]
   );
 
-  useAgentEvents(useCallback((e) => {
-    if (e.event === 'connected') return;
-    const taskId = payloadTaskId(e.payload);
-    if (!taskId || !pendingTaskId.current || taskId !== pendingTaskId.current) return;
-    applyTaskEvent(e.event, e.payload, taskId);
-  }, [applyTaskEvent]));
+  useAgentEvents(
+    useCallback(
+      (e) => {
+        if (e.event === 'connected') return;
+        const taskId = payloadTaskId(e.payload);
+        if (!taskId || !pendingTaskId.current || taskId !== pendingTaskId.current) return;
+        applyTaskEvent(e.event, e.payload, taskId);
+      },
+      [applyTaskEvent]
+    )
+  );
 
   const send = async () => {
     if (!input.trim() || sending) return;
@@ -168,12 +185,15 @@ export default function ChatClient() {
     setSending(true);
     pendingTaskId.current = null;
 
-    setMessages(prev => [...prev, {
-      id: Math.random().toString(36).slice(2),
-      role: 'user',
-      content: text,
-      time: new Date(),
-    }]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Math.random().toString(36).slice(2),
+        role: 'user',
+        content: text,
+        time: new Date(),
+      },
+    ]);
 
     const lower = text.toLowerCase();
     let path = '/api/tasks/freeform';
@@ -207,9 +227,7 @@ export default function ChatClient() {
         finishSending();
       }
     } catch (err) {
-      addAgentMessage(
-        `Error: ${err instanceof Error ? err.message : 'Could not reach the API'}`,
-      );
+      addAgentMessage(`Error: ${err instanceof Error ? err.message : 'Could not reach the API'}`);
     }
   };
 
@@ -222,7 +240,7 @@ export default function ChatClient() {
       </div>
 
       <div className="mb-6">
-        <div className="text-xs tracking-widest text-accent mb-1">SYNQWORKS // CHAT</div>
+        <div className="text-xs tracking-widest text-accent mb-1">WIREASSIST // CHAT</div>
         <h1 className="text-2xl font-black">ADMIN AGENT</h1>
       </div>
 
@@ -230,7 +248,7 @@ export default function ChatClient() {
         className="flex-1 rounded-lg border p-4 overflow-y-auto mb-4 space-y-4"
         style={{ background: '#0d0d1a', borderColor: '#1e2040', minHeight: 400, maxHeight: 600 }}
       >
-        {messages.map(msg => (
+        {messages.map((msg) => (
           <div
             key={msg.id}
             className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -278,8 +296,8 @@ export default function ChatClient() {
         <input
           type="text"
           value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && send()}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && send()}
           placeholder="Triage my inbox / Review calendar / Ask anything..."
           className="flex-1 rounded-lg px-4 py-3 text-sm outline-none"
           style={{

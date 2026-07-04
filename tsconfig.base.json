@@ -24,24 +24,24 @@
     /* Path aliases */
     "baseUrl": ".",
     "paths": {
-      "@synqworks/core": ["synqworks/core/src"],
-      "@synqworks/core/*": ["synqworks/core/src/*"],
-      "@synqworks/agent-admin": ["packages/agents/admin/src"],
-      "@synqworks/agent-admin/*": ["packages/agents/admin/src/*"],
-      "@synqworks/synqpost-mcp": ["packages/synqpost-mcp/src"],
-      "@synqworks/synqpost-mcp/*": ["packages/synqpost-mcp/src/*"],
-      "@synqworks/agent-content": ["packages/agents/content/src"],
-      "@synqworks/agent-content/*": ["packages/agents/content/src/*"],
-      "@synqworks/agent-research": ["packages/agents/research/src"],
-      "@synqworks/agent-research/*": ["packages/agents/research/src/*"]
+      "@wireassist/core": ["wireassist/core/src"],
+      "@wireassist/core/*": ["wireassist/core/src/*"],
+      "@wireassist/agent-admin": ["packages/agents/admin/src"],
+      "@wireassist/agent-admin/*": ["packages/agents/admin/src/*"],
+      "@wireassist/trendpost-mcp": ["packages/trendpost-mcp/src"],
+      "@wireassist/trendpost-mcp/*": ["packages/trendpost-mcp/src/*"],
+      "@wireassist/agent-content": ["packages/agents/content/src"],
+      "@wireassist/agent-content/*": ["packages/agents/content/src/*"],
+      "@wireassist/agent-research": ["packages/agents/research/src"],
+      "@wireassist/agent-research/*": ["packages/agents/research/src/*"]
     }
   },
-  "include": ["synqworks", "packages/agents", "packages/synqpost-mcp", "packages/command-center"],
+  "include": ["wireassist", "packages/agents", "packages/trendpost-mcp", "packages/command-center"],
   "references": [
-    { "path": "./synqworks/core" },
-    { "path": "./synqworks/aia" },
+    { "path": "./wireassist/core" },
+    { "path": "./wireassist/aia" },
     { "path": "./packages/agents/admin" },
-    { "path": "./packages/synqpost-mcp" },
+    { "path": "./packages/trendpost-mcp" },
     { "path": "./packages/agents/content" },
     { "path": "./packages/agents/research" },
     { "path": "./packages/command-center" }

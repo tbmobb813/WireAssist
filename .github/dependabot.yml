@@ -1,0 +1,36 @@
+version: 2
+updates:
+  # npm in root workspace (tooling / hooks)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # npm in app package
+  - package-ecosystem: "npm"
+    directory: "/linux-ai-assistant"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # cargo for top-level Tauri crate (if present)
+  - package-ecosystem: "cargo"
+    directory: "/src-tauri"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # cargo for app Tauri crate
+  - package-ecosystem: "cargo"
+    directory: "/linux-ai-assistant/src-tauri"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5

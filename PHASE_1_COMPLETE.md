@@ -1,6 +1,6 @@
 # Phase 1: MVP Integration - COMPLETE ✅
 
-> **Historical document.** Paths like `packages/core` and `@aia/core` are outdated; use `synqworks/core` and `@synqworks/core`. See [README.md](./README.md).
+> **Historical document.** Paths like `packages/core` and `@aia/core` are outdated; use `wireassist/core` and `@wireassist/core`. See [README.md](./README.md).
 
 **Status:** READY FOR PRODUCTION
 **Date:** November 6, 2024
@@ -11,6 +11,7 @@
 ## 🎯 Phase 1 Goals - All Complete
 
 ### ✅ Monorepo Setup
+
 - [x] pnpm workspaces configured
 - [x] @aia/core linked via `workspace:*` protocol
 - [x] Shared TypeScript, ESLint, Prettier configs
@@ -18,6 +19,7 @@
 - [x] Documentation: `MONOREPO_SETUP.md`
 
 ### ✅ Core Integration
+
 - [x] @aia/core imported and working in AIA app
 - [x] ConversationStore & MessageStore integrated
 - [x] ProviderFactory with all 4 providers (OpenAI, Anthropic, Gemini, Ollama)
@@ -25,12 +27,14 @@
 - [x] 23 integration tests passing
 
 ### ✅ Database Layer
+
 - [x] Core Adapter: Maps @aia/core storage to AIA API format
 - [x] Database Adapters: Full CRUD for conversations & messages
 - [x] Hybrid Database: Switches between Tauri and @aia/core backends
 - [x] 15 adapter tests passing
 
 ### ✅ Multi-Provider Support
+
 - [x] OpenAI provider configuration
 - [x] Anthropic (Claude) provider configuration
 - [x] Google Gemini provider configuration
@@ -40,6 +44,7 @@
 - [x] 30 provider integration tests passing
 
 ### ✅ End-to-End Message Flow (NEW)
+
 - [x] Create conversation with @aia/core
 - [x] Store user messages
 - [x] Get provider responses (mocked)
@@ -119,6 +124,7 @@ AIA Monorepo
 ## 🚀 Key Features Implemented
 
 ### 1. Conversation Management
+
 - Create conversations with @aia/core
 - Track provider and model per conversation
 - Update conversation titles
@@ -127,6 +133,7 @@ AIA Monorepo
 - Support conversation branching
 
 ### 2. Message Storage
+
 - Store user and assistant messages
 - Full-text search on message content
 - Message deletion
@@ -134,6 +141,7 @@ AIA Monorepo
 - Maintain message order and timestamps
 
 ### 3. Multi-Provider Support
+
 - OpenAI (GPT-4, GPT-3.5-turbo, custom models)
 - Anthropic (Claude 3 family, custom models)
 - Google Gemini (1.5-pro, custom models)
@@ -142,6 +150,7 @@ AIA Monorepo
 - Per-conversation provider selection
 
 ### 4. Database Flexibility
+
 - Core-backed storage (local-first)
 - Tauri IPC fallback
 - Hybrid switching at runtime
@@ -149,6 +158,7 @@ AIA Monorepo
 - Full error handling
 
 ### 5. Type Safety
+
 - Full TypeScript integration
 - Types exported from @aia/core
 - API format mappings
@@ -195,6 +205,7 @@ pnpm dev:aia          # Just AIA app
 ## 🎓 How to Use
 
 ### Enable Core Database
+
 ```typescript
 import { enableCoreDatabase } from './lib/api/database';
 
@@ -204,6 +215,7 @@ await enableCoreDatabase();
 ```
 
 ### Use Multi-Provider Support
+
 ```typescript
 import { ProviderFactory } from '@aia/core';
 
@@ -221,6 +233,7 @@ const response = await provider.complete({
 ```
 
 ### Store Message in @aia/core
+
 ```typescript
 import { database } from './lib/api/database';
 
@@ -249,6 +262,7 @@ const messages = await database.messages.getByConversation(conversationId);
 ## ✨ What's Ready for Phase 2
 
 ✅ Foundation is solid for:
+
 - Streaming responses (handler + UI integration)
 - Context building (file/Git integration)
 - Privacy controls (encryption + audit logging)

@@ -1,4 +1,4 @@
-# Contributing to SynqWorks (Nolta)
+# Contributing to WireAssist
 
 ## Development philosophy
 
@@ -13,13 +13,13 @@
 1. [SETUP.md](./SETUP.md) — install, env vars, Google OAuth
 2. [ARCHITECTURE.md](./ARCHITECTURE.md) — packages and agent flow
 3. Explore entry points:
-   - `synqworks/core/src/index.ts` — core exports
+   - `wireassist/core/src/index.ts` — core exports
    - `packages/agents/admin/src/admin-agent.ts` — Admin Agent
    - `packages/command-center/src/api/server.ts` — API bootstrap
 
 ## Code structure
 
-### `@synqworks/core` (`synqworks/core/`)
+### `@wireassist/core` (`wireassist/core/`)
 
 ```
 src/
@@ -38,7 +38,7 @@ src/
 └── __tests__/
 ```
 
-### `ai-assist` (`synqworks/aia/`)
+### `ai-assist` (`wireassist/aia/`)
 
 ```
 src/                 # React UI (Vite)
@@ -47,7 +47,7 @@ cli/                 # Optional CLI (Rust)
 playwright-e2e/      # E2E tests
 ```
 
-### `@synqworks/agent-admin` (`packages/agents/admin/`)
+### `@wireassist/agent-admin` (`packages/agents/admin/`)
 
 ```
 src/
@@ -60,7 +60,7 @@ src/
 └── demo.ts            # CLI demo with [y/n] approvals
 ```
 
-### `@synqworks/command-center` (`packages/command-center/`)
+### `@wireassist/command-center` (`packages/command-center/`)
 
 ```
 src/
@@ -72,9 +72,9 @@ src/
 
 ### Add an AI provider (core)
 
-1. Implement `Provider` in `synqworks/core/src/providers/newprovider.ts`
-2. Register in `synqworks/core/src/providers/index.ts`
-3. Add tests under `synqworks/core/src/__tests__/providers/`
+1. Implement `Provider` in `wireassist/core/src/providers/newprovider.ts`
+2. Register in `wireassist/core/src/providers/index.ts`
+3. Add tests under `wireassist/core/src/__tests__/providers/`
 4. `pnpm build:core && pnpm test:core`
 
 ### Add an MCP tool (Admin Agent)
@@ -89,7 +89,7 @@ src/
    ```
 
 3. Declare the tool name in `AdminAgent` config (`admin-agent.ts` `tools` array)
-4. Rebuild: `pnpm --filter @synqworks/agent-admin build`
+4. Rebuild: `pnpm --filter @wireassist/agent-admin build`
 
 ### Add a new agent task type
 
@@ -100,7 +100,7 @@ src/
 
 ### UI component (AIA desktop)
 
-1. Add component under `synqworks/aia/src/components/`
+1. Add component under `wireassist/aia/src/components/`
 2. `pnpm dev:aia` for HMR
 
 ### UI page (Command Center)
@@ -113,11 +113,11 @@ src/
 Never commit:
 
 - `.env`, `.env.local`
-- `~/.synqworks/gmail-credentials.json`
-- `~/.synqworks/gmail-token.json`
-- `~/.synqworks/synqworks.db`
+- `~/.wireassist/gmail-credentials.json`
+- `~/.wireassist/gmail-token.json`
+- `~/.wireassist/wireassist.db`
 
-Use `SYNQWORKS_HOME` in development if you need an isolated config directory.
+Use `WIREASSIST_HOME` in development if you need an isolated config directory.
 
 ## Testing
 
@@ -138,8 +138,8 @@ pnpm --filter ai-assist test
 
 Older docs may reference `packages/core`, `packages/aia`, or `@aia/core`. Current locations:
 
-| Legacy | Current |
-|--------|---------|
-| `packages/core` | `synqworks/core` (`@synqworks/core`) |
-| `packages/aia` | `synqworks/aia` (`ai-assist`) |
-| `@aia/core` | `@synqworks/core` |
+| Legacy          | Current                                |
+| --------------- | -------------------------------------- |
+| `packages/core` | `wireassist/core` (`@wireassist/core`) |
+| `packages/aia`  | `wireassist/aia` (`ai-assist`)         |
+| `@aia/core`     | `@wireassist/core`                     |

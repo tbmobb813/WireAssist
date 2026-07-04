@@ -2,7 +2,7 @@
 
 ## Overview
 
-**Nolta** is a pnpm monorepo for **SynqWorks**: a local-first AI stack with a shared core library, a desktop chat client, and an agent layer that performs real-world tasks (email, calendar) behind an approval gate.
+**WireAssist** is a TechTrendWire product: a local-first AI stack with a shared core library, a Command Center, and an agent layer that performs real-world tasks (email, calendar) behind an approval gate. The desktop app under `wireassist/aia/` is frozen.
 
 ```mermaid
 flowchart TB
@@ -16,7 +16,7 @@ flowchart TB
     AA[AdminAgent<br/>packages/agents/admin]
   end
 
-  subgraph core [@synqworks/core]
+  subgraph core [@wireassist/core]
     MCP[MCPClient]
     AQ[ApprovalQueue]
     MS[MemoryStore]
@@ -45,9 +45,9 @@ flowchart TB
 
 ## Packages
 
-### `@synqworks/core` (`synqworks/core/`)
+### `@wireassist/core` (`wireassist/core/`)
 
-Foundation library used by AIA and SynqWorks agents.
+Foundation library used by AIA and WireAssist agents.
 
 **Original AIA responsibilities:**
 
@@ -56,55 +56,55 @@ Foundation library used by AIA and SynqWorks agents.
 - Context building (files, git, workspace)
 - Privacy controls and streaming
 
-**SynqWorks agent platform additions:**
+**WireAssist agent platform additions:**
 
-| Module | Role |
-|--------|------|
-| `agents/` | Agent types and registry |
-| `mcp/` | `MCPClient` — register and dispatch tool handlers |
+| Module      | Role                                              |
+| ----------- | ------------------------------------------------- |
+| `agents/`   | Agent types and registry                          |
+| `mcp/`      | `MCPClient` — register and dispatch tool handlers |
 | `approval/` | `ApprovalQueue` — persist pending human approvals |
-| `memory/` | `MemoryStore` — agent memory in SQLite |
-| `events/` | `EventBus` — task lifecycle events for UI/SSE |
+| `memory/`   | `MemoryStore` — agent memory in SQLite            |
+| `events/`   | `EventBus` — task lifecycle events for UI/SSE     |
 
-Entry point: `synqworks/core/src/index.ts`.
+Entry point: `wireassist/core/src/index.ts`.
 
-### `ai-assist` (`synqworks/aia/`)
+### `ai-assist` (`wireassist/aia/`)
 
 Native Linux desktop app (Tauri + React + Vite).
 
-- Consumes `@synqworks/core` for chat and providers
+- Consumes `@wireassist/core` for chat and providers
 - System tray, shortcuts, CLI tooling
 - Independent from Command Center / Admin Agent
 
-### `@synqworks/agent-admin` (`packages/agents/admin/`)
+### `@wireassist/agent-admin` (`packages/agents/admin/`)
 
 Claude-powered agent for administrative work.
 
-| File | Role |
-|------|------|
-| `admin-agent.ts` | Task handlers: email triage, calendar review, freeform |
-| `base-agent.ts` | Anthropic completion helper |
-| `gmail-client.ts` | OAuth + Gmail API |
-| `calendar-client.ts` | Reuses Gmail OAuth token for Calendar API |
-| `mcp-setup.ts` | Registers `gmail_*` and `calendar_*` MCP tools |
-| `task-factory.ts` | Builds typed `AgentTask` objects |
+| File                 | Role                                                   |
+| -------------------- | ------------------------------------------------------ |
+| `admin-agent.ts`     | Task handlers: email triage, calendar review, freeform |
+| `base-agent.ts`      | Anthropic completion helper                            |
+| `gmail-client.ts`    | OAuth + Gmail API                                      |
+| `calendar-client.ts` | Reuses Gmail OAuth token for Calendar API              |
+| `mcp-setup.ts`       | Registers `gmail_*` and `calendar_*` MCP tools         |
+| `task-factory.ts`    | Builds typed `AgentTask` objects                       |
 
 **Auth paths** (both clients):
 
 ```ts
-const HOME_PATH = process.env.SYNQWORKS_HOME ?? os.homedir();
-// $HOME_PATH/.synqworks/gmail-credentials.json
-// $HOME_PATH/.synqworks/gmail-token.json
+const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
+// $HOME_PATH/.wireassist/gmail-credentials.json
+// $HOME_PATH/.wireassist/gmail-token.json
 ```
 
-### `@synqworks/command-center` (`packages/command-center/`)
+### `@wireassist/command-center` (`packages/command-center/`)
 
 Operational UI for running agents.
 
-| Layer | Tech | Port |
-|-------|------|------|
-| Web | Next.js 16 | 3001 |
-| API | Hono + `@hono/node-server` | 3002 |
+| Layer | Tech                       | Port |
+| ----- | -------------------------- | ---- |
+| Web   | Next.js 16                 | 3001 |
+| API   | Hono + `@hono/node-server` | 3002 |
 
 **API highlights:**
 
@@ -114,13 +114,13 @@ Operational UI for running agents.
 - `GET/POST /api/approvals/*` — approval queue
 - `GET /api/events` — SSE stream of agent events
 
-Bootstrap wires `setupAdminMCP` → `AdminAgent` with SQLite at `~/.synqworks/synqworks.db`.
+Bootstrap wires `setupAdminMCP` → `AdminAgent` with SQLite at `~/.wireassist/wireassist.db`.
 
 ## Monorepo layout
 
 ```
-Nolta/
-├── synqworks/
+WireAssist/
+├── wireassist/
 │   ├── core/
 │   │   ├── src/
 │   │   │   ├── client.ts
@@ -128,7 +128,7 @@ Nolta/
 │   │   │   ├── storage/
 │   │   │   ├── agents/ memory/ approval/ mcp/ events/
 │   │   │   └── ...
-│   │   └── package.json          # @synqworks/core
+│   │   └── package.json          # @wireassist/core
 │   └── aia/
 │       ├── src/                  # React UI
 │       ├── src-tauri/            # Rust backend
@@ -147,8 +147,8 @@ Nolta/
 ```yaml
 # pnpm-workspace.yaml
 packages:
-  - 'synqworks/core'
-  - 'synqworks/aia'
+  - 'wireassist/core'
+  - 'wireassist/aia'
   - 'packages/agents/admin'
   - 'packages/command-center'
 ```
@@ -156,7 +156,7 @@ packages:
 Internal dependencies use `workspace:*`:
 
 ```json
-"@synqworks/core": "workspace:*"
+"@wireassist/core": "workspace:*"
 ```
 
 `better-sqlite3` is listed under `onlyBuiltDependencies` because it compiles native bindings.
@@ -174,21 +174,21 @@ Email triage additionally emits `agent:triage_complete` with structured categori
 
 ## Data locations
 
-| Path | Contents |
-|------|----------|
-| `~/.synqworks/gmail-credentials.json` | Google OAuth client secret (user-provided) |
-| `~/.synqworks/gmail-token.json` | OAuth access + refresh token |
-| `~/.synqworks/synqworks.db` | Approvals + memory (Command Center) |
+| Path                                   | Contents                                   |
+| -------------------------------------- | ------------------------------------------ |
+| `~/.wireassist/gmail-credentials.json` | Google OAuth client secret (user-provided) |
+| `~/.wireassist/gmail-token.json`       | OAuth access + refresh token               |
+| `~/.wireassist/wireassist.db`          | Approvals + memory (Command Center)        |
 
-Override base directory with `SYNQWORKS_HOME`.
+Override base directory with `WIREASSIST_HOME`.
 
 ## TypeScript
 
 Shared options live in `tsconfig.base.json`. Each package extends it with its own `tsconfig.json`.
 
-Path aliases for AIA may map `@synqworks/core` to `synqworks/core/src` during development — check `synqworks/aia/tsconfig.json`.
+Path aliases for AIA may map `@wireassist/core` to `wireassist/core/src` during development — check `wireassist/aia/tsconfig.json`.
 
 ## What is not in this repo
 
-- `packages/core` and `packages/aia` — legacy paths from an earlier layout; packages live under `synqworks/`.
-- `@aia/core` — renamed to `@synqworks/core`.
+- `packages/core` and `packages/aia` — legacy paths from an earlier layout; packages live under `wireassist/`.
+- `@aia/core` — renamed to `@wireassist/core`.

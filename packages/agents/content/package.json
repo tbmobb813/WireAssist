@@ -1,19 +1,20 @@
 {
-  "name": "@synqworks/agent-content",
+  "name": "@wireassist/agent-content",
   "version": "0.1.0",
-  "description": "Content Agent — generates, schedules, and manages content via SynqPost",
+  "description": "Content Agent — generates, schedules, and manages content via TrendPost",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "dev": "tsc --watch",
     "test": "jest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",
-    "@synqworks/agent-admin": "workspace:*",
-    "@synqworks/core": "workspace:*",
-    "@synqworks/synqpost-mcp": "workspace:*"
+    "@wireassist/agent-admin": "workspace:*",
+    "@wireassist/core": "workspace:*",
+    "@wireassist/trendpost-mcp": "workspace:*"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

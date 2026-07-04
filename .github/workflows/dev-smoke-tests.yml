@@ -1,0 +1,59 @@
+name: Dev Smoke Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: "Type of smoke test to run"
+        required: true
+        default: "api"
+        type: choice
+        options:
+          - api
+          - all
+  pull_request:
+    types: [labeled]
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && contains(github.event.label.name, 'run-dev-smoke'))
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install native build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3
+
+      - name: Setup pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.3.0 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages
+        run: pnpm -r --filter '!synqagent' build
+
+      - name: Run API smoke test
+        if: github.event.inputs.test_type == 'api' || github.event.inputs.test_type == 'all' || github.event_name == 'pull_request'
+        run: bash dev/smoke_api.sh
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: smoke-test-logs
+          path: /tmp/wireassist-smoke-*/api.log
+          retention-days: 3

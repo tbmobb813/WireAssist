@@ -1,9 +1,9 @@
 packages:
-  - 'synqworks/core'
-  - 'synqworks/aia'
+  - 'wireassist/core'
+  - 'wireassist/aia'
   - 'packages/agents/admin'
   - 'packages/agents/content'
-  - 'packages/synqpost-mcp'
+  - 'packages/trendpost-mcp'
   - 'packages/command-center'
   - 'packages/marketing'
   - 'packages/agents/research'

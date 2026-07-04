@@ -1,18 +1,19 @@
 {
-  "name": "@synqworks/agent-research",
+  "name": "@wireassist/agent-research",
   "version": "0.1.0",
-  "description": "Research Agent — web search and synthesis for SynqWorks",
+  "description": "Research Agent — web search and synthesis for WireAssist",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "dev": "tsc --watch",
     "test": "jest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",
-    "@synqworks/agent-admin": "workspace:*",
-    "@synqworks/core": "workspace:*"
+    "@wireassist/agent-admin": "workspace:*",
+    "@wireassist/core": "workspace:*"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

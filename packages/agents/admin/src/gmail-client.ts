@@ -14,9 +14,9 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
 ];
 
-const HOME_PATH = process.env.SYNQWORKS_HOME ?? os.homedir();
-const TOKEN_PATH = path.join(HOME_PATH, '.synqworks', 'gmail-token.json');
-const CREDENTIALS_PATH = path.join(HOME_PATH, '.synqworks', 'gmail-credentials.json');
+const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
+const TOKEN_PATH = path.join(HOME_PATH, '.wireassist', 'gmail-token.json');
+const CREDENTIALS_PATH = path.join(HOME_PATH, '.wireassist', 'gmail-credentials.json');
 
 export class GmailClient {
   private auth: OAuth2Client;
@@ -27,7 +27,7 @@ export class GmailClient {
     if (!fs.existsSync(CREDENTIALS_PATH)) {
       throw new Error(
         `Gmail credentials not found at ${CREDENTIALS_PATH}.\n` +
-        `Download from Google Cloud Console → APIs & Services → Credentials.`
+          `Download from Google Cloud Console → APIs & Services → Credentials.`
       );
     }
 
@@ -49,7 +49,9 @@ export class GmailClient {
     if (fs.existsSync(TOKEN_PATH)) {
       const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
       if (!this.hasRequiredScopes(token.scope)) {
-        console.log('\n⚠️  Existing token is missing required Gmail/Calendar scopes. Re-authorizing...');
+        console.log(
+          '\n⚠️  Existing token is missing required Gmail/Calendar scopes. Re-authorizing...'
+        );
         await this.runOAuthFlow();
         return;
       }
@@ -100,7 +102,7 @@ export class GmailClient {
         res.end(
           error
             ? '<h1>❌ Authorization failed. You can close this tab.</h1>'
-            : '<h1>✅ SynqWorks authorized. You can close this tab.</h1>'
+            : '<h1>✅ WireAssist authorized. You can close this tab.</h1>'
         );
         server.close();
 
@@ -206,9 +208,13 @@ export class GmailClient {
     const firstMessage = thread.messages?.[0];
     const headers = firstMessage?.payload?.headers ?? [];
 
-    const from = headers.find((h: gmail_v1.Schema$MessagePartHeader) => h.name === 'From')?.value ?? 'Unknown';
-    const subject = headers.find((h: gmail_v1.Schema$MessagePartHeader) => h.name === 'Subject')?.value ?? '(no subject)';
-    const date = headers.find((h: gmail_v1.Schema$MessagePartHeader) => h.name === 'Date')?.value ?? '';
+    const from =
+      headers.find((h: gmail_v1.Schema$MessagePartHeader) => h.name === 'From')?.value ?? 'Unknown';
+    const subject =
+      headers.find((h: gmail_v1.Schema$MessagePartHeader) => h.name === 'Subject')?.value ??
+      '(no subject)';
+    const date =
+      headers.find((h: gmail_v1.Schema$MessagePartHeader) => h.name === 'Date')?.value ?? '';
 
     // Extract plain text body
     const body = this.extractBody(firstMessage?.payload);
@@ -285,10 +291,7 @@ export class GmailClient {
     return { messageId: res.data.id! };
   }
 
-  async labelThread(params: {
-    threadId: string;
-    labelName: string;
-  }): Promise<void> {
+  async labelThread(params: { threadId: string; labelName: string }): Promise<void> {
     // Get or create the label
     const labelId = await this.getOrCreateLabel(params.labelName);
 

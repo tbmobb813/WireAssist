@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { AgentTask } from '@synqworks/core';
+import type { AgentTask } from '@wireassist/core';
 
 export const ResearchTasks = {
   researchTopic(query: string, depth: 'quick' | 'deep' = 'quick'): AgentTask {

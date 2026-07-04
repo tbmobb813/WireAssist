@@ -1,4 +1,4 @@
-import type { MCPClient } from '@synqworks/core';
+import type { MCPClient } from '@wireassist/core';
 
 interface BraveSearchResult {
   title: string;
@@ -17,7 +17,9 @@ export function setupResearchMCP(mcp: MCPClient): void {
     const apiKey = process.env.BRAVE_API_KEY;
 
     if (!apiKey) {
-      throw new Error('BRAVE_API_KEY is not set. Add it to .env.local to enable the Research Agent.');
+      throw new Error(
+        'BRAVE_API_KEY is not set. Add it to .env.local to enable the Research Agent.'
+      );
     }
 
     const url = new URL('https://api.search.brave.com/res/v1/web/search');
@@ -26,7 +28,7 @@ export function setupResearchMCP(mcp: MCPClient): void {
 
     const response = await fetch(url.toString(), {
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'Accept-Encoding': 'gzip',
         'X-Subscription-Token': apiKey,
       },
@@ -36,8 +38,8 @@ export function setupResearchMCP(mcp: MCPClient): void {
       throw new Error(`Brave Search API error: ${response.status} ${response.statusText}`);
     }
 
-    const data = await response.json() as BraveSearchResponse;
-    const results: BraveSearchResult[] = (data.web?.results ?? []).map(r => ({
+    const data = (await response.json()) as BraveSearchResponse;
+    const results: BraveSearchResult[] = (data.web?.results ?? []).map((r) => ({
       title: r.title,
       url: r.url,
       description: r.description,

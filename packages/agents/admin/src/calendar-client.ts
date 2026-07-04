@@ -4,9 +4,9 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-const SYNQWORKS_HOME = process.env.SYNQWORKS_HOME ?? os.homedir();
-const TOKEN_PATH = path.join(SYNQWORKS_HOME, '.synqworks', 'gmail-token.json');
-const CREDENTIALS_PATH = path.join(SYNQWORKS_HOME, '.synqworks', 'gmail-credentials.json');
+const WIREASSIST_HOME = process.env.WIREASSIST_HOME ?? os.homedir();
+const TOKEN_PATH = path.join(WIREASSIST_HOME, '.wireassist', 'gmail-token.json');
+const CREDENTIALS_PATH = path.join(WIREASSIST_HOME, '.wireassist', 'gmail-credentials.json');
 
 // Reuses the same OAuth token as Gmail — no second auth flow needed
 export class CalendarClient {
@@ -55,18 +55,23 @@ export class CalendarClient {
         return [];
       }
 
-      return [{
-        id: e.id!,
-        summary: e.summary ?? '(no title)',
-        start,
-        end,
-        attendees: (e.attendees ?? [])
-          .filter((a): a is calendar_v3.Schema$EventAttendee & { email: string } => typeof a.email === 'string')
-          .map(a => ({ email: a.email })),
-        description: e.description ?? '',
-        location: e.location ?? '',
-        status: e.status ?? 'confirmed',
-      }];
+      return [
+        {
+          id: e.id!,
+          summary: e.summary ?? '(no title)',
+          start,
+          end,
+          attendees: (e.attendees ?? [])
+            .filter(
+              (a): a is calendar_v3.Schema$EventAttendee & { email: string } =>
+                typeof a.email === 'string'
+            )
+            .map((a) => ({ email: a.email })),
+          description: e.description ?? '',
+          location: e.location ?? '',
+          status: e.status ?? 'confirmed',
+        },
+      ];
     });
   }
 
@@ -85,9 +90,12 @@ export class CalendarClient {
         summary: params.summary,
         description: params.description,
         location: params.location,
-        start: { dateTime: params.start, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+        start: {
+          dateTime: params.start,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
         end: { dateTime: params.end, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-        attendees: (params.attendees ?? []).map(email => ({ email })),
+        attendees: (params.attendees ?? []).map((email) => ({ email })),
       },
     });
 
@@ -117,10 +125,7 @@ export class CalendarClient {
     });
   }
 
-  async deleteEvent(params: {
-    eventId: string;
-    calendarId?: string;
-  }): Promise<void> {
+  async deleteEvent(params: { eventId: string; calendarId?: string }): Promise<void> {
     await this.calendar.events.delete({
       calendarId: params.calendarId ?? 'primary',
       eventId: params.eventId,
@@ -165,7 +170,7 @@ export class CalendarClient {
       workdayEnd.setHours(workEnd, 0, 0, 0);
 
       // Check if this slot conflicts with any event
-      const hasConflict = events.some(e => {
+      const hasConflict = events.some((e) => {
         const eStart = new Date(e.start);
         const eEnd = new Date(e.end);
         return cursor < eEnd && slotEnd > eStart;

@@ -29,21 +29,26 @@ export default function ApprovalsClient() {
     fetchApprovals();
   }, [fetchApprovals]);
 
-  useAgentEvents(useCallback((e) => {
-    if (e.event === 'waiting_approval') {
-      fetchApprovals();
-    }
-    if (e.event === 'approval_resolved') {
-      fetchApprovals();
-    }
-  }, [fetchApprovals]));
+  useAgentEvents(
+    useCallback(
+      (e) => {
+        if (e.event === 'waiting_approval') {
+          fetchApprovals();
+        }
+        if (e.event === 'approval_resolved') {
+          fetchApprovals();
+        }
+      },
+      [fetchApprovals]
+    )
+  );
 
   const resolve = async (id: string, approved: boolean) => {
     setActing(id);
     await fetch(`/api/approvals/${id}/${approved ? 'approve' : 'reject'}`, {
       method: 'POST',
     });
-    setApprovals(prev => prev.filter(a => a.id !== id));
+    setApprovals((prev) => prev.filter((a) => a.id !== id));
     setActing(null);
   };
 
@@ -56,7 +61,7 @@ export default function ApprovalsClient() {
       </div>
 
       <div className="mb-8">
-        <div className="text-xs tracking-widest text-amber mb-2">SYNQWORKS // APPROVALS</div>
+        <div className="text-xs tracking-widest text-amber mb-2">WIREASSIST // APPROVALS</div>
         <h1 className="text-3xl font-black">APPROVAL QUEUE</h1>
         <p className="text-gray-500 text-sm mt-2">
           {approvals.length === 0
@@ -80,7 +85,7 @@ export default function ApprovalsClient() {
         </div>
       ) : (
         <div className="space-y-4 max-w-3xl">
-          {approvals.map(approval => (
+          {approvals.map((approval) => (
             <div
               key={approval.id}
               className="rounded-lg border overflow-hidden"
@@ -94,7 +99,11 @@ export default function ApprovalsClient() {
                 <div className="flex items-center gap-3">
                   <span
                     className="text-xs tracking-widest px-2 py-0.5 rounded"
-                    style={{ color: '#ffb347', background: '#ffb34720', border: '1px solid #ffb34740' }}
+                    style={{
+                      color: '#ffb347',
+                      background: '#ffb34720',
+                      border: '1px solid #ffb34740',
+                    }}
                   >
                     {approval.agentRole.toUpperCase()}
                   </span>
@@ -120,10 +129,7 @@ export default function ApprovalsClient() {
               </div>
 
               {/* Actions */}
-              <div
-                className="px-5 py-3 flex gap-3"
-                style={{ borderTop: '1px solid #1e2040' }}
-              >
+              <div className="px-5 py-3 flex gap-3" style={{ borderTop: '1px solid #1e2040' }}>
                 <button
                   onClick={() => resolve(approval.id, true)}
                   disabled={acting === approval.id}

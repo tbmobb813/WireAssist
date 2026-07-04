@@ -5,11 +5,11 @@ import {
   type MemoryStore,
   type MCPClient,
   type EventBus,
-} from '@synqworks/core';
-import { BaseAgent } from '@synqworks/agent-admin';
-import type { Platform } from '@synqworks/synqpost-mcp';
+} from '@wireassist/core';
+import { BaseAgent } from '@wireassist/agent-admin';
+import type { Platform } from '@wireassist/trendpost-mcp';
 
-const CONTENT_SYSTEM_PROMPT = `You are the Content Agent for SynqWorks.
+const CONTENT_SYSTEM_PROMPT = `You are the Content Agent for WireAssist.
 You help solo operators build a consistent, authentic content presence.
 
 PRINCIPLES:
@@ -110,19 +110,22 @@ export class ContentAgent extends BaseAgent {
 
     const context = await this.loadContext('business description products services audience');
 
-    const result = await this.useTool('content_generate', {
-      topic, platform, tone, context,
-    }) as { content: string; platform: string; topic: string };
+    const result = (await this.useTool('content_generate', {
+      topic,
+      platform,
+      tone,
+      context,
+    })) as { content: string; platform: string; topic: string };
 
     this.events.emit('agent:content_generated', {
       taskId: task.id,
       ...result,
     });
 
-    const analysis = await this.useTool('content_analyze', {
+    const analysis = (await this.useTool('content_analyze', {
       content: result.content,
       platform,
-    }) as { score: number; estimatedEngagement: string; suggestion: string };
+    })) as { score: number; estimatedEngagement: string; suggestion: string };
 
     const approved = await this.proposeAction(
       task,
@@ -131,40 +134,48 @@ export class ContentAgent extends BaseAgent {
     );
 
     if (approved) {
-      this.remember(
-        `Generated approved ${platform} post about: ${topic}`,
-        ['content', 'approved', platform]
-      );
+      this.remember(`Generated approved ${platform} post about: ${topic}`, [
+        'content',
+        'approved',
+        platform,
+      ]);
       this.events.emit('agent:content_approved', {
         taskId: task.id,
         content: result.content,
         platform,
       });
     } else {
-      this.remember(
-        `User rejected ${platform} post about: ${topic}. May need different angle.`,
-        ['content', 'rejected', platform]
-      );
+      this.remember(`User rejected ${platform} post about: ${topic}. May need different angle.`, [
+        'content',
+        'rejected',
+        platform,
+      ]);
     }
   }
 
   // ─── GENERATE WEEKLY PLAN ─────────────────────────────────────
 
   private async generatePlan(task: AgentTask): Promise<void> {
-    const { platforms, weeksAhead = 1, postsPerWeek = 3 } = task.input as {
+    const {
+      platforms,
+      weeksAhead = 1,
+      postsPerWeek = 3,
+    } = task.input as {
       platforms: Platform[];
       weeksAhead?: number;
       postsPerWeek?: number;
     };
 
-    const businessContext = await this.loadContext('business description products services recent news');
+    const businessContext = await this.loadContext(
+      'business description products services recent news'
+    );
 
-    const result = await this.useTool('content_generate_plan', {
+    const result = (await this.useTool('content_generate_plan', {
       businessContext: businessContext || 'Solo business operator',
       platforms,
       weeksAhead,
       postsPerWeek,
-    }) as { ideas: unknown[]; totalGenerated: number };
+    })) as { ideas: unknown[]; totalGenerated: number };
 
     this.events.emit('agent:content_plan_generated', {
       taskId: task.id,
@@ -205,14 +216,18 @@ export class ContentAgent extends BaseAgent {
     if (!approved) return;
 
     const post = await this.useTool('content_schedule_post', {
-      content, platform, scheduledAt, tags,
+      content,
+      platform,
+      scheduledAt,
+      tags,
     });
 
     this.events.emit('agent:post_scheduled', { taskId: task.id, post });
-    this.remember(
-      `Scheduled ${platform} post for ${scheduledAt}: "${content.slice(0, 60)}..."`,
-      ['content', 'scheduled', platform]
-    );
+    this.remember(`Scheduled ${platform} post for ${scheduledAt}: "${content.slice(0, 60)}..."`, [
+      'content',
+      'scheduled',
+      platform,
+    ]);
   }
 
   // ─── ANALYZE POST ─────────────────────────────────────────────

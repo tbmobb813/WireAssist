@@ -1,12 +1,23 @@
-import type { AgentTask, IApprovalQueue, MemoryStore, MCPClient, EventBus, AgentConfig } from '@synqworks/core';
+import type {
+  AgentTask,
+  IApprovalQueue,
+  MemoryStore,
+  MCPClient,
+  EventBus,
+  AgentConfig,
+} from '@wireassist/core';
 import { BaseAgent } from '../base-agent';
 
 // ── Minimal concrete subclass ─────────────────────────────────────────────
 class TestAgent extends BaseAgent {
   async run(_task: AgentTask): Promise<void> {}
   // Expose protected methods for testing
-  testLoadContext(q: string) { return this.loadContext(q); }
-  testRemember(c: string, t?: string[]) { return this.remember(c, t); }
+  testLoadContext(q: string) {
+    return this.loadContext(q);
+  }
+  testRemember(c: string, t?: string[]) {
+    return this.remember(c, t);
+  }
   testProposeAction(task: AgentTask, action: string, payload: Record<string, unknown>) {
     return this.proposeAction(task, action, payload);
   }
@@ -30,14 +41,22 @@ function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
   };
 }
 
-const memoryEntry = { id: 'm1', content: 'important context', agentRole: 'admin' as const, tags: [], createdAt: new Date() };
+const memoryEntry = {
+  id: 'm1',
+  content: 'important context',
+  agentRole: 'admin' as const,
+  tags: [],
+  createdAt: new Date(),
+};
 
-function makeDeps(overrides: Partial<{
-  approval: Partial<IApprovalQueue>;
-  memory: Partial<MemoryStore>;
-  mcp: Partial<MCPClient>;
-  events: Partial<EventBus>;
-}> = {}) {
+function makeDeps(
+  overrides: Partial<{
+    approval: Partial<IApprovalQueue>;
+    memory: Partial<MemoryStore>;
+    mcp: Partial<MCPClient>;
+    events: Partial<EventBus>;
+  }> = {}
+) {
   const mockEvents = {
     emit: jest.fn(),
     on: jest.fn(),
@@ -87,7 +106,9 @@ describe('BaseAgent.loadContext()', () => {
   it('calls searchAsync with the query and agentRole filter', async () => {
     const { agent, deps } = makeAgent();
     await agent.testLoadContext('email preferences');
-    expect(deps.memory.searchAsync).toHaveBeenCalledWith('email preferences', { agentRole: 'admin' });
+    expect(deps.memory.searchAsync).toHaveBeenCalledWith('email preferences', {
+      agentRole: 'admin',
+    });
   });
 
   it('returns memory content joined by double newlines', async () => {
@@ -143,7 +164,11 @@ describe('BaseAgent.proposeAction()', () => {
     await agent.testProposeAction(task, 'Send email to alice@test.com', { to: 'alice@test.com' });
     expect(deps.events.emit).toHaveBeenCalledWith(
       'agent:waiting_approval',
-      expect.objectContaining({ agentRole: 'admin', taskId: 'task-1', action: 'Send email to alice@test.com' })
+      expect.objectContaining({
+        agentRole: 'admin',
+        taskId: 'task-1',
+        action: 'Send email to alice@test.com',
+      })
     );
   });
 
@@ -154,7 +179,9 @@ describe('BaseAgent.proposeAction()', () => {
   });
 
   it('returns false when approval.request resolves false', async () => {
-    const { agent } = makeAgent(undefined, { approval: { request: jest.fn().mockResolvedValue(false) } });
+    const { agent } = makeAgent(undefined, {
+      approval: { request: jest.fn().mockResolvedValue(false) },
+    });
     const result = await agent.testProposeAction(makeTask(), 'action', {});
     expect(result).toBe(false);
   });

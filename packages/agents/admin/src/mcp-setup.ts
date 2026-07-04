@@ -1,4 +1,4 @@
-import { MCPClient } from '@synqworks/core';
+import { MCPClient } from '@wireassist/core';
 import { GmailClient } from './gmail-client';
 import { CalendarClient } from './calendar-client';
 

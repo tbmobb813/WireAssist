@@ -27,12 +27,13 @@ export default function MemoryClient() {
     return () => clearTimeout(t);
   }, [query]);
 
-  const roleColor = (role: string) => ({
-    admin: '#4fc3f7',
-    content: '#ffb347',
-    research: '#c084fc',
-    strategy: '#00ff9d',
-  }[role] ?? '#475569');
+  const roleColor = (role: string) =>
+    ({
+      admin: '#4fc3f7',
+      content: '#ffb347',
+      research: '#c084fc',
+      strategy: '#00ff9d',
+    })[role] ?? '#475569';
 
   return (
     <div className="min-h-screen p-8">
@@ -43,7 +44,7 @@ export default function MemoryClient() {
       </div>
 
       <div className="mb-8">
-        <div className="text-xs tracking-widest text-purple mb-2">SYNQWORKS // MEMORY</div>
+        <div className="text-xs tracking-widest text-purple mb-2">WIREASSIST // MEMORY</div>
         <h1 className="text-3xl font-black">AGENT MEMORY</h1>
         <p className="text-gray-500 text-sm mt-2">What your agents have learned and remembered.</p>
       </div>
@@ -51,7 +52,7 @@ export default function MemoryClient() {
       <input
         type="text"
         value={query}
-        onChange={e => setQuery(e.target.value)}
+        onChange={(e) => setQuery(e.target.value)}
         placeholder="Search memories..."
         className="w-full max-w-xl rounded-lg px-4 py-3 text-sm outline-none mb-8"
         style={{ background: '#0d0d1a', border: '1px solid #1e2040', color: '#e2e8f0' }}
@@ -61,11 +62,13 @@ export default function MemoryClient() {
         <div className="text-gray-600 text-sm">Searching...</div>
       ) : entries.length === 0 ? (
         <div className="text-gray-600 text-sm">
-          {query ? 'No memories match that search.' : 'No memories stored yet. Run some tasks first.'}
+          {query
+            ? 'No memories match that search.'
+            : 'No memories stored yet. Run some tasks first.'}
         </div>
       ) : (
         <div className="space-y-3 max-w-3xl">
-          {entries.map(entry => (
+          {entries.map((entry) => (
             <div
               key={entry.id}
               className="rounded-lg border p-4"
@@ -89,8 +92,11 @@ export default function MemoryClient() {
               <p className="text-sm text-gray-300">{entry.content}</p>
               {entry.tags.length > 0 && (
                 <div className="flex gap-2 mt-2 flex-wrap">
-                  {entry.tags.map(tag => (
-                    <span key={tag} className="text-xs text-gray-600 border border-border rounded px-2 py-0.5">
+                  {entry.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="text-xs text-gray-600 border border-border rounded px-2 py-0.5"
+                    >
                       {tag}
                     </span>
                   ))}

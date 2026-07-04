@@ -1,0 +1,32 @@
+# Default code owners for the repository
+# Assign to repository owner by default; adjust to team handles as needed
+
+# Docs
+/docs/ @tbmobb813
+
+# Frontend (Vite/React)
+/src/ @tbmobb813
+/linux-ai-assistant/src/ @tbmobb813
+
+# Tauri/Rust backend and CLI
+/src-tauri/ @tbmobb813
+/cli/ @tbmobb813
+
+# Markdown and repo metadata
+*.md @tbmobb813
+# Code owners for the repository
+# Each pattern is checked from top to bottom. When a file matches, the listed users or teams are requested as reviewers.
+
+# Docs
+/docs/ @tbmobb813
+
+# Frontend (app source)
+/src/ @tbmobb813
+/linux-ai-assistant/src/ @tbmobb813
+
+# Tauri backend (Rust) and CLI
+/linux-ai-assistant/src-tauri/ @tbmobb813
+/cli/ @tbmobb813
+
+# General fallback
+/* @tbmobb813

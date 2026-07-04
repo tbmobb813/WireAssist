@@ -47,11 +47,13 @@ function describeEvent(event: string, payload: unknown): { description: string; 
       };
     case 'triage_complete': {
       const totalEmails = typeof p.totalEmails === 'number' ? p.totalEmails : 0;
-      const categories = p.categories as {
-        urgent?: unknown[];
-        replyNeeded?: unknown[];
-        fyi?: unknown[];
-      } | undefined;
+      const categories = p.categories as
+        | {
+            urgent?: unknown[];
+            replyNeeded?: unknown[];
+            fyi?: unknown[];
+          }
+        | undefined;
       const urgentCount = Array.isArray(categories?.urgent) ? categories.urgent.length : 0;
       const replyNeededCount = Array.isArray(categories?.replyNeeded)
         ? categories.replyNeeded.length
@@ -67,19 +69,19 @@ function describeEvent(event: string, payload: unknown): { description: string; 
     }
     case 'calendar_review_complete': {
       const eventsCount = Array.isArray(p.events) ? p.events.length : 0;
-      const review = p.review as {
-        summary?: string;
-        conflicts?: unknown[];
-        overloadedDays?: unknown[];
-        suggestions?: unknown[];
-      } | undefined;
+      const review = p.review as
+        | {
+            summary?: string;
+            conflicts?: unknown[];
+            overloadedDays?: unknown[];
+            suggestions?: unknown[];
+          }
+        | undefined;
       const conflictsCount = Array.isArray(review?.conflicts) ? review.conflicts.length : 0;
       const overloadedCount = Array.isArray(review?.overloadedDays)
         ? review.overloadedDays.length
         : 0;
-      const suggestionsCount = Array.isArray(review?.suggestions)
-        ? review.suggestions.length
-        : 0;
+      const suggestionsCount = Array.isArray(review?.suggestions) ? review.suggestions.length : 0;
       const summary = review?.summary ? String(review.summary) : '';
       return {
         description:
@@ -90,7 +92,10 @@ function describeEvent(event: string, payload: unknown): { description: string; 
     case 'content_generated': {
       const topic = typeof p.topic === 'string' ? p.topic : 'unknown topic';
       const platform = typeof p.platform === 'string' ? p.platform : '';
-      return { description: `Generated ${platform} post: "${topic}" — awaiting approval`, role: 'content' };
+      return {
+        description: `Generated ${platform} post: "${topic}" — awaiting approval`,
+        role: 'content',
+      };
     }
     case 'content_approved': {
       const platform = typeof p.platform === 'string' ? p.platform : '';
@@ -99,7 +104,10 @@ function describeEvent(event: string, payload: unknown): { description: string; 
     }
     case 'content_plan_generated': {
       const total = typeof p.totalGenerated === 'number' ? p.totalGenerated : 0;
-      return { description: `Content plan generated: ${total} ideas — awaiting approval`, role: 'content' };
+      return {
+        description: `Content plan generated: ${total} ideas — awaiting approval`,
+        role: 'content',
+      };
     }
     case 'post_scheduled': {
       const post = p.post as { platform?: string; scheduledAt?: string } | undefined;
@@ -111,7 +119,10 @@ function describeEvent(event: string, payload: unknown): { description: string; 
       return { description: 'Content analysis complete', role: 'content' };
     case 'scheduled_posts': {
       const count = Array.isArray(p.posts) ? p.posts.length : 0;
-      return { description: `Loaded ${count} scheduled post${count !== 1 ? 's' : ''}`, role: 'content' };
+      return {
+        description: `Loaded ${count} scheduled post${count !== 1 ? 's' : ''}`,
+        role: 'content',
+      };
     }
     default:
       return { description: event, role: typeof p.agentRole === 'string' ? p.agentRole : 'admin' };
@@ -127,28 +138,25 @@ export default function DashboardClient() {
   const [pendingCount, setPendingCount] = useState(0);
   const seenActivityIds = useRef(new Set<string>());
 
-  const addActivity = useCallback(
-    (event: string, payload: unknown, at?: string) => {
-      const id = activityId(event, payload);
-      if (seenActivityIds.current.has(id)) return;
-      seenActivityIds.current.add(id);
+  const addActivity = useCallback((event: string, payload: unknown, at?: string) => {
+    const id = activityId(event, payload);
+    if (seenActivityIds.current.has(id)) return;
+    seenActivityIds.current.add(id);
 
-      const { description, role } = describeEvent(event, payload);
-      setActivity(prev =>
-        [
-          {
-            id,
-            time: at ? new Date(at) : new Date(),
-            event,
-            description,
-            role,
-          },
-          ...prev,
-        ].slice(0, 50),
-      );
-    },
-    [],
-  );
+    const { description, role } = describeEvent(event, payload);
+    setActivity((prev) =>
+      [
+        {
+          id,
+          time: at ? new Date(at) : new Date(),
+          event,
+          description,
+          role,
+        },
+        ...prev,
+      ].slice(0, 50)
+    );
+  }, []);
 
   // Poll pending approvals count
   useEffect(() => {
@@ -195,40 +203,34 @@ export default function DashboardClient() {
         case 'connected':
           return;
         case 'task_started':
-          setAgents(prev =>
-            prev.map(a =>
-              a.role === e.payload.agentRole ? { ...a, status: 'running' } : a,
-            ),
+          setAgents((prev) =>
+            prev.map((a) => (a.role === e.payload.agentRole ? { ...a, status: 'running' } : a))
           );
           addActivity('task_started', e.payload);
           break;
         case 'task_complete':
-          setAgents(prev =>
-            prev.map(a =>
-              a.role === e.payload.agentRole ? { ...a, status: 'idle' } : a,
-            ),
+          setAgents((prev) =>
+            prev.map((a) => (a.role === e.payload.agentRole ? { ...a, status: 'idle' } : a))
           );
           addActivity('task_complete', e.payload);
           break;
         case 'task_failed':
-          setAgents(prev =>
-            prev.map(a =>
-              a.role === e.payload.agentRole ? { ...a, status: 'error' } : a,
-            ),
+          setAgents((prev) =>
+            prev.map((a) => (a.role === e.payload.agentRole ? { ...a, status: 'error' } : a))
           );
           addActivity('task_failed', e.payload);
           break;
         case 'waiting_approval':
-          setAgents(prev =>
-            prev.map(a =>
-              a.role === e.payload.agentRole ? { ...a, status: 'waiting_approval' } : a,
-            ),
+          setAgents((prev) =>
+            prev.map((a) =>
+              a.role === e.payload.agentRole ? { ...a, status: 'waiting_approval' } : a
+            )
           );
-          setPendingCount(c => c + 1);
+          setPendingCount((c) => c + 1);
           addActivity('waiting_approval', e.payload);
           break;
         case 'approval_resolved':
-          setPendingCount(c => Math.max(0, c - 1));
+          setPendingCount((c) => Math.max(0, c - 1));
           break;
         case 'triage_complete':
           addActivity('triage_complete', e.payload);
@@ -244,7 +246,7 @@ export default function DashboardClient() {
           break;
       }
     },
-    [addActivity],
+    [addActivity]
   );
 
   useAgentEvents(handleAgentEvent);
@@ -252,7 +254,7 @@ export default function DashboardClient() {
   const queueTask = async (path: string, label: string) => {
     const queueId = `queue:${path}:${Date.now()}`;
     seenActivityIds.current.add(queueId);
-    setActivity(prev =>
+    setActivity((prev) =>
       [
         {
           id: queueId,
@@ -262,7 +264,7 @@ export default function DashboardClient() {
           role: 'admin',
         },
         ...prev,
-      ].slice(0, 50),
+      ].slice(0, 50)
     );
 
     const res = await fetch(path, { method: 'POST' });
@@ -271,7 +273,7 @@ export default function DashboardClient() {
       const message =
         typeof body.error === 'string' ? body.error : `Request failed (${res.status})`;
       addActivity('task_failed', { error: message, agentRole: 'admin' });
-      setAgents(prev => prev.map(a => (a.role === 'admin' ? { ...a, status: 'error' } : a)));
+      setAgents((prev) => prev.map((a) => (a.role === 'admin' ? { ...a, status: 'error' } : a)));
     }
   };
 
@@ -298,9 +300,11 @@ export default function DashboardClient() {
     <div className="min-h-screen p-8">
       {/* Header */}
       <div className="mb-10">
-        <div className="text-xs tracking-widest text-accent mb-2">SYNQWORKS // COMMAND CENTER</div>
+        <div className="text-xs tracking-widest text-accent mb-2">WIREASSIST // COMMAND CENTER</div>
         <h1 className="text-4xl font-black tracking-tight">RUN A BUSINESS. SOLO.</h1>
-        <p className="text-gray-500 text-sm mt-2 tracking-widest">AI WORKFORCE OPERATIONS DASHBOARD</p>
+        <p className="text-gray-500 text-sm mt-2 tracking-widest">
+          AI WORKFORCE OPERATIONS DASHBOARD
+        </p>
       </div>
 
       {/* Nav */}
@@ -316,7 +320,7 @@ export default function DashboardClient() {
           { href: '/chat', label: 'AGENT CHAT' },
           { href: '/memory', label: 'MEMORY' },
           { href: '/onboarding', label: 'SETUP' },
-        ].map(item => (
+        ].map((item) => (
           <Link
             key={item.href}
             href={item.href}
@@ -336,7 +340,7 @@ export default function DashboardClient() {
         <div className="col-span-1 space-y-4">
           <div className="text-xs tracking-widest text-gray-500 mb-4">WORKFORCE</div>
 
-          {agents.map(agent => (
+          {agents.map((agent) => (
             <div
               key={agent.role}
               className="rounded-lg p-5 border"
@@ -422,7 +426,7 @@ export default function DashboardClient() {
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {activity.map(item => (
+                {activity.map((item) => (
                   <div key={item.id} className="px-5 py-3 flex items-start gap-4">
                     <div className="text-xs text-gray-600 mt-0.5 whitespace-nowrap">
                       {item.time.toLocaleTimeString()}
@@ -430,19 +434,20 @@ export default function DashboardClient() {
                     <div
                       className="text-xs tracking-widest mt-0.5 whitespace-nowrap"
                       style={{
-                        color: {
-                          queued: '#94a3b8',
-                          task_started: '#4fc3f7',
-                          task_complete: '#00ff9d',
-                          task_failed: '#ef4444',
-                          waiting_approval: '#ffb347',
-                          triage_complete: '#4fc3f7',
-                          calendar_review_complete: '#c084fc',
-                          content_generated: '#ffb347',
-                          content_approved: '#00ff9d',
-                          content_plan_generated: '#ffb347',
-                          post_scheduled: '#00ff9d',
-                        }[item.event] ?? '#475569',
+                        color:
+                          {
+                            queued: '#94a3b8',
+                            task_started: '#4fc3f7',
+                            task_complete: '#00ff9d',
+                            task_failed: '#ef4444',
+                            waiting_approval: '#ffb347',
+                            triage_complete: '#4fc3f7',
+                            calendar_review_complete: '#c084fc',
+                            content_generated: '#ffb347',
+                            content_approved: '#00ff9d',
+                            content_plan_generated: '#ffb347',
+                            post_scheduled: '#00ff9d',
+                          }[item.event] ?? '#475569',
                       }}
                     >
                       {item.event.toUpperCase()}

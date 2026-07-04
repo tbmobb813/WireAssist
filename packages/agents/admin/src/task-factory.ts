@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { AgentTask, AgentRole } from '@synqworks/core';
+import type { AgentTask, AgentRole } from '@wireassist/core';
 
 type SupportedTaskInput =
   | { type: 'email_triage'; maxEmails?: number }
@@ -39,14 +39,10 @@ export function createEmailTriageTask(options?: {
   description?: string;
   maxEmails?: number;
 }): AgentTask {
-  return baseTask(
-    'admin',
-    options?.description ?? 'Triage my inbox and propose actions.',
-    {
-      type: 'email_triage',
-      maxEmails: options?.maxEmails,
-    }
-  );
+  return baseTask('admin', options?.description ?? 'Triage my inbox and propose actions.', {
+    type: 'email_triage',
+    maxEmails: options?.maxEmails,
+  });
 }
 
 export function createCalendarReviewTask(options?: {
@@ -90,28 +86,19 @@ export function createScheduleEventTask(params: {
   attendees?: string[];
   description?: string;
 }): AgentTask {
-  return baseTask(
-    'admin',
-    params.description ?? `Schedule calendar event: ${params.summary}`,
-    {
-      type: 'schedule_event',
-      summary: params.summary,
-      start: params.start,
-      end: params.end,
-      attendees: params.attendees,
-      description: params.description,
-    }
-  );
+  return baseTask('admin', params.description ?? `Schedule calendar event: ${params.summary}`, {
+    type: 'schedule_event',
+    summary: params.summary,
+    start: params.start,
+    end: params.end,
+    attendees: params.attendees,
+    description: params.description,
+  });
 }
 
 export function createFreeformTask(params: { prompt: string; description?: string }): AgentTask {
-  return baseTask(
-    'admin',
-    params.description ?? params.prompt,
-    {
-      type: 'freeform',
-      prompt: params.prompt,
-    }
-  );
+  return baseTask('admin', params.description ?? params.prompt, {
+    type: 'freeform',
+    prompt: params.prompt,
+  });
 }
-

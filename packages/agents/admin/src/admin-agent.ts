@@ -6,10 +6,10 @@ import {
   type MemoryStore,
   type MCPClient,
   type EventBus,
-} from '@synqworks/core';
+} from '@wireassist/core';
 import { BaseAgent } from './base-agent';
 
-const ADMIN_SYSTEM_PROMPT = `You are the Admin Agent for SynqWorks — an AI executive assistant 
+const ADMIN_SYSTEM_PROMPT = `You are the Admin Agent for WireAssist — an AI executive assistant 
 for a solo business operator. Your job is to manage email, calendar, and tasks with precision.
 
 PRINCIPLES:
@@ -113,11 +113,11 @@ export class AdminAgent extends BaseAgent {
 
   async triageEmail(task: AgentTask): Promise<EmailTriageResult> {
     // 1. Fetch inbox threads
-    const threads = await this.useTool('gmail_list_threads', {
+    const threads = (await this.useTool('gmail_list_threads', {
       maxResults: (task.input as { maxEmails?: number }).maxEmails ?? 20,
       labelIds: ['INBOX'],
       q: 'is:unread',
-    }) as GmailThread[];
+    })) as GmailThread[];
 
     if (!threads || threads.length === 0) {
       const result: EmailTriageResult = {
@@ -133,9 +133,11 @@ export class AdminAgent extends BaseAgent {
 
     // 2. Fetch thread details in parallel (cap at 10 to avoid token bloat)
     const threadDetails = await Promise.all(
-      threads.slice(0, 10).map(t =>
-        this.useTool('gmail_get_thread', { threadId: t.id }) as Promise<GmailThreadDetail>
-      )
+      threads
+        .slice(0, 10)
+        .map(
+          (t) => this.useTool('gmail_get_thread', { threadId: t.id }) as Promise<GmailThreadDetail>
+        )
     );
 
     // 3. Load memory context — who we know, past decisions
@@ -146,13 +148,17 @@ export class AdminAgent extends BaseAgent {
 Triage these ${threadDetails.length} email threads. 
 
 THREADS:
-${threadDetails.map((t, i) => `
+${threadDetails
+  .map(
+    (t, i) => `
 ThreadId: ${t.id}
 [${i + 1}] From: ${t.from}
 Subject: ${t.subject}
 Snippet: ${t.snippet}
 Date: ${t.date}
-`).join('\n')}
+`
+  )
+  .join('\n')}
 
 Return a JSON object with this exact structure:
 {
@@ -175,7 +181,9 @@ Only return valid JSON. No markdown fences.`;
     try {
       triage = JSON.parse(rawResponse) as TriageCategories;
     } catch {
-      throw new Error(`Admin Agent returned invalid JSON during triage: ${rawResponse.slice(0, 200)}`);
+      throw new Error(
+        `Admin Agent returned invalid JSON during triage: ${rawResponse.slice(0, 200)}`
+      );
     }
 
     // 5. Build proposed actions
@@ -228,15 +236,9 @@ Only return valid JSON. No markdown fences.`;
       if (approved) {
         await this.executeAction(action);
         // Remember the decision
-        this.remember(
-          `User approved: ${action.label}`,
-          ['email', 'approval', action.type]
-        );
+        this.remember(`User approved: ${action.label}`, ['email', 'approval', action.type]);
       } else {
-        this.remember(
-          `User rejected: ${action.label}`,
-          ['email', 'rejection', action.type]
-        );
+        this.remember(`User rejected: ${action.label}`, ['email', 'rejection', action.type]);
       }
     }
 
@@ -251,11 +253,11 @@ Only return valid JSON. No markdown fences.`;
     const now = new Date();
     const until = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
 
-    const events = await this.useTool('calendar_list_events', {
+    const events = (await this.useTool('calendar_list_events', {
       timeMin: now.toISOString(),
       timeMax: until.toISOString(),
       maxResults: 50,
-    }) as CalendarEvent[];
+    })) as CalendarEvent[];
 
     const context = await this.loadContext('calendar preferences meeting preferences work hours');
 
@@ -267,7 +269,7 @@ Review my calendar for the next ${daysAhead} days and identify:
 4. Any events that look like they could be async instead
 
 EVENTS:
-${events.map(e => `- ${e.summary} | ${e.start} → ${e.end} | ${e.attendees?.length ?? 0} attendees`).join('\n')}
+${events.map((e) => `- ${e.summary} | ${e.start} → ${e.end} | ${e.attendees?.length ?? 0} attendees`).join('\n')}
 
 Return a JSON object:
 {
@@ -297,16 +299,11 @@ Only return valid JSON. No markdown fences.`;
     // Propose and await approval for any suggested changes
     for (const suggestion of review.suggestions ?? []) {
       if (suggestion.type === 'reschedule' || suggestion.type === 'cancel') {
-        const approved = await this.proposeAction(
-          task,
-          suggestion.description,
-          { action: suggestion.action }
-        );
+        const approved = await this.proposeAction(task, suggestion.description, {
+          action: suggestion.action,
+        });
         if (approved) {
-          this.remember(
-            `Calendar: ${suggestion.description} — approved`,
-            ['calendar', 'approved']
-          );
+          this.remember(`Calendar: ${suggestion.description} — approved`, ['calendar', 'approved']);
         }
       }
     }
@@ -323,11 +320,12 @@ Only return valid JSON. No markdown fences.`;
     };
 
     // Always require approval before sending
-    const approved = await this.proposeAction(
-      task,
-      `Send email to ${to}: "${subject}"`,
-      { to, subject, body, threadId }
-    );
+    const approved = await this.proposeAction(task, `Send email to ${to}: "${subject}"`, {
+      to,
+      subject,
+      body,
+      threadId,
+    });
 
     if (!approved) return;
 
@@ -362,10 +360,7 @@ Only return valid JSON. No markdown fences.`;
       description,
     });
 
-    this.remember(
-      `Scheduled: ${summary} on ${start}`,
-      ['calendar', 'scheduled']
-    );
+    this.remember(`Scheduled: ${summary} on ${start}`, ['calendar', 'scheduled']);
   }
 
   // ─── FREEFORM ──────────────────────────────────────────────────

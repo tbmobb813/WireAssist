@@ -1,12 +1,12 @@
-# SynqWorks / Nolta — Setup Guide
+# WireAssist — Setup Guide
 
 ## Prerequisites
 
-| Requirement | Version | Needed for |
-|-------------|---------|------------|
-| Node.js | 20.9+ | All packages (Next.js 16 in Command Center requires >=20.9) |
-| pnpm | 11+ | Workspace install (`corepack enable` recommended) |
-| Rust | 1.70+ | `synqworks/aia` Tauri app only |
+| Requirement | Version | Needed for                                                  |
+| ----------- | ------- | ----------------------------------------------------------- |
+| Node.js     | 20.9+   | All packages (Next.js 16 in Command Center requires >=20.9) |
+| pnpm        | 11+     | Workspace install (`corepack enable` recommended)           |
+| Rust        | 1.70+   | `wireassist/aia` Tauri app only                             |
 
 Install pnpm if needed:
 
@@ -18,7 +18,7 @@ corepack prepare pnpm@11.3.0 --activate
 ## Clone and install
 
 ```bash
-cd /path/to/Nolta
+cd /path/to/WireAssist
 pnpm install
 pnpm build:core
 pnpm build:admin
@@ -28,21 +28,21 @@ Command Center and the Admin Agent CLI depend on compiled `dist/` output from co
 
 Workspace packages (from `pnpm-workspace.yaml`):
 
-- `synqworks/core` — `@synqworks/core`
-- `synqworks/aia` — `ai-assist`
-- `packages/agents/admin` — `@synqworks/agent-admin`
-- `packages/command-center` — `@synqworks/command-center`
+- `wireassist/core` — `@wireassist/core`
+- `wireassist/aia` — `synqagent` (frozen desktop app)
+- `packages/agents/admin` — `@wireassist/agent-admin`
+- `packages/command-center` — `@wireassist/command-center`
 
 Verify linking:
 
 ```bash
-ls -la synqworks/aia/node_modules/@synqworks/core
+ls -la wireassist/aia/node_modules/@wireassist/core
 # should symlink to ../../../core
 ```
 
 ### Native module: `better-sqlite3`
 
-Command Center and `@synqworks/core` use SQLite via `better-sqlite3`, which must compile during install. If the API exits immediately or you see `Could not locate the bindings file`:
+Command Center and `@wireassist/core` use SQLite via `better-sqlite3`, which must compile during install. If the API exits immediately or you see `Could not locate the bindings file`:
 
 ```bash
 pnpm approve-builds   # enable better-sqlite3 when prompted
@@ -59,7 +59,7 @@ The workspace `pnpm-workspace.yaml` should list `better-sqlite3: true` under `al
 Put secrets in the **monorepo root** `.env` (gitignored) — Command Center loads it automatically:
 
 ```bash
-# /path/to/Nolta/.env
+# /path/to/WireAssist/.env
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
@@ -75,42 +75,36 @@ You can also `export ANTHROPIC_API_KEY=...` in your shell, or use `packages/comm
 Place the file at:
 
 ```text
-~/.synqworks/gmail-credentials.json
+~/.wireassist/gmail-credentials.json
 ```
 
 Or, with a custom base directory:
 
 ```bash
-export SYNQWORKS_HOME=/path/to/config-root
-# credentials → $SYNQWORKS_HOME/.synqworks/gmail-credentials.json
-# token (auto-created) → $SYNQWORKS_HOME/.synqworks/gmail-token.json
+export WIREASSIST_HOME=/path/to/config-root
+# credentials → $WIREASSIST_HOME/.wireassist/gmail-credentials.json
+# token (auto-created) → $WIREASSIST_HOME/.wireassist/gmail-token.json
 ```
 
 On first agent startup, a browser OAuth flow runs and saves the token. Gmail and Calendar share this token; Calendar scopes are included in the Gmail auth flow.
 
-### AIA desktop (optional providers)
+### Desktop app (frozen)
 
-Create `synqworks/aia/.env.local` (or export in shell) as needed:
-
-```bash
-ANTHROPIC_API_KEY=...
-OPENAI_API_KEY=...
-# etc.
-```
+The Tauri package under `wireassist/aia/` is shelved. Skip this section unless you are reviving **WireAssist Desktop**.
 
 ## Run Command Center
 
 ```bash
 pnpm build:core
 pnpm build:admin
-pnpm --filter @synqworks/command-center dev
+pnpm --filter @wireassist/command-center dev
 ```
 
-| Service | URL |
-|---------|-----|
-| Web UI | http://localhost:3001 |
-| API | http://localhost:3002 |
-| Health | http://localhost:3002/health |
+| Service | URL                          |
+| ------- | ---------------------------- |
+| Web UI  | http://localhost:3001        |
+| API     | http://localhost:3002        |
+| Health  | http://localhost:3002/health |
 
 The Next.js app proxies `/api/*` to the Hono API (see `packages/command-center/next.config.ts`). Command Center uses **Next.js 16** and **React 19**.
 
@@ -119,7 +113,7 @@ Optional port overrides (must match across API, Next rewrites, and `wait-on`):
 ```bash
 export API_PORT=3003
 export WEB_PORT=3001
-pnpm --filter @synqworks/command-center dev
+pnpm --filter @wireassist/command-center dev
 ```
 
 Root `.env` is loaded by the API on startup. Variables already set in your shell are **not** overwritten (e.g. `export ANTHROPIC_API_KEY=...` wins over `.env`).
@@ -131,12 +125,12 @@ If you see `EADDRINUSE` on port 3002 or 3001, a previous dev process is still ru
 After `pnpm build:command-center`, run **both** the API and the web server (same as dev):
 
 ```bash
-pnpm --filter @synqworks/command-center start
+pnpm --filter @wireassist/command-center start
 ```
 
 This runs `start:api` (Hono) and `start:web` (`next start`) via `concurrently`.
 
-SQLite state for approvals and memory defaults to `~/.synqworks/synqworks.db`.
+SQLite state for approvals and memory defaults to `~/.wireassist/wireassist.db`.
 
 ### UI routes
 
@@ -150,17 +144,17 @@ SQLite state for approvals and memory defaults to `~/.synqworks/synqworks.db`.
 No web UI; approvals via terminal `[y/n]`:
 
 ```bash
-pnpm --filter @synqworks/agent-admin build
+pnpm --filter @wireassist/agent-admin build
 node packages/agents/admin/dist/demo.js
 ```
 
 Requires the same Google credentials and `ANTHROPIC_API_KEY` as Command Center.
 
-## Run @synqworks/core alone
+## Run @wireassist/core alone
 
 ```bash
 pnpm dev:core
-# watches TypeScript in synqworks/core
+# watches TypeScript in wireassist/core
 ```
 
 Run tests:
@@ -169,28 +163,12 @@ Run tests:
 pnpm test:core
 ```
 
-## Run AI Assist (Tauri)
-
-```bash
-# Install Rust if needed
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-pnpm dev:aia
-```
-
-Full desktop build:
-
-```bash
-pnpm build:aia
-pnpm --filter ai-assist tauri build
-```
-
 ## Build individual packages
 
 ```bash
 pnpm build:core
-pnpm --filter @synqworks/agent-admin build
-pnpm --filter @synqworks/command-center build
+pnpm --filter @wireassist/agent-admin build
+pnpm --filter @wireassist/command-center build
 pnpm build:aia
 ```
 
@@ -198,17 +176,17 @@ pnpm build:aia
 
 ### `pnpm install` fails on missing packages
 
-Ensure `pnpm-workspace.yaml` only lists existing directories (`synqworks/*`, `packages/agents/admin`, `packages/command-center`). Do not add `packages/core` or `packages/aia` — those paths are not used.
+Ensure `pnpm-workspace.yaml` only lists existing directories (`wireassist/*`, `packages/agents/admin`, `packages/command-center`). Do not add `packages/core` or `packages/aia` — those paths are not used.
 
 ### Calendar 403 / insufficient scopes
 
-Delete `~/.synqworks/gmail-token.json` and re-run; the agent will prompt for re-authorization with Calendar scopes.
+Delete `~/.wireassist/gmail-token.json` and re-run; the agent will prompt for re-authorization with Calendar scopes.
 
 ### OAuth port in use
 
 Another process is bound to the redirect URI port from your Google client config. Stop it and retry.
 
-### `@synqworks/core` changes not reflected
+### `@wireassist/core` changes not reflected
 
 Rebuild core after changes: `pnpm build:core`, or use `pnpm dev:core` while developing dependents.
 

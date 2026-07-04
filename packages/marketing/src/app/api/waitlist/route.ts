@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const WAITLIST_AUDIENCE = process.env.RESEND_AUDIENCE_ID;
+// Lazy — never construct Resend at module scope. Next.js collects page data
+// at build time and must not require secrets to compile.
+function getResend(): Resend {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    throw new Error('RESEND_API_KEY is not set');
+  }
+  return new Resend(key);
+}
 
 // In-memory rate limiter: max 3 submissions per IP per 10 minutes, 1 per email ever
 const ipHits = new Map<string, { count: number; resetAt: number }>();
@@ -25,7 +32,7 @@ function checkRateLimit(ip: string, email: string): 'ok' | 'ip' | 'duplicate' {
 }
 
 export async function POST(req: NextRequest) {
-  const { email } = await req.json() as { email?: string };
+  const { email } = (await req.json()) as { email?: string };
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
@@ -50,14 +57,16 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    if (WAITLIST_AUDIENCE) {
-      await resend.contacts.create({ email, audienceId: WAITLIST_AUDIENCE });
+    const resend = getResend();
+    const audienceId = process.env.RESEND_AUDIENCE_ID;
+    if (audienceId) {
+      await resend.contacts.create({ email, audienceId });
     } else {
       await resend.emails.send({
-        from: 'SynqWorks <waitlist@synqworks.techtrendwire.com>',
+        from: 'WireAssist <waitlist@wireassist.techtrendwire.com>',
         to: email,
-        subject: "You're on the SynqWorks waitlist",
-        text: `Hey,\n\nYou're on the SynqWorks waitlist. We'll reach out when we launch.\n\n— The SynqWorks Team`,
+        subject: "You're on the WireAssist waitlist",
+        text: `Hey,\n\nYou're on the WireAssist waitlist. We'll reach out when we launch.\n\n— The WireAssist Team`,
       });
     }
     seenEmails.add(email.toLowerCase());
