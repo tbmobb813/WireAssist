@@ -1,29 +1,29 @@
 version: 2
 updates:
-  # npm in root workspace (tooling / hooks)
+  # npm monorepo root (pnpm workspace)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
 
-  # npm in app package
+  # npm desktop package (frozen Tauri app)
   - package-ecosystem: "npm"
-    directory: "/linux-ai-assistant"
+    directory: "/wireassist/aia"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
 
-  # cargo for top-level Tauri crate (if present)
+  # cargo for desktop Tauri crate
   - package-ecosystem: "cargo"
-    directory: "/src-tauri"
+    directory: "/wireassist/aia/src-tauri"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
 
-  # cargo for app Tauri crate
+  # cargo for desktop CLI crate
   - package-ecosystem: "cargo"
-    directory: "/linux-ai-assistant/src-tauri"
+    directory: "/wireassist/aia/cli"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5

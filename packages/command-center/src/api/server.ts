@@ -2,6 +2,7 @@ import './load-env';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { cors } from 'hono/cors';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { ApprovalQueue, MemoryStore, MCPClient, EventBus } from '@wireassist/core';
@@ -107,6 +108,7 @@ function sqliteSetupHint(): string {
 
 function openStores() {
   try {
+    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
     approval = new ApprovalQueue(DB_PATH);
     memory = new MemoryStore(DB_PATH);
     trendpostStorage = new TrendPostStorage(DB_PATH);
