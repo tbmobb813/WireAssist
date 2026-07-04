@@ -39,9 +39,9 @@ jobs:
         run: pnpm -r --filter '!synqagent' build
 
       - name: Run package tests (sequential)
-        # Exclude synqagent (desktop vitest) — verified separately; hangs under CI load
-        # Sequential avoids jest worker contention across packages
-        run: pnpm -r --workspace-concurrency=1 --filter '!synqagent' --if-present test
+        # Sequential avoids jest worker contention across packages.
+        # No !synqagent filter: vitest does not typecheck, so aia tests should run.
+        run: pnpm -r --workspace-concurrency=1 --if-present test
 
       - name: Coverage (core)
         run: pnpm --filter @wireassist/core test:coverage
