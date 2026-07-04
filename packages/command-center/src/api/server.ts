@@ -10,6 +10,7 @@ import { AdminAgent, setupAdminMCP, AdminTasks } from '@wireassist/agent-admin';
 import { ContentAgent, ContentTasks } from '@wireassist/agent-content';
 import { ResearchAgent, ResearchTasks, setupResearchMCP } from '@wireassist/agent-research';
 import { registerTrendPostTools, TrendPostStorage } from '@wireassist/trendpost-mcp';
+import { registerPortfolioRoutes } from './portfolio-routes';
 
 const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
 const DB_PATH = path.join(HOME_PATH, '.wireassist', 'wireassist.db');
@@ -203,6 +204,7 @@ async function bootstrap() {
 const app = new Hono();
 
 app.use('*', cors({ origin: 'http://localhost:3001' }));
+registerPortfolioRoutes(app, DB_PATH);
 
 // Health check
 app.get('/health', (c) =>
