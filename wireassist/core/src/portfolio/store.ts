@@ -102,6 +102,7 @@ export class PortfolioStore {
 
   constructor(storagePath: string = './data/aia.db') {
     this.db = new Database(storagePath);
+    this.db.pragma('foreign_keys = ON');
     this.initTables();
   }
 

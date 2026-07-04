@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAgentEvents, type AgentEvent } from '@/hooks/useAgentEvents';
 import Link from 'next/link';
+import PortfolioZones from './portfolio-zones';
 
 interface AgentCard {
   role: string;
@@ -333,6 +334,10 @@ export default function DashboardClient() {
             {item.label}
           </Link>
         ))}
+      </div>
+
+      <div className="mb-10">
+        <PortfolioZones />
       </div>
 
       <div className="grid grid-cols-3 gap-6">
