@@ -32,7 +32,9 @@ export class ProviderFactory {
       if (await ollama.validateConfig()) {
         available.push('ollama');
       }
-    } catch {}
+    } catch {
+      // Ollama not reachable
+    }
 
     // Check for API keys in environment
     if (process.env.OPENAI_API_KEY) available.push('openai');

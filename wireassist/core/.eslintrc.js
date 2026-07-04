@@ -1,9 +1,10 @@
 module.exports = {
+  root: true,
   parser: '@typescript-eslint/parser',
   parserOptions: {
     ecmaVersion: 2020,
     sourceType: 'module',
-    project: './core/tsconfig.json',
+    project: './tsconfig.json',
   },
   extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended'],
   plugins: ['@typescript-eslint'],
@@ -25,6 +26,7 @@ module.exports = {
     'dist/',
     'node_modules/',
     'coverage/',
+    '**/*.d.ts',
     '*.js',
     '!.eslintrc.js',
     '!jest.config.js',

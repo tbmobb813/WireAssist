@@ -1,4 +1,5 @@
 import { existsSync, unlinkSync } from 'fs';
+import Database from 'better-sqlite3';
 import { MemoryStore } from '../../memory/store';
 
 const TEST_DB = './test-memory-store.db';
@@ -173,7 +174,6 @@ describe('MemoryStore — column migration', () => {
   test('adds embedding column to a pre-existing DB without it', () => {
     // Create a DB using the old schema (no embedding column)
     if (existsSync(TEST_DB)) unlinkSync(TEST_DB);
-    const Database = require('better-sqlite3');
     const db = new Database(TEST_DB);
     db.exec(`
       CREATE TABLE memories (

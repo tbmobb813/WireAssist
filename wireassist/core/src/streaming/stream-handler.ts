@@ -63,9 +63,13 @@ export class StreamHandler {
     let buffer = '';
 
     try {
-      while (true) {
+      let reading = true;
+      while (reading) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          reading = false;
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
 
