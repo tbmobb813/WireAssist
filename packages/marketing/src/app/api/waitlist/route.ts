@@ -31,10 +31,27 @@ function checkRateLimit(ip: string, email: string): 'ok' | 'ip' | 'duplicate' {
   return 'ok';
 }
 
+/** Linear-time shape check — avoids ReDoS-prone email regexes. */
+function isValidEmail(value: string): boolean {
+  if (value.length < 3 || value.length > 254) return false;
+  const at = value.indexOf('@');
+  if (at <= 0 || at !== value.lastIndexOf('@')) return false;
+  const local = value.slice(0, at);
+  const domain = value.slice(at + 1);
+  if (!local || local.length > 64) return false;
+  const dot = domain.indexOf('.');
+  if (dot <= 0 || dot === domain.length - 1) return false;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code <= 32 || code === 127) return false;
+  }
+  return true;
+}
+
 export async function POST(req: NextRequest) {
   const { email } = (await req.json()) as { email?: string };
 
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (!email || !isValidEmail(email)) {
     return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
   }
 

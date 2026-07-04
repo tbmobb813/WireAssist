@@ -153,7 +153,7 @@ export class StreamingService {
    * Generate unique session ID
    */
   private generateSessionId(): string {
-    return `stream-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return `stream-${crypto.randomUUID()}`;
   }
 
   /**
