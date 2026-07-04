@@ -62,7 +62,8 @@ export class IllegalTransitionError extends Error {
 
 export function currentIsoWeek(date: Date = new Date()): string {
   // ISO-8601 week number (weeks start Monday; week 1 contains the first Thursday).
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  // Use UTC getters so the calendar day is timezone-independent.
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
@@ -259,25 +260,26 @@ export class PortfolioStore {
     if (project.status !== 'active') {
       throw new Error(`Weekly focus must reference an active project (got '${project.status}')`);
     }
-    const createdAt = Date.now();
-    this.db
+    // RETURNING so createdAt matches DB (preserved on upsert, not a fresh Date.now()).
+    const row = this.db
       .prepare(
         `INSERT INTO weekly_focus (iso_week, product_project_id, career_milestone, created_at)
          VALUES (?, ?, ?, ?)
          ON CONFLICT(iso_week) DO UPDATE SET
            product_project_id = excluded.product_project_id,
-           career_milestone = excluded.career_milestone`
+           career_milestone = excluded.career_milestone
+         RETURNING iso_week, product_project_id, career_milestone, created_at`
       )
-      .run(isoWeek, data.productProjectId, data.careerMilestone, createdAt);
+      .get(isoWeek, data.productProjectId, data.careerMilestone, Date.now()) as WeeklyFocusRow;
     this.appendEvent('focus.set', data.productProjectId, {
       isoWeek,
       careerMilestone: data.careerMilestone,
     });
     return {
-      isoWeek,
-      productProjectId: data.productProjectId,
-      careerMilestone: data.careerMilestone,
-      createdAt,
+      isoWeek: row.iso_week,
+      productProjectId: row.product_project_id,
+      careerMilestone: row.career_milestone,
+      createdAt: row.created_at,
     };
   }
 

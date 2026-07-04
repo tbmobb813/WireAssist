@@ -100,11 +100,21 @@ describe('PortfolioStore', () => {
 
     it('sets and reads the current week, and upserts on repeat', async () => {
       const id = await store.createProject({ name: 'A', lane: 'product', status: 'active' });
-      await store.setWeeklyFocus({ productProjectId: id, careerMilestone: 'Messer 3 modules' });
-      await store.setWeeklyFocus({ productProjectId: id, careerMilestone: 'Messer 5 modules' });
+      const first = await store.setWeeklyFocus({
+        productProjectId: id,
+        careerMilestone: 'Messer 3 modules',
+      });
+      const second = await store.setWeeklyFocus({
+        productProjectId: id,
+        careerMilestone: 'Messer 5 modules',
+      });
+      expect(second.careerMilestone).toBe('Messer 5 modules');
+      expect(second.isoWeek).toBe(currentIsoWeek());
+      // Upsert preserves original created_at; return value must match DB.
+      expect(second.createdAt).toBe(first.createdAt);
       const focus = await store.getWeeklyFocus();
       expect(focus?.careerMilestone).toBe('Messer 5 modules');
-      expect(focus?.isoWeek).toBe(currentIsoWeek());
+      expect(focus?.createdAt).toBe(first.createdAt);
     });
 
     it('today() returns focus null when unset — the dashboard gate condition', async () => {
