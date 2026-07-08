@@ -34,7 +34,7 @@ tauri-plugin-clipboard-manager = "2.3.1"
 tauri-plugin-updater = "2"
 notify = "8"
 ignore = "0.4"
-sysinfo = "0.30"
+sysinfo = "0.39"
 tempfile = "3"
 keyring = "2"
 chrono = { version = "0.4", features = ["serde"] }
