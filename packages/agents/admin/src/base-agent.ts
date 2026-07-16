@@ -10,6 +10,10 @@ import {
   type EventBus,
 } from '@wireassist/core';
 
+// Single place to move the fleet to a new model: set WIREASSIST_MODEL in the
+// environment, or pass `model` in an individual agent's config to override.
+export const DEFAULT_MODEL = process.env.WIREASSIST_MODEL ?? 'claude-sonnet-5';
+
 export abstract class BaseAgent {
   protected config: AgentConfig;
   protected approval: IApprovalQueue;
@@ -53,7 +57,7 @@ export abstract class BaseAgent {
       : this.config.systemPrompt;
 
     const response = await this.client.messages.create({
-      model: this.config.model ?? 'claude-sonnet-4-20250514',
+      model: this.config.model ?? DEFAULT_MODEL,
       max_tokens: this.config.maxTokens ?? 2048,
       system,
       messages: [{ role: 'user', content: userMessage }],

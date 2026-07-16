@@ -60,7 +60,6 @@ export class AdminAgent extends BaseAgent {
         'calendar_delete_event',
         'calendar_find_availability',
       ],
-      model: 'claude-sonnet-4-20250514',
       maxTokens: 4096,
     };
     super(config, deps);

@@ -1,0 +1,25 @@
+{
+  "name": "@wireassist/agent-ops",
+  "version": "0.1.0",
+  "description": "NixOps Agent — runs business workflows (DATA loop) with human-in-the-loop approvals",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.27.0",
+    "@wireassist/agent-admin": "workspace:*",
+    "@wireassist/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.19.24",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.5",
+    "typescript": "^5.9.3"
+  }
+}

@@ -7,6 +7,7 @@ packages:
   - 'packages/command-center'
   - 'packages/marketing'
   - 'packages/agents/research'
+  - 'packages/agents/ops'
 
 allowBuilds:
   better-sqlite3: true

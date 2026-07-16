@@ -9,6 +9,7 @@ import { ApprovalQueue, MemoryStore, MCPClient, EventBus } from '@wireassist/cor
 import { AdminAgent, setupAdminMCP, AdminTasks } from '@wireassist/agent-admin';
 import { ContentAgent, ContentTasks } from '@wireassist/agent-content';
 import { ResearchAgent, ResearchTasks, setupResearchMCP } from '@wireassist/agent-research';
+import { NixOpsAgent, OpsTasks } from '@wireassist/agent-ops';
 import { registerTrendPostTools, TrendPostStorage } from '@wireassist/trendpost-mcp';
 import { registerPortfolioRoutes } from './portfolio-routes';
 
@@ -24,6 +25,7 @@ let memory: MemoryStore;
 let agent: AdminAgent;
 let contentAgent: ContentAgent;
 let researchAgent: ResearchAgent;
+let opsAgent: NixOpsAgent;
 let trendpostStorage: TrendPostStorage;
 let agentReady = false;
 
@@ -99,6 +101,14 @@ function queueContentTask(task: Parameters<ContentAgent['run']>[0]) {
   return task;
 }
 
+/** Run one ops (NixOps) task at a time. */
+let opsTaskChain: Promise<void> = Promise.resolve();
+
+function queueOpsTask(task: Parameters<NixOpsAgent['run']>[0]) {
+  opsTaskChain = opsTaskChain.then(() => opsAgent.run(task)).catch(logAgentTaskError);
+  return task;
+}
+
 function sqliteSetupHint(): string {
   return (
     'SQLite (better-sqlite3) is not built. Run:\n' +
@@ -167,6 +177,10 @@ events.on('agent:post_scheduled', (p) => broadcast('post_scheduled', p));
 events.on('agent:content_analyzed', (p) => broadcast('content_analyzed', p));
 events.on('agent:scheduled_posts', (p) => broadcast('scheduled_posts', p));
 events.on('agent:research_complete', (p) => broadcast('research_complete', p));
+events.on('agent:ops_stage_complete', (p) => broadcast('ops_stage_complete', p));
+events.on('agent:ops_blocked', (p) => broadcast('ops_blocked', p));
+events.on('agent:ops_run_complete', (p) => broadcast('ops_run_complete', p));
+events.on('agent:ops_freeform_response', (p) => broadcast('ops_freeform_response', p));
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 async function bootstrap() {
@@ -179,6 +193,9 @@ async function bootstrap() {
   // Research Agent tools
   setupResearchMCP(mcp);
   researchAgent = new ResearchAgent({ approval, memory, mcp, events });
+
+  // NixOps Agent — business workflow runner (context files ship with the package)
+  opsAgent = new NixOpsAgent({ approval, memory, mcp, events });
 
   // Admin Agent tools — may fail if Gmail credentials are absent; surface a warning but continue
   try {
@@ -228,6 +245,11 @@ app.get('/api/agent/status', (c) => {
       role: 'research',
       name: 'Research Agent',
       status: researchAgent?.status ?? 'idle',
+    },
+    ops: {
+      role: 'strategy',
+      name: 'NixOps',
+      status: opsAgent?.status ?? 'idle',
     },
   });
 });
@@ -375,6 +397,37 @@ app.post('/api/tasks/synthesize', async (c) => {
   if (!topic || typeof topic !== 'string') return c.json({ error: 'topic required' }, 400);
   const task = ResearchTasks.synthesizeFindings(topic);
   queueResearchTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// ── OPS (NIXOPS) TASKS ────────────────────────────────────────────────────
+app.get('/api/ops/workflows', (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  return c.json({ workflows: opsAgent.workflows() });
+});
+
+app.post('/api/tasks/ops-workflow', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const tg = tierGate('workforce');
+  if (!tg.allowed) return c.json({ error: tg.error }, 403);
+  const { workflow, brief } = await c.req.json();
+  if (!workflow || typeof workflow !== 'string') return c.json({ error: 'workflow required' }, 400);
+  if (!brief || typeof brief !== 'string') return c.json({ error: 'brief required' }, 400);
+  const task = OpsTasks.createWorkflowRunTask({ workflow, brief });
+  queueOpsTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/ops-freeform', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const tg = tierGate('workforce');
+  if (!tg.allowed) return c.json({ error: tg.error }, 403);
+  const { prompt } = await c.req.json();
+  if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
+  const task = OpsTasks.createOpsFreeformTask({ prompt });
+  queueOpsTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
