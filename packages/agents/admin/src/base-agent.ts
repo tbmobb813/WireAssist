@@ -1,4 +1,5 @@
 import Anthropic, { type TextBlock } from '@anthropic-ai/sdk';
+import { budgetTracker } from './budget';
 import {
   type AgentConfig,
   type AgentRole,
@@ -50,18 +51,32 @@ export abstract class BaseAgent {
 
   abstract run(task: AgentTask): Promise<void>;
 
-  // Core reasoning — call Claude with this agent's system prompt
+  // Core reasoning — call Claude with this agent's system prompt.
+  // Enforces the monthly budget: refuses new calls once the cap is hit and
+  // records actual token usage after every call.
   protected async think(userMessage: string, extraContext?: string): Promise<string> {
+    budgetTracker.assertWithinBudget();
+
     const system = extraContext
       ? `${this.config.systemPrompt}\n\n---\nCONTEXT:\n${extraContext}`
       : this.config.systemPrompt;
 
+    const model = this.config.model ?? DEFAULT_MODEL;
     const response = await this.client.messages.create({
-      model: this.config.model ?? DEFAULT_MODEL,
+      model,
       max_tokens: this.config.maxTokens ?? 2048,
       system,
       messages: [{ role: 'user', content: userMessage }],
     });
+
+    if (response.usage) {
+      budgetTracker.record(
+        this.role,
+        model,
+        response.usage.input_tokens,
+        response.usage.output_tokens
+      );
+    }
 
     return response.content
       .filter((b): b is TextBlock => b.type === 'text')

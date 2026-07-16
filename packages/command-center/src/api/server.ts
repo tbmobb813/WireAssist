@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { ApprovalQueue, MemoryStore, MCPClient, EventBus } from '@wireassist/core';
-import { AdminAgent, setupAdminMCP, AdminTasks } from '@wireassist/agent-admin';
+import { AdminAgent, setupAdminMCP, AdminTasks, budgetTracker } from '@wireassist/agent-admin';
 import { ContentAgent, ContentTasks } from '@wireassist/agent-content';
 import { ResearchAgent, ResearchTasks, setupResearchMCP } from '@wireassist/agent-research';
 import { NixOpsAgent, OpsTasks } from '@wireassist/agent-ops';
@@ -398,6 +398,11 @@ app.post('/api/tasks/synthesize', async (c) => {
   const task = ResearchTasks.synthesizeFindings(topic);
   queueResearchTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// ── BUDGET ────────────────────────────────────────────────────────────────
+app.get('/api/budget', (c) => {
+  return c.json(budgetTracker.status());
 });
 
 // ── OPS (NIXOPS) TASKS ────────────────────────────────────────────────────

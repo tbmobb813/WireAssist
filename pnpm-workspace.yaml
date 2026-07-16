@@ -8,6 +8,7 @@ packages:
   - 'packages/marketing'
   - 'packages/agents/research'
   - 'packages/agents/ops'
+  - 'packages/telegram-bot'
 
 allowBuilds:
   better-sqlite3: true
