@@ -14,7 +14,7 @@
     "@anthropic-ai/sdk": "^0.27.0",
     "@wireassist/core": "workspace:*",
     "google-auth-library": "^10.9.0",
-    "googleapis": "^162.0.0"
+    "googleapis": "^173.0.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
