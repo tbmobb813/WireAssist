@@ -51,6 +51,7 @@ A listing is DONE when all of these exist in `output/nixlevel/<product-slug>/`:
 
 ### Printify base costs (catalog, Monster Digital — your Etsy print provider — 2026-07-17)
 
+**JNix has NO Printify Premium subscription (confirmed 2026-07-17) — always compute margins on the standard base-cost column. Premium columns are reference-only.**
 **Hoodie — Gildan 18500 Heavy Blend (matches Legacy hoodie):**
 | Size | Base cost | w/ Printify Premium |
 |------|-----------|---------------------|
