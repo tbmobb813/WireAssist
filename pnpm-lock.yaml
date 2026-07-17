@@ -95,6 +95,34 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/agents/ops:
+    dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.27.0
+        version: 0.27.3
+      '@wireassist/agent-admin':
+        specifier: workspace:*
+        version: link:../admin
+      '@wireassist/core':
+        specifier: workspace:*
+        version: link:../../../wireassist/core
+    devDependencies:
+      '@types/jest':
+        specifier: ^29.5.14
+        version: 29.5.14
+      '@types/node':
+        specifier: ^20.19.24
+        version: 20.19.24
+      jest:
+        specifier: ^29.7.0
+        version: 29.7.0(@types/node@20.19.24)(ts-node@10.9.2(@types/node@20.19.24)(typescript@5.9.3))
+      ts-jest:
+        specifier: ^29.4.5
+        version: 29.4.5(@babel/core@7.28.5)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.28.5))(jest-util@29.7.0)(jest@29.7.0(@types/node@20.19.24))(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/agents/research:
     dependencies:
       '@anthropic-ai/sdk':
@@ -137,6 +165,9 @@ importers:
       '@wireassist/agent-content':
         specifier: workspace:*
         version: link:../agents/content
+      '@wireassist/agent-ops':
+        specifier: workspace:*
+        version: link:../agents/ops
       '@wireassist/agent-research':
         specifier: workspace:*
         version: link:../agents/research
@@ -241,6 +272,18 @@ importers:
       tailwindcss:
         specifier: ^3.4.17
         version: 3.4.19(tsx@4.22.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/telegram-bot:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.19.24
+        version: 20.19.24
+      tsx:
+        specifier: ^4.22.3
+        version: 4.22.3
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
