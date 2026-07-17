@@ -30,7 +30,7 @@
     "clean": "pnpm -r --if-present clean && rm -rf node_modules pnpm-lock.yaml"
   },
   "devDependencies": {
-    "@playwright/test": "^1.56.1",
+    "@playwright/test": "^1.61.1",
     "@types/node": "^22.19.0",
     "eslint": "^8.57.1",
     "husky": "^9.1.7",
