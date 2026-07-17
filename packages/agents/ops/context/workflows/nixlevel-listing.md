@@ -69,7 +69,11 @@ Shipping (US, first item): from $7.69. Avg production 1.4 days.
 | 3XL | $16.44 | $13.13 |
 Shipping (US, first item): from $3.99.
 
-⚠️ Margin check on current listings: tee at $22.87 retail − $11.54 base − $3.99 ship (if free-shipping is offered) ≈ 32% before Etsy fees (~9.5%) → **below the 30% floor after fees; flag on any new tee priced under ~$26**. Hoodie at $44.99 with free shipping: $44.99 − $23.11 − $7.69 ≈ 31% before fees → also tight; escalate per rules.
+Margin facts (verified on live listings 2026-07-17):
+
+- **Hoodie** offers seller-paid FREE shipping → repriced to **$48.99 (S–XL) / $52.99 (2XL+)** on 2026-07-17 to clear the 30% floor after Etsy fees (~9.5%). Any new free-shipping hoodie must price at these levels or above.
+- **Tee** uses buyer-paid shipping ($4.75, free over $35 shop-wide); variants mostly $29.99–$32.99 (XS from $22.87) → margins ~40–52% after fees, no floor issue. New buyer-paid-shipping tees are safe from ~$19 up.
+- Rule of thumb: seller-paid free shipping costs $7.69/unit (hoodie) — always add it to cost before computing margin.
 
 ## DATA loop specifics
 
