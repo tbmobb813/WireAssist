@@ -170,9 +170,10 @@ export class NixOpsAgent extends BaseAgent {
       transcript: transcript(),
     };
 
+    // Full transcript, not a truncated summary — this is the only place the
+    // run's actual deliverables survive once the task itself is discarded.
     this.remember(
-      `NixOps run of "${input.workflow}" (${approved ? 'approved' : 'rejected'}). Brief: ${input.brief}. ` +
-        `Assessment summary: ${assessment.slice(0, 500)}`,
+      `NixOps run of "${input.workflow}" (${approved ? 'approved' : 'rejected'}). Brief: ${input.brief}.\n\n${transcript()}`,
       ['ops-run', input.workflow]
     );
 
@@ -181,6 +182,7 @@ export class NixOpsAgent extends BaseAgent {
       taskId: task.id,
       workflow: input.workflow,
       approved,
+      transcript: transcript(),
     });
   }
 

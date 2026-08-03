@@ -43,7 +43,13 @@ export type AgentEvent =
   | { event: 'ops_blocked'; payload: { agentRole: string; taskId: string; diagnosis: string } }
   | {
       event: 'ops_run_complete';
-      payload: { agentRole: string; taskId: string; workflow: string; approved: boolean };
+      payload: {
+        agentRole: string;
+        taskId: string;
+        workflow: string;
+        approved: boolean;
+        transcript: string;
+      };
     }
   | {
       event: 'ops_freeform_response';

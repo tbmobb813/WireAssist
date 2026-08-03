@@ -5,11 +5,11 @@ import { cors } from 'hono/cors';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { ApprovalQueue, MemoryStore, MCPClient, EventBus } from '@wireassist/core';
+import { ApprovalQueue, MemoryStore, MCPClient, EventBus, type AgentRole } from '@wireassist/core';
 import { AdminAgent, setupAdminMCP, AdminTasks, budgetTracker } from '@wireassist/agent-admin';
 import { ContentAgent, ContentTasks } from '@wireassist/agent-content';
 import { ResearchAgent, ResearchTasks, setupResearchMCP } from '@wireassist/agent-research';
-import { NixOpsAgent, OpsTasks } from '@wireassist/agent-ops';
+import { NixOpsAgent, OpsTasks, loadWorkflow } from '@wireassist/agent-ops';
 import {
   GtmAgent,
   GtmTasks,
@@ -514,6 +514,19 @@ app.get('/api/ops/workflows', (c) => {
   return c.json({ workflows: opsAgent.workflows() });
 });
 
+// Preview a workflow's actual requirements before running it, so a brief can
+// be written to satisfy the diagnose stage instead of guessing and hitting
+// VERDICT: BLOCKED.
+app.get('/api/ops/workflows/:name', (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  try {
+    const name = c.req.param('name');
+    return c.json({ workflow: name, content: loadWorkflow(name) });
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : 'Unknown workflow' }, 404);
+  }
+});
+
 app.post('/api/tasks/ops-workflow', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
@@ -736,8 +749,10 @@ app.get('/api/content/ideas', (c) => {
 // ── MEMORY ────────────────────────────────────────────────────────────────
 app.get('/api/memory', async (c) => {
   const query = (c.req.query('q') ?? '').trim();
-  if (!query) return c.json(memory.listRecent());
-  return c.json(await memory.searchAsync(query));
+  const agentRole = c.req.query('agentRole') as AgentRole | undefined;
+  const filters = agentRole ? { agentRole } : undefined;
+  if (!query) return c.json(memory.listRecent(50, filters));
+  return c.json(await memory.searchAsync(query, filters));
 });
 
 app.post('/api/memory/upgrade-embeddings', async (c) => {

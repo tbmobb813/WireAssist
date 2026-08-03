@@ -10,19 +10,42 @@ const STAGE_LABEL: Record<string, string> = {
   assess: 'Assess',
 };
 
+interface PastRun {
+  id: string;
+  content: string;
+  tags: string[];
+  createdAt: string;
+}
+
 export default function OpsPage() {
   const [workflows, setWorkflows] = useState<string[]>([]);
   const [selectedWorkflow, setSelectedWorkflow] = useState('');
+  const [workflowPreview, setWorkflowPreview] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
   const [brief, setBrief] = useState('');
   const [freeformPrompt, setFreeformPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
   const [stages, setStages] = useState<string[]>([]);
-  const [runResult, setRunResult] = useState<{ workflow: string; approved: boolean } | null>(null);
+  const [runResult, setRunResult] = useState<{
+    workflow: string;
+    approved: boolean;
+    transcript: string;
+  } | null>(null);
+  const [showTranscript, setShowTranscript] = useState(false);
   const [blockedDiagnosis, setBlockedDiagnosis] = useState<string | null>(null);
   const [freeformResponse, setFreeformResponse] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pastRuns, setPastRuns] = useState<PastRun[]>([]);
+  const [expandedRun, setExpandedRun] = useState<string | null>(null);
 
   const pendingTaskId = useRef<string | null>(null);
+
+  const loadPastRuns = useCallback(() => {
+    fetch('/api/memory?agentRole=strategy')
+      .then((r) => r.json())
+      .then((d) => Array.isArray(d) && setPastRuns(d))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch('/api/ops/workflows')
@@ -34,46 +57,67 @@ export default function OpsPage() {
         }
       })
       .catch(() => {});
-  }, []);
+    loadPastRuns();
+  }, [loadPastRuns]);
+
+  // Preview what a workflow actually requires, so the brief can be written to
+  // satisfy it instead of guessing and hitting VERDICT: BLOCKED.
+  useEffect(() => {
+    if (!selectedWorkflow) return;
+    setWorkflowPreview(null);
+    fetch(`/api/ops/workflows/${encodeURIComponent(selectedWorkflow)}`)
+      .then((r) => r.json())
+      .then((d) => setWorkflowPreview(typeof d.content === 'string' ? d.content : null))
+      .catch(() => setWorkflowPreview(null));
+  }, [selectedWorkflow]);
 
   useAgentEvents(
-    useCallback((e) => {
-      if (e.event === 'ops_stage_complete') {
-        if (e.payload.taskId !== pendingTaskId.current) return;
-        setStages((prev) => [...prev, e.payload.stage]);
-        return; // not terminal — keep listening
-      }
-      if (e.event === 'ops_blocked') {
-        if (e.payload.taskId !== pendingTaskId.current) return;
-        setBlockedDiagnosis(e.payload.diagnosis);
-        setGenerating(false);
-        pendingTaskId.current = null;
-      }
-      if (e.event === 'ops_run_complete') {
-        if (e.payload.taskId !== pendingTaskId.current) return;
-        setRunResult({ workflow: e.payload.workflow, approved: e.payload.approved });
-        setGenerating(false);
-        pendingTaskId.current = null;
-      }
-      if (e.event === 'ops_freeform_response') {
-        if (e.payload.taskId !== pendingTaskId.current) return;
-        setFreeformResponse(e.payload.response);
-        setGenerating(false);
-        pendingTaskId.current = null;
-      }
-      if (e.event === 'task_failed' && e.payload.agentRole === 'strategy') {
-        if (e.payload.taskId !== pendingTaskId.current) return;
-        setError(e.payload.error);
-        setGenerating(false);
-        pendingTaskId.current = null;
-      }
-    }, [])
+    useCallback(
+      (e) => {
+        if (e.event === 'ops_stage_complete') {
+          if (e.payload.taskId !== pendingTaskId.current) return;
+          setStages((prev) => [...prev, e.payload.stage]);
+          return; // not terminal — keep listening
+        }
+        if (e.event === 'ops_blocked') {
+          if (e.payload.taskId !== pendingTaskId.current) return;
+          setBlockedDiagnosis(e.payload.diagnosis);
+          setGenerating(false);
+          pendingTaskId.current = null;
+        }
+        if (e.event === 'ops_run_complete') {
+          if (e.payload.taskId !== pendingTaskId.current) return;
+          setRunResult({
+            workflow: e.payload.workflow,
+            approved: e.payload.approved,
+            transcript: e.payload.transcript,
+          });
+          setGenerating(false);
+          pendingTaskId.current = null;
+          loadPastRuns();
+        }
+        if (e.event === 'ops_freeform_response') {
+          if (e.payload.taskId !== pendingTaskId.current) return;
+          setFreeformResponse(e.payload.response);
+          setGenerating(false);
+          pendingTaskId.current = null;
+        }
+        if (e.event === 'task_failed' && e.payload.agentRole === 'strategy') {
+          if (e.payload.taskId !== pendingTaskId.current) return;
+          setError(e.payload.error);
+          setGenerating(false);
+          pendingTaskId.current = null;
+        }
+      },
+      [loadPastRuns]
+    )
   );
 
   async function fire(path: string, body: Record<string, unknown>) {
     setError(null);
     setStages([]);
     setRunResult(null);
+    setShowTranscript(false);
     setBlockedDiagnosis(null);
     setFreeformResponse(null);
     setGenerating(true);
@@ -141,6 +185,24 @@ export default function OpsPage() {
               </option>
             ))}
           </select>
+        )}
+        {selectedWorkflow && (
+          <div className="mb-3">
+            <button
+              onClick={() => setShowPreview((v) => !v)}
+              className="text-xs text-gray-500 hover:text-accent"
+            >
+              {showPreview ? '▾' : '▸'} View workflow requirements
+            </button>
+            {showPreview && (
+              <div
+                className="mt-2 rounded p-3 text-xs text-gray-400 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto"
+                style={{ background: '#080810', border: '1px solid #1e2040' }}
+              >
+                {workflowPreview ?? 'Loading...'}
+              </div>
+            )}
+          </div>
         )}
         <textarea
           value={brief}
@@ -248,18 +310,32 @@ export default function OpsPage() {
           <div className="text-xs tracking-widest mb-2" style={{ color: '#00ff9d' }}>
             RUN COMPLETE
           </div>
-          <p className="text-sm text-gray-300">
+          <p className="text-sm text-gray-300 mb-3">
             Workflow &quot;{runResult.workflow}&quot;{' '}
             {runResult.approved
               ? 'completed and approved.'
               : 'completed, not approved — check the Approvals tab.'}
           </p>
+          <button
+            onClick={() => setShowTranscript((v) => !v)}
+            className="text-xs text-gray-500 hover:text-accent"
+          >
+            {showTranscript ? '▾' : '▸'} View full output
+          </button>
+          {showTranscript && (
+            <div
+              className="mt-2 rounded p-3 text-xs text-gray-300 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto"
+              style={{ background: '#080810', border: '1px solid #1e2040' }}
+            >
+              {runResult.transcript}
+            </div>
+          )}
         </div>
       )}
 
       {freeformResponse && (
         <div
-          className="rounded-lg border p-5"
+          className="rounded-lg border p-5 mb-5"
           style={{ background: '#0d0d1a', borderColor: '#00ff9d30' }}
         >
           <div className="text-xs tracking-widest mb-3" style={{ color: '#00ff9d' }}>
@@ -270,6 +346,45 @@ export default function OpsPage() {
           </p>
         </div>
       )}
+
+      <div
+        className="rounded-lg border p-5"
+        style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
+      >
+        <div className="text-xs tracking-widest text-gray-500 mb-3">PAST RUNS</div>
+        {pastRuns.length === 0 ? (
+          <p className="text-xs text-gray-600">No completed workflow runs yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {pastRuns.map((run) => {
+              const open = expandedRun === run.id;
+              const firstLine = run.content.split('\n')[0];
+              return (
+                <div
+                  key={run.id}
+                  className="rounded"
+                  style={{ background: '#080810', border: '1px solid #1e2040' }}
+                >
+                  <button
+                    onClick={() => setExpandedRun(open ? null : run.id)}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-400 hover:text-accent"
+                  >
+                    {open ? '▾' : '▸'} {firstLine}
+                    <span className="text-gray-600 ml-2">
+                      {new Date(run.createdAt).toLocaleString()}
+                    </span>
+                  </button>
+                  {open && (
+                    <div className="px-3 pb-3 text-xs text-gray-300 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
+                      {run.content}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
