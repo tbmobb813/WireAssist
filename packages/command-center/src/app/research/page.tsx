@@ -1,11 +1,18 @@
 'use client';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
 
 interface ResearchResult {
   summary: string;
   sources?: string[];
+}
+
+interface PastResearch {
+  id: string;
+  content: string;
+  tags: string[];
+  createdAt: string;
 }
 
 export default function ResearchPage() {
@@ -15,24 +22,45 @@ export default function ResearchPage() {
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<ResearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pastResearch, setPastResearch] = useState<PastResearch[]>([]);
+  const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
 
   const pendingTaskId = useRef<string | null>(null);
 
+  const loadPastResearch = useCallback(() => {
+    fetch('/api/memory?agentRole=research')
+      .then((r) => r.json())
+      .then((d) => Array.isArray(d) && setPastResearch(d))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadPastResearch();
+  }, [loadPastResearch]);
+
   useAgentEvents(
-    useCallback((e) => {
-      if (e.event === 'research_complete') {
-        if (e.payload.taskId !== pendingTaskId.current) return;
-        setResult({ summary: e.payload.summary, sources: e.payload.sources });
-        setGenerating(false);
-        pendingTaskId.current = null;
-      }
-      if (e.event === 'task_failed' && e.payload.agentRole === 'research') {
-        if (e.payload.taskId !== pendingTaskId.current) return;
-        setError(e.payload.error);
-        setGenerating(false);
-        pendingTaskId.current = null;
-      }
-    }, [])
+    useCallback(
+      (e) => {
+        if (e.event === 'research_complete') {
+          if (e.payload.taskId !== pendingTaskId.current) return;
+          setResult({ summary: e.payload.summary, sources: e.payload.sources });
+          setGenerating(false);
+          pendingTaskId.current = null;
+        }
+        if (e.event === 'task_failed' && e.payload.agentRole === 'research') {
+          if (e.payload.taskId !== pendingTaskId.current) return;
+          setError(e.payload.error);
+          setGenerating(false);
+          pendingTaskId.current = null;
+        }
+        // Findings are only remembered once approved (see /approvals) —
+        // refresh so a newly-stored finding shows up here without a reload.
+        if (e.event === 'approval_resolved' && e.payload.approved) {
+          loadPastResearch();
+        }
+      },
+      [loadPastResearch]
+    )
   );
 
   async function fire(path: string, body: Record<string, unknown>) {
@@ -198,6 +226,48 @@ export default function ResearchPage() {
           )}
         </div>
       )}
+
+      <div
+        className="rounded-lg border p-5 mt-5"
+        style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
+      >
+        <div className="text-xs tracking-widest text-gray-500 mb-3">PAST RESEARCH</div>
+        <p className="text-xs text-gray-600 mb-3">
+          Findings that have been approved and stored to memory — synthesize pulls from these.
+        </p>
+        {pastResearch.length === 0 ? (
+          <p className="text-xs text-gray-600">No approved findings yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {pastResearch.map((entry) => {
+              const open = expandedEntry === entry.id;
+              const firstLine = entry.content.split('\n')[0];
+              return (
+                <div
+                  key={entry.id}
+                  className="rounded"
+                  style={{ background: '#080810', border: '1px solid #1e2040' }}
+                >
+                  <button
+                    onClick={() => setExpandedEntry(open ? null : entry.id)}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-400 hover:text-accent"
+                  >
+                    {open ? '▾' : '▸'} {firstLine}
+                    <span className="text-gray-600 ml-2">
+                      {new Date(entry.createdAt).toLocaleString()}
+                    </span>
+                  </button>
+                  {open && (
+                    <div className="px-3 pb-3 text-xs text-gray-300 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
+                      {entry.content}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
