@@ -27,7 +27,28 @@ export type AgentEvent =
     }
   | { event: 'scheduled_posts'; payload: { taskId: string; posts: unknown[] } }
   | { event: 'gtm_generated'; payload: { taskId: string; gtm: unknown } }
-  | { event: 'gtm_psych_generated'; payload: { taskId: string; psych: unknown } };
+  | { event: 'gtm_psych_generated'; payload: { taskId: string; psych: unknown } }
+  | {
+      event: 'research_complete';
+      payload: { agentRole: string; taskId: string; summary: string; sources?: string[] };
+    }
+  | {
+      event: 'ops_stage_complete';
+      payload: {
+        agentRole: string;
+        taskId: string;
+        stage: 'diagnose' | 'assemble' | 'take_action' | 'assess';
+      };
+    }
+  | { event: 'ops_blocked'; payload: { agentRole: string; taskId: string; diagnosis: string } }
+  | {
+      event: 'ops_run_complete';
+      payload: { agentRole: string; taskId: string; workflow: string; approved: boolean };
+    }
+  | {
+      event: 'ops_freeform_response';
+      payload: { agentRole: string; taskId: string; response: string };
+    };
 
 export function useAgentEvents(onEvent: (e: AgentEvent) => void) {
   const handlerRef = useRef(onEvent);

@@ -13,6 +13,7 @@ import { NixOpsAgent, OpsTasks } from '@wireassist/agent-ops';
 import { GtmAgent, GtmTasks, type GtmProductInput } from '@wireassist/agent-gtm';
 import { registerTrendPostTools, TrendPostStorage } from '@wireassist/trendpost-mcp';
 import { registerPortfolioRoutes } from './portfolio-routes';
+import { routeChatMessage, type RouteDecision } from './chat-router';
 
 const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
 const DB_PATH = path.join(HOME_PATH, '.wireassist', 'wireassist.db');
@@ -340,9 +341,84 @@ app.post('/api/tasks/freeform', async (c) => {
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const { instruction } = await c.req.json();
   if (!instruction) return c.json({ error: 'instruction required' }, 400);
-  const task = AdminTasks.freeform(instruction);
-  queueAgentTask(task);
-  return c.json({ taskId: task.id, status: 'queued' });
+
+  let decision: RouteDecision;
+  try {
+    decision = await routeChatMessage(instruction);
+  } catch {
+    decision = { kind: 'admin_freeform', prompt: instruction };
+  }
+
+  switch (decision.kind) {
+    case 'admin_triage': {
+      if (!gmailReady) return c.json(gmailRequired(), 503);
+      const task = AdminTasks.triageEmail(20);
+      queueAgentTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+    case 'admin_calendar': {
+      if (!gmailReady) return c.json(gmailRequired(), 503);
+      const task = AdminTasks.reviewCalendar(decision.daysAhead ?? 7);
+      queueAgentTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+    case 'content_generate': {
+      const tg = tierGate('operator');
+      if (!tg.allowed) return c.json({ error: tg.error }, 403);
+      const task = ContentTasks.generatePost(decision.topic, decision.platform, decision.tone);
+      queueContentTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+    case 'content_plan': {
+      const tg = tierGate('operator');
+      if (!tg.allowed) return c.json({ error: tg.error }, 403);
+      const task = ContentTasks.generatePlan(
+        decision.platforms ?? ['linkedin', 'twitter'],
+        decision.weeksAhead ?? 1,
+        decision.postsPerWeek ?? 3
+      );
+      queueContentTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+    case 'research_topic': {
+      const tg = tierGate('workforce');
+      if (!tg.allowed) return c.json({ error: tg.error }, 403);
+      const task = ResearchTasks.researchTopic(decision.query, decision.depth ?? 'quick');
+      queueResearchTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+    case 'ops_freeform': {
+      const tg = tierGate('workforce');
+      if (!tg.allowed) return c.json({ error: tg.error }, 403);
+      const task = OpsTasks.createOpsFreeformTask({ prompt: decision.prompt });
+      queueOpsTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+    case 'ops_workflow': {
+      const tg = tierGate('workforce');
+      if (!tg.allowed) return c.json({ error: tg.error }, 403);
+      const task = OpsTasks.createWorkflowRunTask({
+        workflow: decision.workflow,
+        brief: decision.brief,
+      });
+      queueOpsTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+    case 'gtm_redirect':
+      return c.json({
+        redirect: '/gtm',
+        message:
+          'GTM strategy needs more detail than chat can capture — 16 fields covering your product, market, and business. Head to the GTM wizard to build a full plan.',
+      });
+    case 'admin_freeform':
+    default: {
+      const task = AdminTasks.freeform(
+        decision.kind === 'admin_freeform' ? decision.prompt : instruction
+      );
+      queueAgentTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+  }
 });
 
 // ── CONTENT TASKS ─────────────────────────────────────────────────────────

@@ -30,7 +30,7 @@ export default function ChatClient() {
       id: '0',
       role: 'agent',
       content:
-        'Admin Agent online. I can triage your inbox, review your calendar, draft emails, or schedule events. What do you need?',
+        'WireAssist online. I can triage your inbox, review your calendar, write content, research a topic, run an ops workflow, or just answer a question — what do you need? (GTM strategy requests get pointed to the GTM wizard, which needs more detail than chat can capture.)',
       time: new Date(),
     },
   ]);
@@ -49,29 +49,33 @@ export default function ChatClient() {
     pendingTaskId.current = null;
   }, []);
 
-  const addAgentMessage = useCallback(
-    (content: string, taskId?: string) => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Math.random().toString(36).slice(2),
-          role: 'agent',
-          content,
-          time: new Date(),
-          taskId,
-        },
-      ]);
-      finishSending();
-    },
-    [finishSending]
-  );
-
-  const markHandled = useCallback((taskId: string, event: string) => {
-    handledEvents.current.add(`${taskId}:${event}`);
+  const addProgressMessage = useCallback((content: string, taskId?: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Math.random().toString(36).slice(2),
+        role: 'agent',
+        content,
+        time: new Date(),
+        taskId,
+      },
+    ]);
   }, []);
 
-  const wasHandled = useCallback((taskId: string, event: string) => {
-    return handledEvents.current.has(`${taskId}:${event}`);
+  const addAgentMessage = useCallback(
+    (content: string, taskId?: string) => {
+      addProgressMessage(content, taskId);
+      finishSending();
+    },
+    [addProgressMessage, finishSending]
+  );
+
+  const markHandled = useCallback((taskId: string, event: string, key?: string) => {
+    handledEvents.current.add(`${taskId}:${event}${key ? `:${key}` : ''}`);
+  }, []);
+
+  const wasHandled = useCallback((taskId: string, event: string, key?: string) => {
+    return handledEvents.current.has(`${taskId}:${event}${key ? `:${key}` : ''}`);
   }, []);
 
   const applyTaskEvent = useCallback(
@@ -107,11 +111,69 @@ export default function ChatClient() {
           markHandled(taskId, event);
           return true;
         }
+        case 'content_generated': {
+          const p = payload as { content?: string; platform?: string };
+          addAgentMessage(`Generated ${p.platform} post:\n\n${p.content ?? ''}`, taskId);
+          markHandled(taskId, event);
+          return true;
+        }
+        case 'content_plan_generated': {
+          const p = payload as { totalGenerated?: number };
+          addAgentMessage(
+            `Generated a content plan: ${p.totalGenerated ?? 0} posts. Check the Content tab for details.`,
+            taskId
+          );
+          markHandled(taskId, event);
+          return true;
+        }
+        case 'research_complete': {
+          const p = payload as { summary?: string; sources?: string[] };
+          const sources =
+            p.sources && p.sources.length > 0 ? `\n\nSources:\n${p.sources.join('\n')}` : '';
+          addAgentMessage(`${p.summary ?? ''}${sources}`, taskId);
+          markHandled(taskId, event);
+          return true;
+        }
+        case 'ops_freeform_response': {
+          const p = payload as { response?: string };
+          addAgentMessage(p.response ?? '', taskId);
+          markHandled(taskId, event);
+          return true;
+        }
+        case 'ops_stage_complete': {
+          const p = payload as { stage?: string };
+          const stageKey = p.stage ?? 'unknown';
+          // Keyed by stage (not just taskId:event) since this event fires once
+          // per stage for the same task — dedupe per-stage instead of per-event.
+          if (!wasHandled(taskId, event, stageKey)) {
+            addProgressMessage(`Ops: ${p.stage} stage complete...`, taskId);
+            markHandled(taskId, event, stageKey);
+          }
+          // Never terminal, and uses addProgressMessage (not addAgentMessage) so
+          // it doesn't reset pendingTaskId — keep listening for the eventual
+          // ops_run_complete or ops_blocked event on this taskId.
+          return false;
+        }
+        case 'ops_blocked': {
+          const p = payload as { diagnosis?: string };
+          addAgentMessage(`Ops workflow blocked: ${p.diagnosis ?? ''}`, taskId);
+          markHandled(taskId, event);
+          return true;
+        }
+        case 'ops_run_complete': {
+          const p = payload as { workflow?: string; approved?: boolean };
+          addAgentMessage(
+            `Ops workflow "${p.workflow}" ${p.approved ? 'completed and approved' : 'completed (not approved)'}.`,
+            taskId
+          );
+          markHandled(taskId, event);
+          return true;
+        }
         default:
           return false;
       }
     },
-    [addAgentMessage, markHandled, wasHandled]
+    [addAgentMessage, addProgressMessage, markHandled, wasHandled]
   );
 
   const scanActivity = useCallback(
@@ -195,29 +257,21 @@ export default function ChatClient() {
       },
     ]);
 
-    const lower = text.toLowerCase();
-    let path = '/api/tasks/freeform';
-    let body: string | undefined = JSON.stringify({ instruction: text });
-
-    if (/\b(triage|inbox)\b/.test(lower) && /\b(email|inbox|mail)\b/.test(lower)) {
-      path = '/api/tasks/triage-email';
-      body = undefined;
-    } else if (/\b(review|check)\b/.test(lower) && /\b(calendar|schedule|meeting)\b/.test(lower)) {
-      path = '/api/tasks/review-calendar';
-      body = undefined;
-    }
-
     try {
-      const res = await fetch(path, {
+      const res = await fetch('/api/tasks/freeform', {
         method: 'POST',
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-        body,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction: text }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const message =
           typeof data.error === 'string' ? data.error : `Request failed (${res.status})`;
         addAgentMessage(`Error: ${message}`);
+        return;
+      }
+      if (typeof data.redirect === 'string') {
+        addAgentMessage(`${data.message ?? ''}\n\nOpen the GTM wizard: ${data.redirect}`);
         return;
       }
       if (typeof data.taskId === 'string') {
@@ -241,7 +295,7 @@ export default function ChatClient() {
 
       <div className="mb-6">
         <div className="text-xs tracking-widest text-accent mb-1">WIREASSIST // CHAT</div>
-        <h1 className="text-2xl font-black">ADMIN AGENT</h1>
+        <h1 className="text-2xl font-black">AGENT CHAT</h1>
       </div>
 
       <div
@@ -298,7 +352,7 @@ export default function ChatClient() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && send()}
-          placeholder="Triage my inbox / Review calendar / Ask anything..."
+          placeholder="Write a post, research a topic, run a workflow, ask anything..."
           className="flex-1 rounded-lg px-4 py-3 text-sm outline-none"
           style={{
             background: '#0d0d1a',
