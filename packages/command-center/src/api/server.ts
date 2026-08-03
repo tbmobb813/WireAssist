@@ -10,7 +10,12 @@ import { AdminAgent, setupAdminMCP, AdminTasks, budgetTracker } from '@wireassis
 import { ContentAgent, ContentTasks } from '@wireassist/agent-content';
 import { ResearchAgent, ResearchTasks, setupResearchMCP } from '@wireassist/agent-research';
 import { NixOpsAgent, OpsTasks } from '@wireassist/agent-ops';
-import { GtmAgent, GtmTasks, type GtmProductInput } from '@wireassist/agent-gtm';
+import {
+  GtmAgent,
+  GtmTasks,
+  prefillFromRepoDoc,
+  type GtmProductInput,
+} from '@wireassist/agent-gtm';
 import { registerTrendPostTools, TrendPostStorage } from '@wireassist/trendpost-mcp';
 import { registerPortfolioRoutes } from './portfolio-routes';
 import { routeChatMessage, type RouteDecision } from './chat-router';
@@ -241,7 +246,7 @@ async function bootstrap() {
 const app = new Hono();
 
 app.use('*', cors({ origin: 'http://localhost:3001' }));
-registerPortfolioRoutes(app, DB_PATH);
+const portfolioStore = registerPortfolioRoutes(app, DB_PATH);
 
 // Health check
 app.get('/health', (c) =>
@@ -591,6 +596,34 @@ app.post('/api/tasks/gtm/psych', async (c) => {
   const task = GtmTasks.generatePsychTactics(product);
   queueGtmTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// Best-effort pre-fill for the GTM wizard: name always; category/problem/benefit/
+// differentiator only if the focused (or first active) project has a repoPath
+// in its metadata pointing at a repo with a README.md/STATUS.md.
+app.get('/api/tasks/gtm/prefill', async (c) => {
+  if (!agentReady) return c.json({ prefill: null });
+  const tg = tierGate('operator');
+  if (!tg.allowed) return c.json({ error: tg.error }, 403);
+
+  const today = await portfolioStore.today();
+  const targetId = today.focus?.productProjectId ?? today.active[0]?.id;
+  if (!targetId) return c.json({ prefill: null });
+
+  const project = await portfolioStore.getProject(targetId);
+  if (!project) return c.json({ prefill: null });
+
+  if (!anthropicConfigured()) {
+    return c.json({ prefill: { name: project.name, docFound: false } });
+  }
+
+  const repoPath = (project.metadata as { repoPath?: string } | null)?.repoPath;
+  try {
+    const prefill = await prefillFromRepoDoc(project.name, repoPath);
+    return c.json({ prefill });
+  } catch {
+    return c.json({ prefill: { name: project.name, docFound: false } });
+  }
 });
 
 // ── LICENSE ───────────────────────────────────────────────────────────────

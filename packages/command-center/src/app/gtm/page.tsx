@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
 import type { GtmProductInput, GtmStrategy, GtmPsychPrinciple } from '@wireassist/agent-gtm';
@@ -88,12 +88,39 @@ export default function GtmPage() {
   const [gtm, setGtm] = useState<GtmStrategy | null>(null);
   const [psych, setPsych] = useState<GtmPsychPrinciple[] | null>(null);
   const [openPsychCard, setOpenPsychCard] = useState<number | null>(0);
+  const [prefilledFrom, setPrefilledFrom] = useState<string | null>(null);
 
   const pendingTaskIds = useRef<Set<string>>(new Set());
 
   function set<K extends keyof GtmProductInput>(field: K, value: string) {
     setProduct((p) => ({ ...p, [field]: value }));
   }
+
+  // Best-effort pre-fill from the focused project's repo doc, once, only into a
+  // still-blank wizard — never overwrites anything the founder has already typed.
+  useEffect(() => {
+    if (product.name.trim()) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/tasks/gtm/prefill');
+        if (!res.ok) return;
+        const { prefill } = await res.json();
+        if (!prefill?.name) return;
+        setProduct((p) => ({
+          ...p,
+          name: p.name || prefill.name || '',
+          cat: p.cat || prefill.cat || '',
+          problem: p.problem || prefill.problem || '',
+          benefit: p.benefit || prefill.benefit || '',
+          diff: p.diff || prefill.diff || '',
+        }));
+        if (prefill.docFound) setPrefilledFrom(prefill.name);
+      } catch {
+        // Silent — pre-fill is a nicety, not a requirement.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const checkDone = useCallback((taskId: string) => {
     pendingTaskIds.current.delete(taskId);
@@ -228,6 +255,14 @@ export default function GtmPage() {
       {/* Step 0: Product */}
       {step === 0 && (
         <Card title="Your Product">
+          {prefilledFrom && (
+            <div
+              className="rounded p-3 mb-4 text-xs"
+              style={{ background: '#ffb34715', border: '1px solid #ffb34730', color: '#d4b06a' }}
+            >
+              Pre-filled from {prefilledFrom}&apos;s README — review before generating.
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <Field
               label="Product / Service Name"

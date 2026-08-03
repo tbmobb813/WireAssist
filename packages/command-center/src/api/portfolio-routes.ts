@@ -65,6 +65,19 @@ export function registerPortfolioRoutes(app: Hono, dbPath: string): PortfolioSto
     }
   });
 
+  app.post('/api/portfolio/projects/:id/metadata', async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return c.json({ error: 'metadata object required' }, 400);
+    }
+    try {
+      const project = await store.updateMetadata(c.req.param('id'), body);
+      return c.json({ project });
+    } catch (err) {
+      return portfolioError(c, err);
+    }
+  });
+
   app.get('/api/portfolio/focus', async (c) => {
     const focus = await store.getWeeklyFocus(c.req.query('week') ?? undefined);
     return c.json({ focus });

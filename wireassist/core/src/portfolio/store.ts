@@ -241,6 +241,17 @@ export class PortfolioStore {
     this.appendEvent('project.transitioned', id, { from, to });
   }
 
+  /** Merges (does not overwrite) new keys into an existing project's metadata. */
+  async updateMetadata(id: string, metadata: Record<string, unknown>): Promise<Project> {
+    const project = await this.getProject(id);
+    if (!project) throw new Error(`Project not found: ${id}`);
+    const merged = { ...(project.metadata ?? {}), ...metadata };
+    this.db
+      .prepare(`UPDATE projects SET metadata = ?, updated_at = ? WHERE id = ?`)
+      .run(JSON.stringify(merged), Date.now(), id);
+    return (await this.getProject(id))!;
+  }
+
   private assertWipCapacity(): void {
     const row = this.db
       .prepare(`SELECT COUNT(*) AS n FROM projects WHERE status = 'active'`)
