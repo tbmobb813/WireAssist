@@ -30,6 +30,7 @@ let opsAgent: NixOpsAgent;
 let gtmAgent: GtmAgent;
 let trendpostStorage: TrendPostStorage;
 let agentReady = false;
+let gmailReady = false;
 
 // ── License tier gating ────────────────────────────────────────────────────
 import Database from 'better-sqlite3';
@@ -212,13 +213,16 @@ async function bootstrap() {
   // GTM Agent — go-to-market strategy and psych tactics generation
   gtmAgent = new GtmAgent({ approval, memory, mcp, events });
 
-  // Admin Agent tools — may fail if Gmail credentials are absent; surface a warning but continue
+  // Admin Agent — always constructed so freeform chat works without Gmail/Calendar
+  // credentials. Gmail/Calendar tools register separately below; email/calendar-
+  // specific tasks are gated on gmailReady, not on the agent's existence.
+  agent = new AdminAgent({ approval, memory, mcp, events });
   try {
     await setupAdminMCP(mcp);
-    agent = new AdminAgent({ approval, memory, mcp, events });
+    gmailReady = true;
   } catch (err) {
     console.warn(
-      '⚠️  Admin Agent unavailable (Gmail/Calendar credentials missing or invalid).',
+      '⚠️  Gmail/Calendar tools unavailable (credentials missing or invalid). Chat still works; email/calendar tasks will fail until configured.',
       err instanceof Error ? err.message : err
     );
   }
@@ -240,7 +244,7 @@ registerPortfolioRoutes(app, DB_PATH);
 
 // Health check
 app.get('/health', (c) =>
-  c.json({ status: 'ok', agentReady, anthropicConfigured: anthropicConfigured() })
+  c.json({ status: 'ok', agentReady, gmailReady, anthropicConfigured: anthropicConfigured() })
 );
 
 // ── AGENT STATUS ──────────────────────────────────────────────────────────
@@ -305,17 +309,16 @@ app.post('/api/approvals/:id/reject', (c) => {
   return c.json({ ok: true });
 });
 
-function adminAgentRequired() {
+function gmailRequired() {
   return {
-    error:
-      'Admin Agent unavailable — Gmail/Calendar credentials are not configured. See docs/SETUP.md.',
+    error: 'Gmail/Calendar credentials are not configured. See docs/SETUP.md.',
   };
 }
 
 // ── TASKS ─────────────────────────────────────────────────────────────────
 app.post('/api/tasks/triage-email', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
-  if (!agent) return c.json(adminAgentRequired(), 503);
+  if (!gmailReady) return c.json(gmailRequired(), 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const task = AdminTasks.triageEmail(20);
   queueAgentTask(task);
@@ -324,7 +327,7 @@ app.post('/api/tasks/triage-email', async (c) => {
 
 app.post('/api/tasks/review-calendar', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
-  if (!agent) return c.json(adminAgentRequired(), 503);
+  if (!gmailReady) return c.json(gmailRequired(), 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const body = await c.req.json().catch(() => ({}));
   const task = AdminTasks.reviewCalendar(body.daysAhead ?? 7);
@@ -334,7 +337,6 @@ app.post('/api/tasks/review-calendar', async (c) => {
 
 app.post('/api/tasks/freeform', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
-  if (!agent) return c.json(adminAgentRequired(), 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const { instruction } = await c.req.json();
   if (!instruction) return c.json({ error: 'instruction required' }, 400);
