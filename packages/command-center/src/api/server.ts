@@ -9,7 +9,15 @@ import { ApprovalQueue, MemoryStore, MCPClient, EventBus, type AgentRole } from 
 import { AdminAgent, setupAdminMCP, AdminTasks, budgetTracker } from '@wireassist/agent-admin';
 import { ContentAgent, ContentTasks } from '@wireassist/agent-content';
 import { ResearchAgent, ResearchTasks, setupResearchMCP } from '@wireassist/agent-research';
-import { NixOpsAgent, OpsTasks, loadWorkflow } from '@wireassist/agent-ops';
+import {
+  NixOpsAgent,
+  OpsTasks,
+  loadWorkflow,
+  getTrustStage,
+  setTrustStage,
+  MIN_TRUST_STAGE,
+  MAX_TRUST_STAGE,
+} from '@wireassist/agent-ops';
 import {
   GtmAgent,
   GtmTasks,
@@ -525,6 +533,31 @@ app.get('/api/ops/workflows/:name', (c) => {
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : 'Unknown workflow' }, 404);
   }
+});
+
+// Per-workflow trust stage (SOUL.md's trust ladder). Stage >=3 means this
+// workflow's final approval gate is skipped — safe to trigger unattended by
+// an external cron at that point (Stage 4 "heartbeat" is the same code path,
+// just triggered by a scheduler instead of a human).
+app.get('/api/ops/trust/:workflow', (c) => {
+  return c.json({
+    workflow: c.req.param('workflow'),
+    stage: getTrustStage(c.req.param('workflow')),
+  });
+});
+
+app.post('/api/ops/trust/:workflow', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const stage = Number(body.stage);
+  if (!Number.isFinite(stage) || stage < MIN_TRUST_STAGE || stage > MAX_TRUST_STAGE) {
+    return c.json(
+      { error: `stage must be a number between ${MIN_TRUST_STAGE} and ${MAX_TRUST_STAGE}` },
+      400
+    );
+  }
+  const workflow = c.req.param('workflow');
+  const saved = setTrustStage(workflow, stage);
+  return c.json({ workflow, stage: saved });
 });
 
 app.post('/api/tasks/ops-workflow', async (c) => {

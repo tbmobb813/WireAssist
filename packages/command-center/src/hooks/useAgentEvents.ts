@@ -48,6 +48,7 @@ export type AgentEvent =
         taskId: string;
         workflow: string;
         approved: boolean;
+        autoApproved: boolean;
         transcript: string;
       };
     }

@@ -8,6 +8,8 @@ import {
 } from '@wireassist/core';
 import { BaseAgent } from '@wireassist/agent-admin';
 import { loadOpsContext, loadWorkflow, listWorkflows } from './context-loader';
+import { getTrustStage } from './trust-stage';
+import { logRun } from './run-log';
 
 export interface RunWorkflowInput {
   type: 'run_workflow';
@@ -128,6 +130,7 @@ export class NixOpsAgent extends BaseAgent {
 
     if (/VERDICT:\s*BLOCKED/i.test(diagnosis)) {
       task.output = { blocked: true, diagnosis };
+      logRun(input.workflow, 'BLOCKED', `Brief: ${input.brief}\n\n${diagnosis}`);
       this.events.emit('agent:ops_blocked', {
         agentRole: this.role,
         taskId: task.id,
@@ -157,31 +160,43 @@ export class NixOpsAgent extends BaseAgent {
       transcript()
     );
 
-    // Trust Stage 2: nothing is delivered until JNix approves the assessed output.
-    const approved = await this.proposeAction(task, 'deliver_workflow_output', {
-      workflow: input.workflow,
-      brief: input.brief,
-      assessment,
-    });
+    // Trust stage 2 (default): nothing is delivered until JNix approves.
+    // Stage 3+: this workflow has been explicitly advanced past that gate —
+    // deliver without asking. Stage 3 vs 4 differ only in who triggers the
+    // run (a human vs. an unattended cron); the code path is identical.
+    const trustStage = getTrustStage(input.workflow);
+    const autoApproved = trustStage >= 3;
+    const approved = autoApproved
+      ? true
+      : await this.proposeAction(task, 'deliver_workflow_output', {
+          workflow: input.workflow,
+          brief: input.brief,
+          assessment,
+        });
 
     task.output = {
       workflow: input.workflow,
       approved,
+      autoApproved,
       transcript: transcript(),
     };
+
+    const outcomeLabel = autoApproved ? 'AUTO-APPROVED' : approved ? 'APPROVED' : 'REJECTED';
 
     // Full transcript, not a truncated summary — this is the only place the
     // run's actual deliverables survive once the task itself is discarded.
     this.remember(
-      `NixOps run of "${input.workflow}" (${approved ? 'approved' : 'rejected'}). Brief: ${input.brief}.\n\n${transcript()}`,
+      `NixOps run of "${input.workflow}" (${outcomeLabel}). Brief: ${input.brief}.\n\n${transcript()}`,
       ['ops-run', input.workflow]
     );
+    logRun(input.workflow, outcomeLabel, `Brief: ${input.brief}\n\n${transcript()}`);
 
     this.events.emit('agent:ops_run_complete', {
       agentRole: this.role,
       taskId: task.id,
       workflow: input.workflow,
       approved,
+      autoApproved,
       transcript: transcript(),
     });
   }

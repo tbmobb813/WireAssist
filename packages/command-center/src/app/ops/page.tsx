@@ -22,6 +22,8 @@ export default function OpsPage() {
   const [selectedWorkflow, setSelectedWorkflow] = useState('');
   const [workflowPreview, setWorkflowPreview] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [trustStage, setTrustStageState] = useState(2);
+  const [savingTrustStage, setSavingTrustStage] = useState(false);
   const [brief, setBrief] = useState('');
   const [freeformPrompt, setFreeformPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -29,6 +31,7 @@ export default function OpsPage() {
   const [runResult, setRunResult] = useState<{
     workflow: string;
     approved: boolean;
+    autoApproved: boolean;
     transcript: string;
   } | null>(null);
   const [showTranscript, setShowTranscript] = useState(false);
