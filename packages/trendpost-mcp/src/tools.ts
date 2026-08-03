@@ -2,6 +2,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { TrendPostStorage, Platform, PostStatus } from './storage';
 import type { MCPClient } from '@wireassist/core';
 
+const MODEL = process.env.WIREASSIST_MODEL ?? 'claude-sonnet-5';
+
 function parseJson<T>(raw: string, context: string): T {
   const stripped = raw
     .replace(/^```(?:json)?\s*/i, '')
@@ -49,7 +51,7 @@ ${context ? `Business context: ${context}` : ''}
 Return ONLY the post content. No labels, no explanations, no quotes around it.`;
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: MODEL,
       max_tokens: 1024,
       system: CONTENT_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: prompt }],
@@ -95,7 +97,7 @@ Return a JSON array of content ideas. Each item:
 Return only valid JSON array. No markdown fences.`;
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: MODEL,
       max_tokens: 2048,
       system: CONTENT_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: prompt }],
@@ -189,7 +191,7 @@ ${content}
 Return only valid JSON. No markdown fences.`;
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: MODEL,
       max_tokens: 512,
       system: CONTENT_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: prompt }],
