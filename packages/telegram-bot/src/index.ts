@@ -14,10 +14,13 @@
  *   /reject <id>         reject a pending request
  *   /workflows           list NixOps workflows
  *   /run <wf> <brief>    queue a NixOps workflow run
- *   /ask <prompt>        freeform NixOps question
+ *   /ask <prompt>        ask anything — routed to the right agent automatically
+ *                        (admin, content, research, or ops; GTM requests get
+ *                        pointed at the /gtm wizard instead of a direct answer)
  *
- * Also subscribes to the command-center SSE feed and pushes
- * waiting_approval / task_complete / task_failed / ops_blocked events.
+ * Also subscribes to the command-center SSE feed and pushes back results from
+ * whichever agent handled the request — admin, content, research, or ops —
+ * plus waiting_approval / task_failed regardless of origin.
  */
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -68,7 +71,7 @@ async function handleCommand(text: string): Promise<string> {
         '/approve <id> · /reject <id>',
         '/workflows — NixOps workflows',
         '/run <workflow> <brief>',
-        '/ask <prompt>',
+        '/ask <prompt> — routed to the right agent automatically',
       ].join('\n');
 
     case '/status': {
@@ -143,11 +146,16 @@ async function handleCommand(text: string): Promise<string> {
 
     case '/ask': {
       if (!args) return 'Usage: /ask <prompt>';
-      const r = (await api('/api/tasks/ops-freeform', {
+      // Same smart router the Command Center chat page uses — one message in,
+      // dispatched to whichever agent (admin/content/research/ops) fits.
+      const r = (await api('/api/tasks/freeform', {
         method: 'POST',
-        body: JSON.stringify({ prompt: args }),
-      })) as { taskId: string };
-      return `🧠 Asked NixOps (task \`${r.taskId}\`) — answer will arrive here.`;
+        body: JSON.stringify({ instruction: args }),
+      })) as { taskId?: string; redirect?: string; message?: string };
+      if (r.redirect) {
+        return `${r.message ?? ''}\n\nOpen: ${r.redirect}`;
+      }
+      return `🧠 Task queued (\`${r.taskId}\`) — answer will arrive here.`;
     }
 
     default:
@@ -241,6 +249,25 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
     case 'ops_freeform_response':
       await send(`🧠 ${String(p.response ?? '').slice(0, 3500)}`);
       break;
+    case 'freeform_response':
+      await send(`🧠 ${String(p.response ?? '').slice(0, 3500)}`);
+      break;
+    case 'content_generated':
+      await send(`✍️ *Generated ${p.platform} post:*\n\n${String(p.content ?? '').slice(0, 3500)}`);
+      break;
+    case 'content_plan_generated':
+      await send(
+        `✍️ Content plan generated: ${p.totalGenerated} posts. Check the Content tab for details.`
+      );
+      break;
+    case 'research_complete': {
+      const sources =
+        Array.isArray(p.sources) && p.sources.length > 0
+          ? `\n\nSources:\n${(p.sources as string[]).join('\n')}`
+          : '';
+      await send(`🔍 ${String(p.summary ?? '').slice(0, 3000)}${sources}`);
+      break;
+    }
     case 'task_failed':
       await send(`🔴 Task failed (${p.agentRole}): ${String(p.error ?? '').slice(0, 500)}`);
       break;
