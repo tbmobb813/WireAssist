@@ -11,12 +11,23 @@ export type AgentEvent =
   | { event: 'triage_complete'; payload: unknown }
   | { event: 'calendar_review_complete'; payload: unknown }
   | { event: 'freeform_response'; payload: { taskId: string; response: string } }
-  | { event: 'content_generated'; payload: { taskId: string; content: string; platform: string; topic: string } }
+  | {
+      event: 'content_generated';
+      payload: { taskId: string; content: string; platform: string; topic: string };
+    }
   | { event: 'content_approved'; payload: { taskId: string; content: string; platform: string } }
-  | { event: 'content_plan_generated'; payload: { taskId: string; ideas: unknown[]; totalGenerated: number } }
+  | {
+      event: 'content_plan_generated';
+      payload: { taskId: string; ideas: unknown[]; totalGenerated: number };
+    }
   | { event: 'post_scheduled'; payload: { taskId: string; post: unknown } }
-  | { event: 'content_analyzed'; payload: { taskId: string; content: string; platform: string; analysis: unknown } }
-  | { event: 'scheduled_posts'; payload: { taskId: string; posts: unknown[] } };
+  | {
+      event: 'content_analyzed';
+      payload: { taskId: string; content: string; platform: string; analysis: unknown };
+    }
+  | { event: 'scheduled_posts'; payload: { taskId: string; posts: unknown[] } }
+  | { event: 'gtm_generated'; payload: { taskId: string; gtm: unknown } }
+  | { event: 'gtm_psych_generated'; payload: { taskId: string; psych: unknown } };
 
 export function useAgentEvents(onEvent: (e: AgentEvent) => void) {
   const handlerRef = useRef(onEvent);

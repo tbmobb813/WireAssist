@@ -416,6 +416,17 @@ export default function DashboardClient() {
               </div>
             </Link>
           )}
+
+          <Link
+            href="/gtm"
+            className="block rounded-lg p-4 border transition-colors"
+            style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
+          >
+            <div className="text-xs tracking-widest text-gray-500 mb-1">GTM ENGINE</div>
+            <div className="text-sm font-bold text-gray-300">
+              Go-to-market strategy + psych tactics
+            </div>
+          </Link>
         </div>
 
         {/* Activity Feed */}

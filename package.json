@@ -12,6 +12,7 @@
     "build:admin": "pnpm --filter @wireassist/agent-admin build",
     "build:trendpost-mcp": "pnpm --filter @wireassist/trendpost-mcp build",
     "build:content": "pnpm --filter @wireassist/agent-content build",
+    "build:gtm": "pnpm --filter @wireassist/agent-gtm build",
     "build:command-center": "pnpm --filter @wireassist/command-center build",
     "dev": "pnpm -r --parallel dev",
     "dev:core": "pnpm --filter @wireassist/core dev",

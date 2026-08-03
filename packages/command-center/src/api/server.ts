@@ -10,6 +10,7 @@ import { AdminAgent, setupAdminMCP, AdminTasks, budgetTracker } from '@wireassis
 import { ContentAgent, ContentTasks } from '@wireassist/agent-content';
 import { ResearchAgent, ResearchTasks, setupResearchMCP } from '@wireassist/agent-research';
 import { NixOpsAgent, OpsTasks } from '@wireassist/agent-ops';
+import { GtmAgent, GtmTasks, type GtmProductInput } from '@wireassist/agent-gtm';
 import { registerTrendPostTools, TrendPostStorage } from '@wireassist/trendpost-mcp';
 import { registerPortfolioRoutes } from './portfolio-routes';
 
@@ -26,6 +27,7 @@ let agent: AdminAgent;
 let contentAgent: ContentAgent;
 let researchAgent: ResearchAgent;
 let opsAgent: NixOpsAgent;
+let gtmAgent: GtmAgent;
 let trendpostStorage: TrendPostStorage;
 let agentReady = false;
 
@@ -109,6 +111,14 @@ function queueOpsTask(task: Parameters<NixOpsAgent['run']>[0]) {
   return task;
 }
 
+/** Run one GTM task at a time. */
+let gtmTaskChain: Promise<void> = Promise.resolve();
+
+function queueGtmTask(task: Parameters<GtmAgent['run']>[0]) {
+  gtmTaskChain = gtmTaskChain.then(() => gtmAgent.run(task)).catch(logAgentTaskError);
+  return task;
+}
+
 function sqliteSetupHint(): string {
   return (
     'SQLite (better-sqlite3) is not built. Run:\n' +
@@ -181,6 +191,8 @@ events.on('agent:ops_stage_complete', (p) => broadcast('ops_stage_complete', p))
 events.on('agent:ops_blocked', (p) => broadcast('ops_blocked', p));
 events.on('agent:ops_run_complete', (p) => broadcast('ops_run_complete', p));
 events.on('agent:ops_freeform_response', (p) => broadcast('ops_freeform_response', p));
+events.on('agent:gtm_generated', (p) => broadcast('gtm_generated', p));
+events.on('agent:gtm_psych_generated', (p) => broadcast('gtm_psych_generated', p));
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 async function bootstrap() {
@@ -196,6 +208,9 @@ async function bootstrap() {
 
   // NixOps Agent — business workflow runner (context files ship with the package)
   opsAgent = new NixOpsAgent({ approval, memory, mcp, events });
+
+  // GTM Agent — go-to-market strategy and psych tactics generation
+  gtmAgent = new GtmAgent({ approval, memory, mcp, events });
 
   // Admin Agent tools — may fail if Gmail credentials are absent; surface a warning but continue
   try {
@@ -250,6 +265,11 @@ app.get('/api/agent/status', (c) => {
       role: 'strategy',
       name: 'NixOps',
       status: opsAgent?.status ?? 'idle',
+    },
+    gtm: {
+      role: 'gtm',
+      name: 'GTM Agent',
+      status: gtmAgent?.status ?? 'idle',
     },
   });
 });
@@ -433,6 +453,65 @@ app.post('/api/tasks/ops-freeform', async (c) => {
   if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
   const task = OpsTasks.createOpsFreeformTask({ prompt });
   queueOpsTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// ── GTM TASKS ─────────────────────────────────────────────────────────────
+const GTM_FIELDS = [
+  'name',
+  'cat',
+  'problem',
+  'benefit',
+  'diff',
+  'buyer',
+  'segment',
+  'comp',
+  'channels',
+  'pain',
+  'price',
+  'model',
+  'free',
+  'goal',
+  'current',
+  'budget',
+] as const;
+
+function normalizeGtmProduct(body: unknown): GtmProductInput | null {
+  if (typeof body !== 'object' || body === null) return null;
+  const src = body as Record<string, unknown>;
+  if (typeof src.name !== 'string' || src.name.trim().length === 0) return null;
+
+  const product = {} as GtmProductInput;
+  for (const field of GTM_FIELDS) {
+    const value = src[field];
+    product[field] = typeof value === 'string' ? value : '';
+  }
+  return product;
+}
+
+app.post('/api/tasks/gtm/strategy', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const tg = tierGate('operator');
+  if (!tg.allowed) return c.json({ error: tg.error }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const product = normalizeGtmProduct(body);
+  if (!product) return c.json({ error: 'product name required' }, 400);
+  const task = GtmTasks.generateStrategy(product);
+  queueGtmTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/gtm/psych', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const tg = tierGate('operator');
+  if (!tg.allowed) return c.json({ error: tg.error }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const product = normalizeGtmProduct(body);
+  if (!product) return c.json({ error: 'product name required' }, 400);
+  const task = GtmTasks.generatePsychTactics(product);
+  queueGtmTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
