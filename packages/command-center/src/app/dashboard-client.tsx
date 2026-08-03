@@ -10,15 +10,17 @@ interface AgentCard {
   status: 'idle' | 'running' | 'waiting_approval' | 'error';
 }
 
-// Where each non-admin agent is actually reachable today. Research and Ops
-// (role 'strategy' — no dedicated AgentRole yet) have no dedicated page, so
-// they point at chat, which the router now dispatches both of correctly.
+// role 'strategy' is NixOps — there's no dedicated 'ops' AgentRole yet.
 function agentLink(role: string): { href: string; label: string } {
   switch (role) {
     case 'content':
       return { href: '/content', label: 'Open content' };
     case 'gtm':
       return { href: '/gtm', label: 'Open GTM' };
+    case 'research':
+      return { href: '/research', label: 'Open research' };
+    case 'strategy':
+      return { href: '/ops', label: 'Open ops' };
     default:
       return { href: '/chat', label: 'Ask via chat' };
   }
