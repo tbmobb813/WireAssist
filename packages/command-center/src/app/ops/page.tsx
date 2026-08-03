@@ -74,6 +74,30 @@ export default function OpsPage() {
       .catch(() => setWorkflowPreview(null));
   }, [selectedWorkflow]);
 
+  useEffect(() => {
+    if (!selectedWorkflow) return;
+    fetch(`/api/ops/trust/${encodeURIComponent(selectedWorkflow)}`)
+      .then((r) => r.json())
+      .then((d) => typeof d.stage === 'number' && setTrustStageState(d.stage))
+      .catch(() => {});
+  }, [selectedWorkflow]);
+
+  async function updateTrustStage(stage: number) {
+    if (!selectedWorkflow) return;
+    setSavingTrustStage(true);
+    try {
+      const res = await fetch(`/api/ops/trust/${encodeURIComponent(selectedWorkflow)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (typeof data.stage === 'number') setTrustStageState(data.stage);
+    } finally {
+      setSavingTrustStage(false);
+    }
+  }
+
   useAgentEvents(
     useCallback(
       (e) => {
@@ -93,6 +117,7 @@ export default function OpsPage() {
           setRunResult({
             workflow: e.payload.workflow,
             approved: e.payload.approved,
+            autoApproved: e.payload.autoApproved,
             transcript: e.payload.transcript,
           });
           setGenerating(false);
@@ -207,6 +232,43 @@ export default function OpsPage() {
             )}
           </div>
         )}
+        {selectedWorkflow && (
+          <div
+            className="rounded p-3 mb-3 flex items-center justify-between gap-3"
+            style={{ background: '#080810', border: '1px solid #1e2040' }}
+          >
+            <div>
+              <div className="text-xs text-gray-400">
+                Trust stage: <span style={{ color: '#4fc3f7' }}>{trustStage}</span>
+                {trustStage >= 3 && (
+                  <span className="text-gray-600"> — auto-delivers, no approval</span>
+                )}
+              </div>
+              <div className="text-xs text-gray-600 mt-0.5">
+                {trustStage === 2
+                  ? 'Every run waits for your approval before delivering.'
+                  : 'Runs deliver automatically. Safe to trigger via an external cron for unattended (heartbeat) runs.'}
+              </div>
+            </div>
+            <select
+              value={trustStage}
+              disabled={savingTrustStage}
+              onChange={(e) => updateTrustStage(Number(e.target.value))}
+              className="rounded px-2 py-1 text-xs outline-none flex-shrink-0"
+              style={{ background: '#0d0d1a', border: '1px solid #1e2040', color: '#e2e8f0' }}
+            >
+              <option value={2} style={{ background: '#0d0d1a' }}>
+                Stage 2 — approve everything
+              </option>
+              <option value={3} style={{ background: '#0d0d1a' }}>
+                Stage 3 — pre-approved
+              </option>
+              <option value={4} style={{ background: '#0d0d1a' }}>
+                Stage 4 — heartbeat (unattended)
+              </option>
+            </select>
+          </div>
+        )}
         <textarea
           value={brief}
           onChange={(e) => setBrief(e.target.value)}
@@ -315,9 +377,11 @@ export default function OpsPage() {
           </div>
           <p className="text-sm text-gray-300 mb-3">
             Workflow &quot;{runResult.workflow}&quot;{' '}
-            {runResult.approved
-              ? 'completed and approved.'
-              : 'completed, not approved — check the Approvals tab.'}
+            {runResult.autoApproved
+              ? 'completed and auto-delivered (trust stage 3+ — no approval needed).'
+              : runResult.approved
+                ? 'completed and approved.'
+                : 'completed, not approved — check the Approvals tab.'}
           </p>
           <button
             onClick={() => setShowTranscript((v) => !v)}

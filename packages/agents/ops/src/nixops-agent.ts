@@ -93,6 +93,17 @@ export class NixOpsAgent extends BaseAgent {
     const priorRuns = await this.loadContext(`workflow ${input.workflow}`);
     const stages: StageResult[] = [];
 
+    // setTrustStage() keeps the workflow file's own "**Trust stage:**" line in
+    // sync whenever JNix changes it via the dashboard, so this value and that
+    // line always agree — this note just states it plainly up front so every
+    // DATA-loop stage (including the final report) has it without re-parsing
+    // the workflow file's markdown each time.
+    const trustStage = getTrustStage(input.workflow);
+    const trustStageNote =
+      trustStage >= 3
+        ? `CURRENT TRUST STAGE FOR THIS WORKFLOW: ${trustStage} (matches the workflow file's own "Trust stage" line — JNix advanced this workflow past Stage 2 via the dashboard). This run auto-delivers without human approval.`
+        : `CURRENT TRUST STAGE FOR THIS WORKFLOW: ${trustStage} (matches the workflow file's own "Trust stage" line). This run requires human approval before delivery.`;
+
     const stage = async (
       name: StageResult['stage'],
       instruction: string,
@@ -101,6 +112,7 @@ export class NixOpsAgent extends BaseAgent {
       const content = await this.think(
         [
           `WORKFLOW FILE:\n${workflow}`,
+          trustStageNote,
           `TASK BRIEF FROM JNIX:\n${input.brief}`,
           extra ? `PRIOR STAGES:\n${extra}` : '',
           `CURRENT STAGE — ${name.toUpperCase()}:\n${instruction}`,
@@ -164,7 +176,8 @@ export class NixOpsAgent extends BaseAgent {
     // Stage 3+: this workflow has been explicitly advanced past that gate —
     // deliver without asking. Stage 3 vs 4 differ only in who triggers the
     // run (a human vs. an unattended cron); the code path is identical.
-    const trustStage = getTrustStage(input.workflow);
+    // (trustStage was already read at the top of runWorkflow so the model's
+    // own prompt context stays in sync with this decision.)
     const autoApproved = trustStage >= 3;
     const approved = autoApproved
       ? true

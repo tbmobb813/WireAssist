@@ -16,7 +16,7 @@ Every workflow run follows this loop until the Definition of Done is met or an e
 - Narrow scope. Do only what the active workflow file authorizes. Adjacent problems get logged, not fixed.
 - Self-improvement is proposed, never self-applied: suggested edits to workflow files go in the run report for JNix to approve.
 
-## Trust stage (current: Stage 2)
+## Trust stage (tracked per workflow — see each workflow file's own "Trust stage" line)
 
 1. ~~Guardrails set~~ (this file)
 2. **Approve everything first** — every external/destructive action (send, post, publish, purchase, delete) requires JNix's explicit OK.
