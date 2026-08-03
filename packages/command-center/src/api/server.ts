@@ -613,7 +613,7 @@ app.get('/api/events', (c) => {
 // ── Start ──────────────────────────────────────────────────────────────────
 const API_PORT = Number(process.env.API_PORT ?? 3002);
 
-const server = serve({ fetch: app.fetch, port: API_PORT }, (info) => {
+const server = serve({ fetch: app.fetch, port: API_PORT, hostname: '0.0.0.0' }, (info) => {
   console.log(`🚀 API server running at http://localhost:${info.port}`);
   bootstrap().catch((err) => {
     console.error('❌ Agent bootstrap failed:', err);
