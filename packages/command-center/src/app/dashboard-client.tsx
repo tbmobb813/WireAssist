@@ -10,6 +10,20 @@ interface AgentCard {
   status: 'idle' | 'running' | 'waiting_approval' | 'error';
 }
 
+// Where each non-admin agent is actually reachable today. Research and Ops
+// (role 'strategy' — no dedicated AgentRole yet) have no dedicated page, so
+// they point at chat, which the router now dispatches both of correctly.
+function agentLink(role: string): { href: string; label: string } {
+  switch (role) {
+    case 'content':
+      return { href: '/content', label: 'Open content' };
+    case 'gtm':
+      return { href: '/gtm', label: 'Open GTM' };
+    default:
+      return { href: '/chat', label: 'Ask via chat' };
+  }
+}
+
 interface ActivityItem {
   id: string;
   time: Date;
@@ -134,6 +148,9 @@ export default function DashboardClient() {
   const [agents, setAgents] = useState<AgentCard[]>([
     { role: 'admin', name: 'Admin Agent', status: 'idle' },
     { role: 'content', name: 'Content Agent', status: 'idle' },
+    { role: 'research', name: 'Research Agent', status: 'idle' },
+    { role: 'strategy', name: 'NixOps', status: 'idle' },
+    { role: 'gtm', name: 'GTM Agent', status: 'idle' },
   ]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
@@ -176,7 +193,7 @@ export default function DashboardClient() {
     const fetchStatus = async () => {
       const res = await fetch('/api/agent/status');
       const data = await res.json();
-      setAgents([data.admin, data.content].filter(Boolean));
+      setAgents(Object.values(data).filter(Boolean) as AgentCard[]);
     };
     fetchStatus();
     const t = setInterval(fetchStatus, 3000);
@@ -394,10 +411,10 @@ export default function DashboardClient() {
                   </>
                 ) : (
                   <Link
-                    href="/content"
+                    href={agentLink(agent.role).href}
                     className="block text-xs py-2 px-3 rounded border border-border text-gray-400 hover:border-accent hover:text-accent transition-colors"
                   >
-                    → Open content
+                    → {agentLink(agent.role).label}
                   </Link>
                 )}
               </div>
