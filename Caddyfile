@@ -1,0 +1,12 @@
+# Optional reverse proxy for the Hostinger VPS deploy — only needed if you
+# point a domain at the box and want automatic HTTPS in front of the web UI.
+# Not used by docker-compose.yml; wire it in manually (see docs/DEPLOYMENT.md)
+# once you have a domain, since Caddy needs one to issue a cert.
+#
+# Next.js already proxies /api/* to the Hono API inside the container
+# (see packages/command-center/next.config.ts), so port 3001 is the only
+# thing that needs to be exposed publicly — 3002 should stay unpublished.
+#
+# your-domain.example {
+# 	reverse_proxy localhost:3001
+# }
