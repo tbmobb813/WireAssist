@@ -15,6 +15,8 @@ export default function FocusPage() {
   const router = useRouter();
   const [active, setActive] = useState<Project[]>([]);
   const [paused, setPaused] = useState<Project[]>([]);
+  const [icebox, setIcebox] = useState<Project[]>([]);
+  const [iceboxSelection, setIceboxSelection] = useState('');
   const [isoWeek, setIsoWeek] = useState('');
   const [productProjectId, setProductProjectId] = useState('');
   const [careerMilestone, setCareerMilestone] = useState('');
@@ -23,13 +25,15 @@ export default function FocusPage() {
 
   useEffect(() => {
     (async () => {
-      const [t, p] = await Promise.all([
+      const [t, p, i] = await Promise.all([
         fetch('/api/portfolio/today').then((r) => r.json()),
         fetch('/api/portfolio/projects?status=paused').then((r) => r.json()),
+        fetch('/api/portfolio/projects?status=icebox').then((r) => r.json()),
       ]);
       setIsoWeek(t.isoWeek);
       setActive(t.active ?? []);
       setPaused(p.projects ?? []);
+      setIcebox(i.projects ?? []);
       if (t.focus) {
         setProductProjectId(t.focus.productProjectId);
         setCareerMilestone(t.focus.careerMilestone);
@@ -54,6 +58,8 @@ export default function FocusPage() {
     const t = await fetch('/api/portfolio/today').then((r) => r.json());
     setActive(t.active ?? []);
     setPaused((prev) => prev.filter((p) => p.id !== id));
+    setIcebox((prev) => prev.filter((p) => p.id !== id));
+    if (iceboxSelection === id) setIceboxSelection('');
   }
 
   async function submit() {
@@ -87,26 +93,23 @@ export default function FocusPage() {
 
       <section className="mt-8">
         <h2 className="text-sm uppercase tracking-wide opacity-60">Product focus (active only)</h2>
-        <div className="mt-3 space-y-2">
-          {active.map((p) => (
-            <label
-              key={p.id}
-              className={`flex cursor-pointer items-center gap-3 rounded border p-3 ${
-                productProjectId === p.id ? 'border-white' : 'border-white/20'
-              }`}
+        <div className="mt-3">
+          {active.length > 0 ? (
+            <select
+              value={productProjectId}
+              onChange={(e) => setProductProjectId(e.target.value)}
+              className="w-full rounded border border-white/20 bg-transparent p-3 text-sm outline-none focus:border-white"
             >
-              <input
-                type="radio"
-                name="product"
-                checked={productProjectId === p.id}
-                onChange={() => setProductProjectId(p.id)}
-              />
-              <span>
-                {p.name} <span className="opacity-50">({p.lane})</span>
-              </span>
-            </label>
-          ))}
-          {active.length === 0 && (
+              <option value="" disabled className="bg-black">
+                Pick a project…
+              </option>
+              {active.map((p) => (
+                <option key={p.id} value={p.id} className="bg-black">
+                  {p.name} ({p.lane})
+                </option>
+              ))}
+            </select>
+          ) : (
             <p className="text-sm opacity-70">
               No active projects. Activate one below (WIP limit: 2).
             </p>
@@ -140,6 +143,35 @@ export default function FocusPage() {
               ))}
             </div>
           </details>
+        )}
+
+        {icebox.length > 0 && (
+          <div className="mt-4">
+            <h3 className="text-sm opacity-60">Still to be addressed ({icebox.length})</h3>
+            <div className="mt-2 flex items-center gap-2">
+              <select
+                value={iceboxSelection}
+                onChange={(e) => setIceboxSelection(e.target.value)}
+                className="flex-1 rounded border border-white/20 bg-transparent p-2 text-sm outline-none focus:border-white"
+              >
+                <option value="" disabled>
+                  Pick a project…
+                </option>
+                {icebox.map((p) => (
+                  <option key={p.id} value={p.id} className="bg-black">
+                    {p.name} ({p.lane})
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => iceboxSelection && activate(iceboxSelection)}
+                disabled={!iceboxSelection}
+                className="rounded border border-white/30 px-3 py-2 text-sm hover:bg-white/10 disabled:opacity-40"
+              >
+                Activate
+              </button>
+            </div>
+          </div>
         )}
       </section>
 

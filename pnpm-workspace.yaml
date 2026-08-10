@@ -7,6 +7,9 @@ packages:
   - 'packages/command-center'
   - 'packages/marketing'
   - 'packages/agents/research'
+  - 'packages/agents/ops'
+  - 'packages/agents/gtm'
+  - 'packages/telegram-bot'
 
 allowBuilds:
   better-sqlite3: true

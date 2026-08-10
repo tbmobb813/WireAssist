@@ -59,7 +59,7 @@
     "@tauri-apps/plugin-notification": "2.3.1",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.11",
-    "lucide-react": "^0.548.0",
+    "lucide-react": "^1.28.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "react-markdown": "^10.1.0",
@@ -72,7 +72,7 @@
   "private": true,
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
-    "@playwright/test": "^1.56.1",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.1.16",
     "@tauri-apps/cli": "^2.11.4",
     "@testing-library/jest-dom": "^6.0.0",
@@ -83,7 +83,7 @@
     "@typescript-eslint/eslint-plugin": "^8.62.1",
     "@typescript-eslint/parser": "^8.62.1",
     "@vitejs/plugin-react": "^4.3.1",
-    "@vitest/coverage-v8": "^4.0.5",
+    "@vitest/coverage-v8": "^4.1.9",
     "autoprefixer": "^10.4.19",
     "eslint-plugin-react-hooks": "^7.0.1",
     "husky": "^9.1.7",
@@ -93,7 +93,7 @@
     "tailwindcss": "^4.1.16",
     "typescript": "^5.7.2",
     "vite": "^7.1.12",
-    "vitest": "^4.0.5"
+    "vitest": "^4.1.9"
   },
   "vitest": {
     "exclude": [

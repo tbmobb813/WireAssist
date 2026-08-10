@@ -5,12 +5,28 @@ import { cors } from 'hono/cors';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { ApprovalQueue, MemoryStore, MCPClient, EventBus } from '@wireassist/core';
-import { AdminAgent, setupAdminMCP, AdminTasks } from '@wireassist/agent-admin';
+import { ApprovalQueue, MemoryStore, MCPClient, EventBus, type AgentRole } from '@wireassist/core';
+import { AdminAgent, setupAdminMCP, AdminTasks, budgetTracker } from '@wireassist/agent-admin';
 import { ContentAgent, ContentTasks } from '@wireassist/agent-content';
 import { ResearchAgent, ResearchTasks, setupResearchMCP } from '@wireassist/agent-research';
+import {
+  NixOpsAgent,
+  OpsTasks,
+  loadWorkflow,
+  getTrustStage,
+  setTrustStage,
+  MIN_TRUST_STAGE,
+  MAX_TRUST_STAGE,
+} from '@wireassist/agent-ops';
+import {
+  GtmAgent,
+  GtmTasks,
+  prefillFromRepoDoc,
+  type GtmProductInput,
+} from '@wireassist/agent-gtm';
 import { registerTrendPostTools, TrendPostStorage } from '@wireassist/trendpost-mcp';
 import { registerPortfolioRoutes } from './portfolio-routes';
+import { routeChatMessage, type RouteDecision } from './chat-router';
 
 const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
 const DB_PATH = path.join(HOME_PATH, '.wireassist', 'wireassist.db');
@@ -24,8 +40,11 @@ let memory: MemoryStore;
 let agent: AdminAgent;
 let contentAgent: ContentAgent;
 let researchAgent: ResearchAgent;
+let opsAgent: NixOpsAgent;
+let gtmAgent: GtmAgent;
 let trendpostStorage: TrendPostStorage;
 let agentReady = false;
+let gmailReady = false;
 
 // ── License tier gating ────────────────────────────────────────────────────
 import Database from 'better-sqlite3';
@@ -99,6 +118,22 @@ function queueContentTask(task: Parameters<ContentAgent['run']>[0]) {
   return task;
 }
 
+/** Run one ops (NixOps) task at a time. */
+let opsTaskChain: Promise<void> = Promise.resolve();
+
+function queueOpsTask(task: Parameters<NixOpsAgent['run']>[0]) {
+  opsTaskChain = opsTaskChain.then(() => opsAgent.run(task)).catch(logAgentTaskError);
+  return task;
+}
+
+/** Run one GTM task at a time. */
+let gtmTaskChain: Promise<void> = Promise.resolve();
+
+function queueGtmTask(task: Parameters<GtmAgent['run']>[0]) {
+  gtmTaskChain = gtmTaskChain.then(() => gtmAgent.run(task)).catch(logAgentTaskError);
+  return task;
+}
+
 function sqliteSetupHint(): string {
   return (
     'SQLite (better-sqlite3) is not built. Run:\n' +
@@ -167,6 +202,12 @@ events.on('agent:post_scheduled', (p) => broadcast('post_scheduled', p));
 events.on('agent:content_analyzed', (p) => broadcast('content_analyzed', p));
 events.on('agent:scheduled_posts', (p) => broadcast('scheduled_posts', p));
 events.on('agent:research_complete', (p) => broadcast('research_complete', p));
+events.on('agent:ops_stage_complete', (p) => broadcast('ops_stage_complete', p));
+events.on('agent:ops_blocked', (p) => broadcast('ops_blocked', p));
+events.on('agent:ops_run_complete', (p) => broadcast('ops_run_complete', p));
+events.on('agent:ops_freeform_response', (p) => broadcast('ops_freeform_response', p));
+events.on('agent:gtm_generated', (p) => broadcast('gtm_generated', p));
+events.on('agent:gtm_psych_generated', (p) => broadcast('gtm_psych_generated', p));
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 async function bootstrap() {
@@ -180,13 +221,22 @@ async function bootstrap() {
   setupResearchMCP(mcp);
   researchAgent = new ResearchAgent({ approval, memory, mcp, events });
 
-  // Admin Agent tools — may fail if Gmail credentials are absent; surface a warning but continue
+  // NixOps Agent — business workflow runner (context files ship with the package)
+  opsAgent = new NixOpsAgent({ approval, memory, mcp, events });
+
+  // GTM Agent — go-to-market strategy and psych tactics generation
+  gtmAgent = new GtmAgent({ approval, memory, mcp, events });
+
+  // Admin Agent — always constructed so freeform chat works without Gmail/Calendar
+  // credentials. Gmail/Calendar tools register separately below; email/calendar-
+  // specific tasks are gated on gmailReady, not on the agent's existence.
+  agent = new AdminAgent({ approval, memory, mcp, events });
   try {
     await setupAdminMCP(mcp);
-    agent = new AdminAgent({ approval, memory, mcp, events });
+    gmailReady = true;
   } catch (err) {
     console.warn(
-      '⚠️  Admin Agent unavailable (Gmail/Calendar credentials missing or invalid).',
+      '⚠️  Gmail/Calendar tools unavailable (credentials missing or invalid). Chat still works; email/calendar tasks will fail until configured.',
       err instanceof Error ? err.message : err
     );
   }
@@ -204,11 +254,11 @@ async function bootstrap() {
 const app = new Hono();
 
 app.use('*', cors({ origin: 'http://localhost:3001' }));
-registerPortfolioRoutes(app, DB_PATH);
+const portfolioStore = registerPortfolioRoutes(app, DB_PATH);
 
 // Health check
 app.get('/health', (c) =>
-  c.json({ status: 'ok', agentReady, anthropicConfigured: anthropicConfigured() })
+  c.json({ status: 'ok', agentReady, gmailReady, anthropicConfigured: anthropicConfigured() })
 );
 
 // ── AGENT STATUS ──────────────────────────────────────────────────────────
@@ -228,6 +278,16 @@ app.get('/api/agent/status', (c) => {
       role: 'research',
       name: 'Research Agent',
       status: researchAgent?.status ?? 'idle',
+    },
+    ops: {
+      role: 'strategy',
+      name: 'NixOps',
+      status: opsAgent?.status ?? 'idle',
+    },
+    gtm: {
+      role: 'gtm',
+      name: 'GTM Agent',
+      status: gtmAgent?.status ?? 'idle',
     },
   });
 });
@@ -263,17 +323,16 @@ app.post('/api/approvals/:id/reject', (c) => {
   return c.json({ ok: true });
 });
 
-function adminAgentRequired() {
+function gmailRequired() {
   return {
-    error:
-      'Admin Agent unavailable — Gmail/Calendar credentials are not configured. See docs/SETUP.md.',
+    error: 'Gmail/Calendar credentials are not configured. See docs/SETUP.md.',
   };
 }
 
 // ── TASKS ─────────────────────────────────────────────────────────────────
 app.post('/api/tasks/triage-email', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
-  if (!agent) return c.json(adminAgentRequired(), 503);
+  if (!gmailReady) return c.json(gmailRequired(), 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const task = AdminTasks.triageEmail(20);
   queueAgentTask(task);
@@ -282,7 +341,7 @@ app.post('/api/tasks/triage-email', async (c) => {
 
 app.post('/api/tasks/review-calendar', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
-  if (!agent) return c.json(adminAgentRequired(), 503);
+  if (!gmailReady) return c.json(gmailRequired(), 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const body = await c.req.json().catch(() => ({}));
   const task = AdminTasks.reviewCalendar(body.daysAhead ?? 7);
@@ -292,13 +351,87 @@ app.post('/api/tasks/review-calendar', async (c) => {
 
 app.post('/api/tasks/freeform', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
-  if (!agent) return c.json(adminAgentRequired(), 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const { instruction } = await c.req.json();
   if (!instruction) return c.json({ error: 'instruction required' }, 400);
-  const task = AdminTasks.freeform(instruction);
-  queueAgentTask(task);
-  return c.json({ taskId: task.id, status: 'queued' });
+
+  let decision: RouteDecision;
+  try {
+    decision = await routeChatMessage(instruction);
+  } catch {
+    decision = { kind: 'admin_freeform', prompt: instruction };
+  }
+
+  switch (decision.kind) {
+    case 'admin_triage': {
+      if (!gmailReady) return c.json(gmailRequired(), 503);
+      const task = AdminTasks.triageEmail(20);
+      queueAgentTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+    case 'admin_calendar': {
+      if (!gmailReady) return c.json(gmailRequired(), 503);
+      const task = AdminTasks.reviewCalendar(decision.daysAhead ?? 7);
+      queueAgentTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+    case 'content_generate': {
+      const tg = tierGate('operator');
+      if (!tg.allowed) return c.json({ error: tg.error }, 403);
+      const task = ContentTasks.generatePost(decision.topic, decision.platform, decision.tone);
+      queueContentTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+    case 'content_plan': {
+      const tg = tierGate('operator');
+      if (!tg.allowed) return c.json({ error: tg.error }, 403);
+      const task = ContentTasks.generatePlan(
+        decision.platforms ?? ['linkedin', 'twitter'],
+        decision.weeksAhead ?? 1,
+        decision.postsPerWeek ?? 3
+      );
+      queueContentTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+    case 'research_topic': {
+      const tg = tierGate('workforce');
+      if (!tg.allowed) return c.json({ error: tg.error }, 403);
+      const task = ResearchTasks.researchTopic(decision.query, decision.depth ?? 'quick');
+      queueResearchTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+    case 'ops_freeform': {
+      const tg = tierGate('workforce');
+      if (!tg.allowed) return c.json({ error: tg.error }, 403);
+      const task = OpsTasks.createOpsFreeformTask({ prompt: decision.prompt });
+      queueOpsTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+    case 'ops_workflow': {
+      const tg = tierGate('workforce');
+      if (!tg.allowed) return c.json({ error: tg.error }, 403);
+      const task = OpsTasks.createWorkflowRunTask({
+        workflow: decision.workflow,
+        brief: decision.brief,
+      });
+      queueOpsTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+    case 'gtm_redirect':
+      return c.json({
+        redirect: '/gtm',
+        message:
+          'GTM strategy needs more detail than chat can capture — 16 fields covering your product, market, and business. Head to the GTM wizard to build a full plan.',
+      });
+    case 'admin_freeform':
+    default: {
+      const task = AdminTasks.freeform(
+        decision.kind === 'admin_freeform' ? decision.prompt : instruction
+      );
+      queueAgentTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
+  }
 });
 
 // ── CONTENT TASKS ─────────────────────────────────────────────────────────
@@ -376,6 +509,167 @@ app.post('/api/tasks/synthesize', async (c) => {
   const task = ResearchTasks.synthesizeFindings(topic);
   queueResearchTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// ── BUDGET ────────────────────────────────────────────────────────────────
+app.get('/api/budget', (c) => {
+  return c.json(budgetTracker.status());
+});
+
+// ── OPS (NIXOPS) TASKS ────────────────────────────────────────────────────
+app.get('/api/ops/workflows', (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  return c.json({ workflows: opsAgent.workflows() });
+});
+
+// Preview a workflow's actual requirements before running it, so a brief can
+// be written to satisfy the diagnose stage instead of guessing and hitting
+// VERDICT: BLOCKED.
+app.get('/api/ops/workflows/:name', (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  try {
+    const name = c.req.param('name');
+    return c.json({ workflow: name, content: loadWorkflow(name) });
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : 'Unknown workflow' }, 404);
+  }
+});
+
+// Per-workflow trust stage (SOUL.md's trust ladder). Stage >=3 means this
+// workflow's final approval gate is skipped — safe to trigger unattended by
+// an external cron at that point (Stage 4 "heartbeat" is the same code path,
+// just triggered by a scheduler instead of a human).
+app.get('/api/ops/trust/:workflow', (c) => {
+  return c.json({
+    workflow: c.req.param('workflow'),
+    stage: getTrustStage(c.req.param('workflow')),
+  });
+});
+
+app.post('/api/ops/trust/:workflow', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const stage = Number(body.stage);
+  if (!Number.isFinite(stage) || stage < MIN_TRUST_STAGE || stage > MAX_TRUST_STAGE) {
+    return c.json(
+      { error: `stage must be a number between ${MIN_TRUST_STAGE} and ${MAX_TRUST_STAGE}` },
+      400
+    );
+  }
+  const workflow = c.req.param('workflow');
+  const saved = setTrustStage(workflow, stage);
+  return c.json({ workflow, stage: saved });
+});
+
+app.post('/api/tasks/ops-workflow', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const tg = tierGate('workforce');
+  if (!tg.allowed) return c.json({ error: tg.error }, 403);
+  const { workflow, brief } = await c.req.json();
+  if (!workflow || typeof workflow !== 'string') return c.json({ error: 'workflow required' }, 400);
+  if (!brief || typeof brief !== 'string') return c.json({ error: 'brief required' }, 400);
+  const task = OpsTasks.createWorkflowRunTask({ workflow, brief });
+  queueOpsTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/ops-freeform', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const tg = tierGate('workforce');
+  if (!tg.allowed) return c.json({ error: tg.error }, 403);
+  const { prompt } = await c.req.json();
+  if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
+  const task = OpsTasks.createOpsFreeformTask({ prompt });
+  queueOpsTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// ── GTM TASKS ─────────────────────────────────────────────────────────────
+const GTM_FIELDS = [
+  'name',
+  'cat',
+  'problem',
+  'benefit',
+  'diff',
+  'buyer',
+  'segment',
+  'comp',
+  'channels',
+  'pain',
+  'price',
+  'model',
+  'free',
+  'goal',
+  'current',
+  'budget',
+] as const;
+
+function normalizeGtmProduct(body: unknown): GtmProductInput | null {
+  if (typeof body !== 'object' || body === null) return null;
+  const src = body as Record<string, unknown>;
+  if (typeof src.name !== 'string' || src.name.trim().length === 0) return null;
+
+  const product = {} as GtmProductInput;
+  for (const field of GTM_FIELDS) {
+    const value = src[field];
+    product[field] = typeof value === 'string' ? value : '';
+  }
+  return product;
+}
+
+app.post('/api/tasks/gtm/strategy', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const tg = tierGate('operator');
+  if (!tg.allowed) return c.json({ error: tg.error }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const product = normalizeGtmProduct(body);
+  if (!product) return c.json({ error: 'product name required' }, 400);
+  const task = GtmTasks.generateStrategy(product);
+  queueGtmTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/gtm/psych', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const tg = tierGate('operator');
+  if (!tg.allowed) return c.json({ error: tg.error }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const product = normalizeGtmProduct(body);
+  if (!product) return c.json({ error: 'product name required' }, 400);
+  const task = GtmTasks.generatePsychTactics(product);
+  queueGtmTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// Best-effort pre-fill for the GTM wizard: name always; category/problem/benefit/
+// differentiator only if the focused (or first active) project has a repoPath
+// in its metadata pointing at a repo with a README.md/STATUS.md.
+app.get('/api/tasks/gtm/prefill', async (c) => {
+  if (!agentReady) return c.json({ prefill: null });
+  const tg = tierGate('operator');
+  if (!tg.allowed) return c.json({ error: tg.error }, 403);
+
+  const today = await portfolioStore.today();
+  const targetId = today.focus?.productProjectId ?? today.active[0]?.id;
+  if (!targetId) return c.json({ prefill: null });
+
+  const project = await portfolioStore.getProject(targetId);
+  if (!project) return c.json({ prefill: null });
+
+  if (!anthropicConfigured()) {
+    return c.json({ prefill: { name: project.name, docFound: false } });
+  }
+
+  const repoPath = (project.metadata as { repoPath?: string } | null)?.repoPath;
+  try {
+    const prefill = await prefillFromRepoDoc(project.name, repoPath);
+    return c.json({ prefill });
+  } catch {
+    return c.json({ prefill: { name: project.name, docFound: false } });
+  }
 });
 
 // ── LICENSE ───────────────────────────────────────────────────────────────
@@ -488,8 +782,10 @@ app.get('/api/content/ideas', (c) => {
 // ── MEMORY ────────────────────────────────────────────────────────────────
 app.get('/api/memory', async (c) => {
   const query = (c.req.query('q') ?? '').trim();
-  if (!query) return c.json(memory.listRecent());
-  return c.json(await memory.searchAsync(query));
+  const agentRole = c.req.query('agentRole') as AgentRole | undefined;
+  const filters = agentRole ? { agentRole } : undefined;
+  if (!query) return c.json(memory.listRecent(50, filters));
+  return c.json(await memory.searchAsync(query, filters));
 });
 
 app.post('/api/memory/upgrade-embeddings', async (c) => {
@@ -555,7 +851,7 @@ app.get('/api/events', (c) => {
 // ── Start ──────────────────────────────────────────────────────────────────
 const API_PORT = Number(process.env.API_PORT ?? 3002);
 
-const server = serve({ fetch: app.fetch, port: API_PORT }, (info) => {
+const server = serve({ fetch: app.fetch, port: API_PORT, hostname: '0.0.0.0' }, (info) => {
   console.log(`🚀 API server running at http://localhost:${info.port}`);
   bootstrap().catch((err) => {
     console.error('❌ Agent bootstrap failed:', err);
