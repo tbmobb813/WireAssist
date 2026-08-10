@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import NewProjectForm from '../new-project-form';
 
 interface Project {
   id: string;
@@ -23,25 +24,27 @@ export default function FocusPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const [t, p, i] = await Promise.all([
-        fetch('/api/portfolio/today').then((r) => r.json()),
-        fetch('/api/portfolio/projects?status=paused').then((r) => r.json()),
-        fetch('/api/portfolio/projects?status=icebox').then((r) => r.json()),
-      ]);
-      setIsoWeek(t.isoWeek);
-      setActive(t.active ?? []);
-      setPaused(p.projects ?? []);
-      setIcebox(i.projects ?? []);
-      if (t.focus) {
-        setProductProjectId(t.focus.productProjectId);
-        setCareerMilestone(t.focus.careerMilestone);
-      } else if (t.active?.length === 1) {
-        setProductProjectId(t.active[0].id);
-      }
-    })().catch(() => setError('API unreachable — is the command-center API running?'));
+  const refresh = useCallback(async () => {
+    const [t, p, i] = await Promise.all([
+      fetch('/api/portfolio/today').then((r) => r.json()),
+      fetch('/api/portfolio/projects?status=paused').then((r) => r.json()),
+      fetch('/api/portfolio/projects?status=icebox').then((r) => r.json()),
+    ]);
+    setIsoWeek(t.isoWeek);
+    setActive(t.active ?? []);
+    setPaused(p.projects ?? []);
+    setIcebox(i.projects ?? []);
+    if (t.focus) {
+      setProductProjectId(t.focus.productProjectId);
+      setCareerMilestone(t.focus.careerMilestone);
+    } else if (t.active?.length === 1) {
+      setProductProjectId(t.active[0].id);
+    }
   }, []);
+
+  useEffect(() => {
+    refresh().catch(() => setError('API unreachable — is the command-center API running?'));
+  }, [refresh]);
 
   async function activate(id: string) {
     setError(null);
@@ -111,9 +114,13 @@ export default function FocusPage() {
             </select>
           ) : (
             <p className="text-sm opacity-70">
-              No active projects. Activate one below (WIP limit: 2).
+              No active projects. Activate one below, or create a new one (WIP limit: 2).
             </p>
           )}
+        </div>
+
+        <div className="mt-4">
+          <NewProjectForm onCreated={refresh} />
         </div>
 
         {paused.length > 0 && (
