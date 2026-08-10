@@ -5,6 +5,7 @@
 // The gate: if this week's focus is unset, hard-redirect to /focus.
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import NewProjectForm from './new-project-form';
 
 interface Project {
   id: string;
@@ -91,9 +92,12 @@ export default function PortfolioZones() {
 
       {/* ── Zone 2: Pipelines ── */}
       <section>
-        <h3 className="text-sm uppercase tracking-wide opacity-60">
-          Active ({today.active.length}/2)
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm uppercase tracking-wide opacity-60">
+            Active ({today.active.length}/2)
+          </h3>
+          <NewProjectForm onCreated={refresh} />
+        </div>
         <div className="mt-2 space-y-2">
           {today.active.map((p) => (
             <Row key={p.id} p={p}>
