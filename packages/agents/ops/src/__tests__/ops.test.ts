@@ -15,6 +15,16 @@ describe('context-loader', () => {
     expect(loadWorkflow('nixlevel-listing')).toContain('Definition of Done');
   });
 
+  it.each(['courier-route-log', 'nixlevel-margin-tracking', 'techtrendwire-article-draft'])(
+    'lists and loads the %s workflow with a Trust stage line',
+    (name) => {
+      expect(listWorkflows()).toContain(name);
+      const md = loadWorkflow(name);
+      expect(md).toContain('Definition of Done');
+      expect(md).toMatch(/\*\*Trust stage:\*\*/);
+    }
+  );
+
   it('rejects path traversal in workflow names', () => {
     expect(() => loadWorkflow('../SOUL')).toThrow(/Invalid workflow name/);
   });
