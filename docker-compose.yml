@@ -1,0 +1,41 @@
+services:
+  command-center:
+    build: .
+    command: pnpm --filter @wireassist/command-center start
+    restart: unless-stopped
+    ports:
+      # 3002 (the Hono API) is deliberately not published to the host — the
+      # web UI on 3001 proxies /api/* to it internally (next.config.ts), and
+      # the telegram-bot service reaches it over the compose network. Expose
+      # 3002 too only if you need to hit the API directly for debugging.
+      - '3001:3001'
+    env_file:
+      - .env
+    environment:
+      WIREASSIST_HOME: /data
+    volumes:
+      - wireassist-data:/data
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  telegram-bot:
+    build: .
+    command: node packages/telegram-bot/dist/index.js
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      WIREASSIST_HOME: /data
+      WIREASSIST_API_URL: http://command-center:3002
+    volumes:
+      - wireassist-data:/data
+    depends_on:
+      command-center:
+        condition: service_healthy
+
+volumes:
+  wireassist-data:
