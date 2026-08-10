@@ -5,9 +5,10 @@ services, restarted automatically by Docker on crash or VPS reboot. State
 (SQLite DB, OAuth tokens, budget/trust-stage files) lives in a named volume
 so it survives image rebuilds.
 
-This covers punch-list item #1 (get it deployed and persistent). Items #2
-(the Stage-4 heartbeat cron) and #8 (backups) are follow-ups, not covered
-here — see the note at the bottom.
+This covers punch-list item #1 (get it deployed and persistent), plus #8
+(off-box backups, step 7) and #9 (Telegram alerting on API downtime,
+already built into the bot — see `packages/telegram-bot`). Item #2 (the
+Stage-4 heartbeat cron) is still a follow-up — see the note at the bottom.
 
 ## 0. Fresh VPS prep
 
@@ -197,6 +198,48 @@ and `sudo systemctl reload caddy`. Caddy issues and renews the TLS cert
 automatically. Only port 3001 needs to be reachable — the API on 3002 is
 deliberately not published (see `docker-compose.yml` comments).
 
+## 7. Off-box backups
+
+The named Docker volume survives container restarts and rebuilds, but not
+a Hostinger disk failure. `dev/backup.sh` dumps the volume, encrypts it
+(it contains your Gmail OAuth tokens), uploads it off-box via `rclone`,
+and prunes old remote backups. Runs on the VPS via cron; failures push a
+Telegram alert if `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` are in the
+environment (success is silent by design).
+
+**One-time setup:**
+
+```bash
+# Install rclone (works with any of its 70+ supported providers — S3,
+# Backblaze B2, Google Drive, etc. Pick whichever you already have an
+# account with; B2's free tier is generous for this use case)
+curl https://rclone.org/install.sh | sudo bash
+rclone config   # interactive — set up a remote, name it whatever you like
+```
+
+Add to `.env` (or export in the cron environment directly — cron doesn't
+source `.env` automatically):
+
+```bash
+WIREASSIST_BACKUP_PASSPHRASE=<a long random passphrase, not your login password>
+WIREASSIST_BACKUP_RCLONE_REMOTE=<remote-name>:<bucket-or-path>/wireassist-backups
+```
+
+**Cron entry** (nightly at 3am server time):
+
+```bash
+crontab -e
+# add:
+0 3 * * * cd /path/to/WireAssist && set -a && . ./.env && set +a && ./dev/backup.sh >> /var/log/wireassist-backup.log 2>&1
+```
+
+**Test it once manually** before trusting the cron job — run the same
+command by hand and confirm a file lands in your rclone remote. If you
+ever need to restore: `rclone copy <remote-path>/<file>.tar.gz.gpg .`,
+then `gpg --decrypt <file>.tar.gz.gpg > <file>.tar.gz`, then extract into
+a fresh volume the same way `docker run ... busybox tar` was used to
+populate it in step 4.
+
 ## Updating after a code change
 
 ```bash
@@ -210,8 +253,3 @@ docker compose up -d --build
   Stage-4 "heartbeat" workflow run on a schedule — that still needs a
   crontab entry (or systemd timer) hitting the workflow-run endpoint. Next
   piece of work, not part of this deploy.
-- **Backups (punch-list #8).** The named Docker volume is durable across
-  container restarts and rebuilds, but a Hostinger disk failure still takes
-  it out. Back up `wireassist-data` (e.g. `docker run --rm -v
-wireassist_wireassist-data:/data -v $PWD:/backup busybox tar czf
-/backup/wireassist-data-$(date +%F).tar.gz -C /data .`) somewhere off-box.

@@ -21,6 +21,10 @@
  * Also subscribes to the command-center SSE feed and pushes back results from
  * whichever agent handled the request — admin, content, research, or ops —
  * plus waiting_approval / task_failed regardless of origin.
+ *
+ * Independently, polls the API's /health endpoint and alerts on down/recovery
+ * transitions — SSE reconnects silently forever on its own, so a dead API
+ * process would otherwise go unnoticed until the next on-demand command.
  */
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -274,6 +278,41 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
   }
 }
 
+// ── API health monitoring ───────────────────────────────────────────────────
+
+const HEALTH_CHECK_INTERVAL_MS = 60_000;
+// Require 3 consecutive failures (~3 min) before alerting, so a single blip
+// (deploy restart, brief network hiccup) doesn't page unnecessarily.
+const HEALTH_FAILURE_THRESHOLD = 3;
+
+async function healthLoop(): Promise<never> {
+  let consecutiveFailures = 0;
+  let isDown = false;
+
+  for (;;) {
+    try {
+      const res = await fetch(`${API_URL}/health`);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      consecutiveFailures = 0;
+      if (isDown) {
+        isDown = false;
+        await send('✅ WireAssist API is back up.');
+      }
+    } catch (err) {
+      consecutiveFailures += 1;
+      if (!isDown && consecutiveFailures >= HEALTH_FAILURE_THRESHOLD) {
+        isDown = true;
+        const reason = err instanceof Error ? err.message : String(err);
+        await send(
+          `🔴 WireAssist API unreachable at ${API_URL} (${consecutiveFailures} checks failed). Last error: ${reason}`
+        );
+      }
+    }
+    await new Promise((r) => setTimeout(r, HEALTH_CHECK_INTERVAL_MS));
+  }
+}
+
 console.log(`WireAssist Telegram bot starting (API: ${API_URL})`);
 void pollLoop();
 void sseLoop();
+void healthLoop();
