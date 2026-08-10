@@ -364,6 +364,7 @@ describe('@wireassist/core Integration Tests', () => {
         provider: 'openai',
         createdAt: new Date().getTime(),
         updatedAt: new Date().getTime(),
+        messages: [],
       };
 
       expect(conv.id).toBe('test-id');
@@ -376,8 +377,6 @@ describe('@wireassist/core Integration Tests', () => {
         content: 'Test',
         role: 'user',
         timestamp: Date.now(),
-        createdAt: new Date().getTime(),
-        updatedAt: new Date().getTime(),
       };
 
       expect(msg.id).toBe('msg-id');
