@@ -59,6 +59,10 @@ export class AdminAgent extends BaseAgent {
         'calendar_update_event',
         'calendar_delete_event',
         'calendar_find_availability',
+        // Sheets tools, same deal — registered in MCP setup.
+        'sheets_read',
+        'sheets_append',
+        'sheets_update',
       ],
       maxTokens: 4096,
     };
