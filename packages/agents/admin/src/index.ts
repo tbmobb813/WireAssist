@@ -1,5 +1,7 @@
 export { AdminAgent } from './admin-agent';
+export { SheetsClient } from './sheets-client';
 export { AdminTasks } from './admin-tasks';
 export { setupAdminMCP } from './mcp-setup';
 export * from './task-factory';
-export { BaseAgent } from './base-agent';
+export { BaseAgent, DEFAULT_MODEL } from './base-agent';
+export { BudgetTracker, BudgetExceededError, budgetTracker, type BudgetStatus } from './budget';

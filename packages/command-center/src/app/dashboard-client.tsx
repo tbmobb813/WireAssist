@@ -2,11 +2,28 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAgentEvents, type AgentEvent } from '@/hooks/useAgentEvents';
 import Link from 'next/link';
+import PortfolioZones from './portfolio-zones';
 
 interface AgentCard {
   role: string;
   name: string;
   status: 'idle' | 'running' | 'waiting_approval' | 'error';
+}
+
+// role 'strategy' is NixOps — there's no dedicated 'ops' AgentRole yet.
+function agentLink(role: string): { href: string; label: string } {
+  switch (role) {
+    case 'content':
+      return { href: '/content', label: 'Open content' };
+    case 'gtm':
+      return { href: '/gtm', label: 'Open GTM' };
+    case 'research':
+      return { href: '/research', label: 'Open research' };
+    case 'strategy':
+      return { href: '/ops', label: 'Open ops' };
+    default:
+      return { href: '/chat', label: 'Ask via chat' };
+  }
 }
 
 interface ActivityItem {
@@ -133,6 +150,9 @@ export default function DashboardClient() {
   const [agents, setAgents] = useState<AgentCard[]>([
     { role: 'admin', name: 'Admin Agent', status: 'idle' },
     { role: 'content', name: 'Content Agent', status: 'idle' },
+    { role: 'research', name: 'Research Agent', status: 'idle' },
+    { role: 'strategy', name: 'NixOps', status: 'idle' },
+    { role: 'gtm', name: 'GTM Agent', status: 'idle' },
   ]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
@@ -175,7 +195,7 @@ export default function DashboardClient() {
     const fetchStatus = async () => {
       const res = await fetch('/api/agent/status');
       const data = await res.json();
-      setAgents([data.admin, data.content].filter(Boolean));
+      setAgents(Object.values(data).filter(Boolean) as AgentCard[]);
     };
     fetchStatus();
     const t = setInterval(fetchStatus, 3000);
@@ -335,6 +355,10 @@ export default function DashboardClient() {
         ))}
       </div>
 
+      <div className="mb-10">
+        <PortfolioZones />
+      </div>
+
       <div className="grid grid-cols-3 gap-6">
         {/* Agent Cards */}
         <div className="col-span-1 space-y-4">
@@ -389,10 +413,10 @@ export default function DashboardClient() {
                   </>
                 ) : (
                   <Link
-                    href="/content"
+                    href={agentLink(agent.role).href}
                     className="block text-xs py-2 px-3 rounded border border-border text-gray-400 hover:border-accent hover:text-accent transition-colors"
                   >
-                    → Open content
+                    → {agentLink(agent.role).label}
                   </Link>
                 )}
               </div>
@@ -411,6 +435,17 @@ export default function DashboardClient() {
               </div>
             </Link>
           )}
+
+          <Link
+            href="/gtm"
+            className="block rounded-lg p-4 border transition-colors"
+            style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
+          >
+            <div className="text-xs tracking-widest text-gray-500 mb-1">GTM ENGINE</div>
+            <div className="text-sm font-bold text-gray-300">
+              Go-to-market strategy + psych tactics
+            </div>
+          </Link>
         </div>
 
         {/* Activity Feed */}

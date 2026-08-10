@@ -65,10 +65,10 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 You can also `export ANTHROPIC_API_KEY=...` in your shell, or use `packages/command-center/.env.local` for package-only overrides.
 
-### Google Gmail + Calendar
+### Google Gmail + Calendar + Sheets
 
 1. Create a project in [Google Cloud Console](https://console.cloud.google.com/).
-2. Enable **Gmail API** and **Google Calendar API**.
+2. Enable **Gmail API**, **Google Calendar API**, and **Google Sheets API**.
 3. Create **OAuth 2.0 Client ID** (Desktop app or Web with localhost redirect).
 4. Download the client JSON.
 
@@ -86,7 +86,9 @@ export WIREASSIST_HOME=/path/to/config-root
 # token (auto-created) → $WIREASSIST_HOME/.wireassist/gmail-token.json
 ```
 
-On first agent startup, a browser OAuth flow runs and saves the token. Gmail and Calendar share this token; Calendar scopes are included in the Gmail auth flow.
+On first agent startup, a browser OAuth flow runs and saves the token. Gmail, Calendar, and Sheets all share this one token; Calendar and Sheets scopes are included in the Gmail auth flow.
+
+If you generated a token before Sheets support was added, it's missing the `spreadsheets` scope — `gmail.authenticate()` detects this automatically (`hasRequiredScopes()` checks the full scope list) and re-runs the OAuth flow next time an agent starts. No manual token deletion needed, just complete the re-auth prompt.
 
 ### Desktop app (frozen)
 

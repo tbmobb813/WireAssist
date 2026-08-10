@@ -19,14 +19,17 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.27.0",
     "@hono/node-server": "^1.14.0",
     "@wireassist/agent-admin": "workspace:*",
     "@wireassist/agent-content": "workspace:*",
     "@wireassist/agent-research": "workspace:*",
+    "@wireassist/agent-ops": "workspace:*",
+    "@wireassist/agent-gtm": "workspace:*",
     "@wireassist/core": "workspace:*",
     "@wireassist/trendpost-mcp": "workspace:*",
-    "better-sqlite3": "^12.4.1",
-    "hono": "^4.7.10",
+    "better-sqlite3": "^12.11.1",
+    "hono": "^4.12.27",
     "next": "16.2.10",
     "react": "^19.2.7",
     "react-dom": "^19.2.0"

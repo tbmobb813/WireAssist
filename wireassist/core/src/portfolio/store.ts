@@ -102,6 +102,7 @@ export class PortfolioStore {
 
   constructor(storagePath: string = './data/aia.db') {
     this.db = new Database(storagePath);
+    this.db.pragma('foreign_keys = ON');
     this.initTables();
   }
 
@@ -238,6 +239,17 @@ export class PortfolioStore {
       .prepare(`UPDATE projects SET status = ?, resume_note = ?, updated_at = ? WHERE id = ?`)
       .run(to, resumeNote ?? project.resumeNote, Date.now(), id);
     this.appendEvent('project.transitioned', id, { from, to });
+  }
+
+  /** Merges (does not overwrite) new keys into an existing project's metadata. */
+  async updateMetadata(id: string, metadata: Record<string, unknown>): Promise<Project> {
+    const project = await this.getProject(id);
+    if (!project) throw new Error(`Project not found: ${id}`);
+    const merged = { ...(project.metadata ?? {}), ...metadata };
+    this.db
+      .prepare(`UPDATE projects SET metadata = ?, updated_at = ? WHERE id = ?`)
+      .run(JSON.stringify(merged), Date.now(), id);
+    return (await this.getProject(id))!;
   }
 
   private assertWipCapacity(): void {

@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Use Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
 
@@ -38,10 +38,12 @@ jobs:
         # Exclude synqagent (Tauri desktop) — frozen, tsc not green; vitest still runs below
         run: pnpm -r --filter '!synqagent' build
 
-      - name: Run package tests (sequential)
+      - name: Run package tests (sequential, non-synqagent)
         # Sequential avoids jest worker contention across packages.
-        # No !synqagent filter: vitest does not typecheck, so aia tests should run.
-        run: pnpm -r --workspace-concurrency=1 --if-present test
+        run: pnpm -r --workspace-concurrency=1 --filter '!synqagent' --if-present test
+
+      - name: Run synqagent tests (no threads, avoids CI hang)
+        run: pnpm --filter synqagent --if-present test:ci
 
       - name: Coverage (core)
         run: pnpm --filter @wireassist/core test:coverage
@@ -61,7 +63,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Use Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
 

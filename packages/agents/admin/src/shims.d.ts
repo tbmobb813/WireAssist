@@ -15,7 +15,10 @@ declare module '@anthropic-ai/sdk' {
         max_tokens: number;
         system: string;
         messages: { role: 'user'; content: string }[];
-      }): Promise<{ content: TextBlock[] }>;
+      }): Promise<{
+        content: TextBlock[];
+        usage?: { input_tokens: number; output_tokens: number };
+      }>;
     };
   }
 }
@@ -25,4 +28,3 @@ declare module '@anthropic-ai/sdk' {
 declare const process: {
   exitCode?: number;
 };
-
