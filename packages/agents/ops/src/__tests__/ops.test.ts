@@ -1,4 +1,4 @@
-import { loadOpsContext, listWorkflows, loadWorkflow } from '../context-loader';
+import { loadOpsContext, listWorkflows, loadWorkflow, parseSheetRef } from '../context-loader';
 import { createWorkflowRunTask, createOpsFreeformTask } from '../task-factory';
 
 describe('context-loader', () => {
@@ -21,6 +21,26 @@ describe('context-loader', () => {
 
   it('throws a helpful error for unknown workflows', () => {
     expect(() => loadWorkflow('nope')).toThrow(/Unknown workflow/);
+  });
+});
+
+describe('parseSheetRef', () => {
+  it('parses a spreadsheet id and range from a Sheet line', () => {
+    const md = '**Trust stage:** 2\n\n**Sheet:** 1a2B3cD4eFgH | Costs!A1:D100\n';
+    expect(parseSheetRef(md)).toEqual({ spreadsheetId: '1a2B3cD4eFgH', range: 'Costs!A1:D100' });
+  });
+
+  it('trims surrounding whitespace from the range', () => {
+    const md = '**Sheet:**   1a2B3cD4eFgH   |   Costs!A1:D100   \n';
+    expect(parseSheetRef(md)).toEqual({ spreadsheetId: '1a2B3cD4eFgH', range: 'Costs!A1:D100' });
+  });
+
+  it('returns null when no Sheet line is present', () => {
+    expect(parseSheetRef('**Trust stage:** 2\n\nNo sheet here.')).toBeNull();
+  });
+
+  it('returns null for a malformed Sheet line missing the separator', () => {
+    expect(parseSheetRef('**Sheet:** 1a2B3cD4eFgH Costs!A1:D100')).toBeNull();
   });
 });
 

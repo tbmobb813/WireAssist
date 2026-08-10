@@ -4,7 +4,7 @@
  * Provides direct streaming without Tauri IPC overhead
  */
 
-import { ProviderFactory, handleStream } from '@wireassist/core';
+import { ProviderFactory } from '@wireassist/core';
 import type { ProviderMessage, Provider } from './provider';
 import { useSettingsStore } from '../stores/settingsStore';
 
@@ -93,19 +93,14 @@ export class CoreStreamingProvider implements Provider {
         prompt: messages.map((m) => `${m.role}: ${m.content}`).join('\n'),
       });
 
-      // Handle stream with @wireassist/core's stream handler
-      const fullResponse = await handleStream(stream, {
-        onChunk,
-        onComplete: () => {
-          // Stream complete
-        },
-        onError: (error) => {
-          console.error('Stream error:', error);
-        },
-      });
+      let fullResponse = '';
+      for await (const chunk of stream) {
+        fullResponse += chunk;
+        onChunk(chunk);
+      }
 
       return fullResponse;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new Error(
         `Streaming failed: ${error instanceof Error ? error.message : String(error)}`
       );

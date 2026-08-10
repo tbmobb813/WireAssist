@@ -341,7 +341,10 @@ describe('@wireassist/core Provider Integration', () => {
         prompt: 'Summarize this code',
         context: {
           files: [],
-          workspaceStructure: '',
+          projectStructure: {
+            type: 'node',
+            rootPath: '/test',
+          },
         },
       };
 
