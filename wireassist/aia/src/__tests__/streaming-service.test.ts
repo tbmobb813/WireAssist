@@ -124,15 +124,22 @@ describe('Streaming Service', () => {
     });
 
     it('should calculate session duration on end', async () => {
-      const sessionId = service.createSession('conv-123');
+      // Fake timers make this deterministic — a real setTimeout(..., 100) can
+      // fire a millisecond or two early under CI scheduling jitter, which
+      // made this assertion flaky (observed failures at 99ms).
+      vi.useFakeTimers();
+      try {
+        const sessionId = service.createSession('conv-123');
 
-      // Wait 100ms
-      await new Promise((r) => setTimeout(r, 100));
+        await vi.advanceTimersByTimeAsync(100);
 
-      const endedSession = service.endSession(sessionId);
-      const duration = Date.now() - (endedSession?.startedAt || 0);
+        const endedSession = service.endSession(sessionId);
+        const duration = Date.now() - (endedSession?.startedAt || 0);
 
-      expect(duration).toBeGreaterThanOrEqual(100);
+        expect(duration).toBeGreaterThanOrEqual(100);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
