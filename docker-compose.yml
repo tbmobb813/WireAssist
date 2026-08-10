@@ -1,0 +1,45 @@
+services:
+  command-center:
+    build: .
+    command: pnpm --filter @wireassist/command-center start
+    restart: unless-stopped
+    ports:
+      # Bound to loopback only — Caddy (or whatever's fronting this on the
+      # VPS) is the only thing meant to be internet-facing. Change to
+      # '3001:3001' if you need to reach the web UI directly without a
+      # reverse proxy in front (e.g. no domain yet) — see docs/DEPLOYMENT.md.
+      #
+      # 3002 (the Hono API) is not published at all — the web UI on 3001
+      # proxies /api/* to it internally (next.config.ts), and the
+      # telegram-bot service reaches it over the compose network.
+      - '127.0.0.1:3001:3001'
+    env_file:
+      - .env
+    environment:
+      WIREASSIST_HOME: /data
+    volumes:
+      - wireassist-data:/data
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  telegram-bot:
+    build: .
+    command: node packages/telegram-bot/dist/index.js
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      WIREASSIST_HOME: /data
+      WIREASSIST_API_URL: http://command-center:3002
+    volumes:
+      - wireassist-data:/data
+    depends_on:
+      command-center:
+        condition: service_healthy
+
+volumes:
+  wireassist-data:

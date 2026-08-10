@@ -1,0 +1,217 @@
+# Deployment — Hostinger VPS
+
+Runs Command Center (web + API) and the Telegram bot as two Docker Compose
+services, restarted automatically by Docker on crash or VPS reboot. State
+(SQLite DB, OAuth tokens, budget/trust-stage files) lives in a named volume
+so it survives image rebuilds.
+
+This covers punch-list item #1 (get it deployed and persistent). Items #2
+(the Stage-4 heartbeat cron) and #8 (backups) are follow-ups, not covered
+here — see the note at the bottom.
+
+## 0. Fresh VPS prep
+
+Skip this if the box is already provisioned and hardened. Do this before
+step 2 if you're starting from a clean Hostinger image.
+
+**OS.** Ubuntu 24.04 LTS or Debian 12 — matches the Dockerfile's base image
+(`node:20-bookworm-slim`) and has long support.
+
+**Sizing / swap.** `docker build` here compiles `better-sqlite3`'s native
+binding and runs a Next.js build — both spike RAM. Minimum workable is 2
+vCPU / 4GB. On anything with 2GB or less, add swap first or the build gets
+OOM-killed silently:
+
+```bash
+fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+```
+
+**Lock down SSH before anything else touches the network.**
+
+```bash
+adduser <you>
+usermod -aG sudo <you>
+# copy your SSH public key to /home/<you>/.ssh/authorized_keys, then:
+```
+
+In `/etc/ssh/sshd_config`: set `PermitRootLogin no` and
+`PasswordAuthentication no`, then `systemctl restart sshd`. Install
+`fail2ban` for brute-force protection on whatever's left exposed:
+
+```bash
+apt install -y fail2ban
+```
+
+**Firewall — deny by default.**
+
+```bash
+ufw default deny incoming
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw enable
+```
+
+Port 3001 is deliberately _not_ opened here — `docker-compose.yml` binds it
+to loopback only, so it's reachable exclusively through Caddy (step 6) once
+that's set up. Nothing needs a 3001 firewall rule.
+
+**Unattended security patches.** This box runs unattended with your
+Anthropic key and Gmail/Calendar access sitting on it — patching should be
+automatic:
+
+```bash
+apt install -y unattended-upgrades
+dpkg-reconfigure -plow unattended-upgrades
+```
+
+**Docker log rotation.** The default `json-file` log driver has no size cap
+— over months, a long-running `command-center`/`telegram-bot` pair can fill
+the disk with logs. Before bringing the stack up, create
+`/etc/docker/daemon.json`:
+
+```json
+{ "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "3" } }
+```
+
+then `systemctl restart docker` (after Docker is installed in step 2).
+
+**Confirm Docker survives a reboot.** The `get.docker.com` installer enables
+this by default, but verify: `systemctl is-enabled docker` should print
+`enabled`. Combined with `restart: unless-stopped` in `docker-compose.yml`,
+this is what makes the stack self-heal after a VPS reboot instead of needing
+you to SSH in and restart things by hand.
+
+**DNS before Caddy.** If you're using a domain, point its A record at the
+VPS's IP now — Let's Encrypt needs it to already resolve when Caddy requests
+a certificate in step 6.
+
+## 1. One-time: generate the Google OAuth token locally
+
+Do this on your laptop, **not** the VPS. The OAuth flow spins up a
+`localhost` callback server and tries to open a browser (`gmail-client.ts`)
+— that can't complete over a remote SSH session.
+
+```bash
+# On your laptop, from the repo root
+export WIREASSIST_HOME=/tmp/wireassist-oauth
+pnpm build:core && pnpm build:admin
+node packages/agents/admin/dist/demo.js
+# Complete the Google OAuth prompt in your browser, then Ctrl+C once it's done.
+```
+
+This leaves two files you'll copy to the VPS in step 4:
+
+```
+/tmp/wireassist-oauth/.wireassist/gmail-credentials.json
+/tmp/wireassist-oauth/.wireassist/gmail-token.json
+```
+
+## 2. Provision the VPS
+
+SSH into the Hostinger box, then:
+
+```bash
+# Docker + Compose plugin (Debian/Ubuntu; adjust if Hostinger's image differs)
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER   # log out/in for this to take effect
+```
+
+## 3. Clone the repo
+
+```bash
+git clone https://github.com/tbmobb813/WireAssist.git
+cd WireAssist
+git checkout main   # or whichever branch you want live
+```
+
+## 4. Configure secrets and copy the OAuth token
+
+```bash
+cat > .env <<'EOF'
+ANTHROPIC_API_KEY=sk-ant-...
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...
+WIREASSIST_BUDGET_MONTHLY=30
+EOF
+chmod 600 .env
+```
+
+Start the stack once so the named volume exists, then copy the OAuth files
+in from your laptop:
+
+```bash
+docker compose up -d
+docker compose stop   # will restart once the token is in place
+
+# From your laptop:
+scp /tmp/wireassist-oauth/.wireassist/gmail-credentials.json \
+    /tmp/wireassist-oauth/.wireassist/gmail-token.json \
+    user@vps-host:/tmp/
+
+# Back on the VPS — copy into the running volume via a throwaway container:
+docker run --rm -v wireassist_wireassist-data:/data -v /tmp:/src busybox \
+  sh -c "cp /src/gmail-credentials.json /src/gmail-token.json /data/"
+```
+
+(Volume name is `<project-dir-name>_wireassist-data` — check the real name
+with `docker volume ls` if the clone directory isn't `wireassist`.)
+
+## 5. Bring the stack up
+
+```bash
+docker compose up -d --build
+docker compose ps   # command-center should show "healthy" after ~30s
+curl http://127.0.0.1:3001   # run on the VPS itself — web UI should respond
+```
+
+`/health` lives on the API (port 3002), which isn't published at all — see
+`docker-compose.yml` comments. `docker compose ps`'s health column is the
+check that exercises it. To hit it directly for debugging:
+`docker compose exec command-center wget -qO- http://127.0.0.1:3002/health`.
+
+The web UI on 3001 is bound to loopback only — reachable from `curl` on the
+VPS itself, but not yet from the internet. That's intentional: step 6 puts
+Caddy in front of it. If you want to reach it directly over the VPS's IP
+without a domain (e.g. just to sanity-check it works before bothering with
+Caddy), change the `docker-compose.yml` port line to `'3001:3001'`, run
+`ufw allow 3001/tcp`, then `docker compose up -d` again — revert both once
+Caddy is in place. The Telegram bot connects to the API over the internal
+Docker network regardless — no extra config needed there.
+
+## 6. (Optional) put a domain + TLS in front of it
+
+If you want to reach this somewhere other than `http://vps-ip:3001`:
+
+```bash
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update && sudo apt install caddy
+```
+
+Point your domain's DNS A record at the VPS, then edit `/etc/caddy/Caddyfile`
+using this repo's `Caddyfile` as the template (fill in your real domain),
+and `sudo systemctl reload caddy`. Caddy issues and renews the TLS cert
+automatically. Only port 3001 needs to be reachable — the API on 3002 is
+deliberately not published (see `docker-compose.yml` comments).
+
+## Updating after a code change
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+## What this does NOT cover yet
+
+- **Unattended scheduled runs (punch-list #2).** Nothing here triggers a
+  Stage-4 "heartbeat" workflow run on a schedule — that still needs a
+  crontab entry (or systemd timer) hitting the workflow-run endpoint. Next
+  piece of work, not part of this deploy.
+- **Backups (punch-list #8).** The named Docker volume is durable across
+  container restarts and rebuilds, but a Hostinger disk failure still takes
+  it out. Back up `wireassist-data` (e.g. `docker run --rm -v
+wireassist_wireassist-data:/data -v $PWD:/backup busybox tar czf
+/backup/wireassist-data-$(date +%F).tar.gz -C /data .`) somewhere off-box.

@@ -1,4 +1,4 @@
-export type AgentRole = 'admin' | 'content' | 'research' | 'strategy';
+export type AgentRole = 'admin' | 'content' | 'research' | 'strategy' | 'gtm';
 
 export type AgentStatus = 'idle' | 'running' | 'waiting_approval' | 'error';
 

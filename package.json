@@ -12,6 +12,7 @@
     "build:admin": "pnpm --filter @wireassist/agent-admin build",
     "build:trendpost-mcp": "pnpm --filter @wireassist/trendpost-mcp build",
     "build:content": "pnpm --filter @wireassist/agent-content build",
+    "build:gtm": "pnpm --filter @wireassist/agent-gtm build",
     "build:command-center": "pnpm --filter @wireassist/command-center build",
     "dev": "pnpm -r --parallel dev",
     "dev:core": "pnpm --filter @wireassist/core dev",
@@ -30,11 +31,11 @@
     "clean": "pnpm -r --if-present clean && rm -rf node_modules pnpm-lock.yaml"
   },
   "devDependencies": {
-    "@playwright/test": "^1.56.1",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^22.19.0",
     "eslint": "^8.57.1",
     "husky": "^9.1.7",
-    "lint-staged": "^16.2.6",
+    "lint-staged": "^17.0.8",
     "prettier": "^3.3.3",
     "typescript": "^5.9.3"
   },

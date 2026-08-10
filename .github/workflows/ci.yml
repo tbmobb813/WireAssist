@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Use Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
 
@@ -38,16 +38,18 @@ jobs:
         # Exclude synqagent (Tauri desktop) — frozen, tsc not green; vitest still runs below
         run: pnpm -r --filter '!synqagent' build
 
-      - name: Run package tests (sequential)
-        # Exclude synqagent (desktop vitest) — verified separately; hangs under CI load
-        # Sequential avoids jest worker contention across packages
+      - name: Run package tests (sequential, non-synqagent)
+        # Sequential avoids jest worker contention across packages.
         run: pnpm -r --workspace-concurrency=1 --filter '!synqagent' --if-present test
+
+      - name: Run synqagent tests (no threads, avoids CI hang)
+        run: pnpm --filter synqagent --if-present test:ci
 
       - name: Coverage (core)
         run: pnpm --filter @wireassist/core test:coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: wireassist/core/coverage/coverage-final.json
           fail_ci_if_error: false
@@ -58,10 +60,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Use Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
 

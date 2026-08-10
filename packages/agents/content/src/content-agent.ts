@@ -46,7 +46,6 @@ export class ContentAgent extends BaseAgent {
         'content_list_ideas',
         'content_analyze',
       ],
-      model: 'claude-sonnet-4-20250514',
       maxTokens: 4096,
     };
     super(config, deps);

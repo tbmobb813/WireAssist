@@ -1,6 +1,7 @@
 import { MCPClient } from '@wireassist/core';
 import { GmailClient } from './gmail-client';
 import { CalendarClient } from './calendar-client';
+import { SheetsClient } from './sheets-client';
 
 export async function setupAdminMCP(mcp: MCPClient): Promise<void> {
   const gmail = new GmailClient();
@@ -24,6 +25,11 @@ export async function setupAdminMCP(mcp: MCPClient): Promise<void> {
     await gmail.authenticate({ forceReauth: true });
     cal = new CalendarClient();
   }
+
+  // Sheets scope is granted by the same token as Gmail/Calendar — the
+  // hasRequiredScopes() check inside gmail.authenticate() above already
+  // forced re-authorization if it was missing, so no separate probe needed.
+  const sheets = new SheetsClient();
 
   // ── GMAIL (unchanged) ──────────────────────────────────────────
   mcp.register('gmail_list_threads', async (params) => {
@@ -119,6 +125,30 @@ export async function setupAdminMCP(mcp: MCPClient): Promise<void> {
       timeMin: params.timeMin as string,
       timeMax: params.timeMax as string,
       durationMinutes: params.durationMinutes as number,
+    });
+  });
+
+  // ── SHEETS ──────────────────────────────────────────────────────
+  mcp.register('sheets_read', async (params) => {
+    return sheets.readRange({
+      spreadsheetId: params.spreadsheetId as string,
+      range: params.range as string,
+    });
+  });
+
+  mcp.register('sheets_append', async (params) => {
+    return sheets.appendRows({
+      spreadsheetId: params.spreadsheetId as string,
+      range: params.range as string,
+      values: params.values as string[][],
+    });
+  });
+
+  mcp.register('sheets_update', async (params) => {
+    return sheets.updateRange({
+      spreadsheetId: params.spreadsheetId as string,
+      range: params.range as string,
+      values: params.values as string[][],
     });
   });
 }

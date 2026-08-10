@@ -1,0 +1,19 @@
+{
+  "name": "@wireassist/telegram-bot",
+  "version": "0.1.0",
+  "description": "Telegram surface for WireAssist — status, budget, approvals, and NixOps workflow runs from your phone",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.19.24",
+    "tsx": "^4.22.3",
+    "typescript": "^5.9.3"
+  }
+}
