@@ -2,11 +2,11 @@
 
 ## Prerequisites
 
-| Requirement | Version | Needed for                                                  |
-| ----------- | ------- | ----------------------------------------------------------- |
-| Node.js     | 20.9+   | All packages (Next.js 16 in Command Center requires >=20.9) |
-| pnpm        | 11+     | Workspace install (`corepack enable` recommended)           |
-| Rust        | 1.70+   | `wireassist/aia` Tauri app only                             |
+| Requirement | Version | Needed for                                                                                                           |
+| ----------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
+| Node.js     | 22.13+  | pnpm 11's pinned version (`packageManager` in package.json) uses `node:sqlite` internally, which is Node 22.13+ only |
+| pnpm        | 11+     | Workspace install (`corepack enable` recommended)                                                                    |
+| Rust        | 1.70+   | `wireassist/aia` Tauri app only                                                                                      |
 
 Install pnpm if needed:
 

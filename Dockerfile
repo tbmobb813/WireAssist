@@ -5,7 +5,7 @@
 # api start script (`tsx src/api/server.ts`) runs from source, not dist, so
 # devDependencies (tsx, concurrently) must stay installed at runtime — this
 # image is not pruned to production-only deps.
-FROM node:20-bookworm-slim AS build
+FROM node:22-bookworm-slim AS build
 
 RUN corepack enable && corepack prepare pnpm@11.3.0 --activate
 
@@ -37,7 +37,7 @@ COPY . .
 # dependency order (core/agents before command-center/telegram-bot).
 RUN pnpm build
 
-FROM node:20-bookworm-slim AS runtime
+FROM node:22-bookworm-slim AS runtime
 
 RUN corepack enable && corepack prepare pnpm@11.3.0 --activate
 
