@@ -9,6 +9,84 @@ This covers punch-list item #1 (get it deployed and persistent). Items #2
 (the Stage-4 heartbeat cron) and #8 (backups) are follow-ups, not covered
 here — see the note at the bottom.
 
+## 0. Fresh VPS prep
+
+Skip this if the box is already provisioned and hardened. Do this before
+step 2 if you're starting from a clean Hostinger image.
+
+**OS.** Ubuntu 24.04 LTS or Debian 12 — matches the Dockerfile's base image
+(`node:20-bookworm-slim`) and has long support.
+
+**Sizing / swap.** `docker build` here compiles `better-sqlite3`'s native
+binding and runs a Next.js build — both spike RAM. Minimum workable is 2
+vCPU / 4GB. On anything with 2GB or less, add swap first or the build gets
+OOM-killed silently:
+
+```bash
+fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+```
+
+**Lock down SSH before anything else touches the network.**
+
+```bash
+adduser <you>
+usermod -aG sudo <you>
+# copy your SSH public key to /home/<you>/.ssh/authorized_keys, then:
+```
+
+In `/etc/ssh/sshd_config`: set `PermitRootLogin no` and
+`PasswordAuthentication no`, then `systemctl restart sshd`. Install
+`fail2ban` for brute-force protection on whatever's left exposed:
+
+```bash
+apt install -y fail2ban
+```
+
+**Firewall — deny by default.**
+
+```bash
+ufw default deny incoming
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw enable
+```
+
+Port 3001 is deliberately _not_ opened here — `docker-compose.yml` binds it
+to loopback only, so it's reachable exclusively through Caddy (step 6) once
+that's set up. Nothing needs a 3001 firewall rule.
+
+**Unattended security patches.** This box runs unattended with your
+Anthropic key and Gmail/Calendar access sitting on it — patching should be
+automatic:
+
+```bash
+apt install -y unattended-upgrades
+dpkg-reconfigure -plow unattended-upgrades
+```
+
+**Docker log rotation.** The default `json-file` log driver has no size cap
+— over months, a long-running `command-center`/`telegram-bot` pair can fill
+the disk with logs. Before bringing the stack up, create
+`/etc/docker/daemon.json`:
+
+```json
+{ "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "3" } }
+```
+
+then `systemctl restart docker` (after Docker is installed in step 2).
+
+**Confirm Docker survives a reboot.** The `get.docker.com` installer enables
+this by default, but verify: `systemctl is-enabled docker` should print
+`enabled`. Combined with `restart: unless-stopped` in `docker-compose.yml`,
+this is what makes the stack self-heal after a VPS reboot instead of needing
+you to SSH in and restart things by hand.
+
+**DNS before Caddy.** If you're using a domain, point its A record at the
+VPS's IP now — Let's Encrypt needs it to already resolve when Caddy requests
+a certificate in step 6.
+
 ## 1. One-time: generate the Google OAuth token locally
 
 Do this on your laptop, **not** the VPS. The OAuth flow spins up a
@@ -85,16 +163,22 @@ with `docker volume ls` if the clone directory isn't `wireassist`.)
 ```bash
 docker compose up -d --build
 docker compose ps   # command-center should show "healthy" after ~30s
-curl http://127.0.0.1:3001   # web UI should respond
+curl http://127.0.0.1:3001   # run on the VPS itself — web UI should respond
 ```
 
-`/health` lives on the API (port 3002), which is deliberately not published
-to the host (see step 6) — `docker compose ps`'s health column is the check
-that exercises it. To hit it directly for debugging:
+`/health` lives on the API (port 3002), which isn't published at all — see
+`docker-compose.yml` comments. `docker compose ps`'s health column is the
+check that exercises it. To hit it directly for debugging:
 `docker compose exec command-center wget -qO- http://127.0.0.1:3002/health`.
 
-Command Center's web UI is now on port 3001. The Telegram bot connects to
-the API over the internal Docker network — no extra config needed.
+The web UI on 3001 is bound to loopback only — reachable from `curl` on the
+VPS itself, but not yet from the internet. That's intentional: step 6 puts
+Caddy in front of it. If you want to reach it directly over the VPS's IP
+without a domain (e.g. just to sanity-check it works before bothering with
+Caddy), change the `docker-compose.yml` port line to `'3001:3001'`, run
+`ufw allow 3001/tcp`, then `docker compose up -d` again — revert both once
+Caddy is in place. The Telegram bot connects to the API over the internal
+Docker network regardless — no extra config needed there.
 
 ## 6. (Optional) put a domain + TLS in front of it
 

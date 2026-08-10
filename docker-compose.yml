@@ -4,11 +4,15 @@ services:
     command: pnpm --filter @wireassist/command-center start
     restart: unless-stopped
     ports:
-      # 3002 (the Hono API) is deliberately not published to the host — the
-      # web UI on 3001 proxies /api/* to it internally (next.config.ts), and
-      # the telegram-bot service reaches it over the compose network. Expose
-      # 3002 too only if you need to hit the API directly for debugging.
-      - '3001:3001'
+      # Bound to loopback only — Caddy (or whatever's fronting this on the
+      # VPS) is the only thing meant to be internet-facing. Change to
+      # '3001:3001' if you need to reach the web UI directly without a
+      # reverse proxy in front (e.g. no domain yet) — see docs/DEPLOYMENT.md.
+      #
+      # 3002 (the Hono API) is not published at all — the web UI on 3001
+      # proxies /api/* to it internally (next.config.ts), and the
+      # telegram-bot service reaches it over the compose network.
+      - '127.0.0.1:3001:3001'
     env_file:
       - .env
     environment:
