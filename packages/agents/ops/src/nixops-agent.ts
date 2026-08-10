@@ -7,7 +7,7 @@ import {
   type EventBus,
 } from '@wireassist/core';
 import { BaseAgent } from '@wireassist/agent-admin';
-import { loadOpsContext, loadWorkflow, listWorkflows } from './context-loader';
+import { loadOpsContext, loadWorkflow, listWorkflows, parseSheetRef } from './context-loader';
 import { getTrustStage } from './trust-stage';
 import { logRun } from './run-log';
 
@@ -42,7 +42,7 @@ export class NixOpsAgent extends BaseAgent {
       role: 'strategy',
       name: 'NixOps',
       systemPrompt: [ctx.soul, ctx.identity, ctx.user].join('\n\n---\n\n'),
-      tools: [],
+      tools: ['sheets_read'],
       maxTokens: 8192,
     };
     super(config, deps);
@@ -133,11 +133,40 @@ export class NixOpsAgent extends BaseAgent {
     const transcript = () =>
       stages.map((s) => `### ${s.stage.toUpperCase()}\n${s.content}`).join('\n\n');
 
+    // SOUL.md's Diagnose step: "Pull the current real state (inbox, sheet,
+    // API, files)." A workflow file opts in with a "**Sheet:**" line
+    // (see parseSheetRef); workflows without one just skip this.
+    const sheetRef = parseSheetRef(workflow);
+    let sheetContext = '';
+    if (sheetRef) {
+      try {
+        const sheet = (await this.useTool('sheets_read', {
+          spreadsheetId: sheetRef.spreadsheetId,
+          range: sheetRef.range,
+        })) as { range: string; values: string[][] };
+        sheetContext =
+          `CURRENT SHEET STATE (${sheet.range}):\n` +
+          (sheet.values.length > 0
+            ? sheet.values.map((row) => row.join(' | ')).join('\n')
+            : '(no rows)');
+      } catch (err) {
+        sheetContext =
+          `SHEET READ FAILED for ${sheetRef.spreadsheetId} (${sheetRef.range}): ` +
+          (err instanceof Error ? err.message : String(err)) +
+          '\nTreat sheet-derived inputs as unavailable — do not assume stale/cached values.';
+      }
+    }
+
     const diagnosis = await stage(
       'diagnose',
-      'Check the workflow inputs against the brief. List unfilled TODOs or missing inputs. ' +
+      [
+        'Check the workflow inputs against the brief. List unfilled TODOs or missing inputs.',
+        sheetContext,
         'End with exactly one line: "VERDICT: PROCEED" if the workflow can run, or ' +
-        '"VERDICT: BLOCKED — <reason>" if a required input is missing per the escalation rules.'
+          '"VERDICT: BLOCKED — <reason>" if a required input is missing per the escalation rules.',
+      ]
+        .filter(Boolean)
+        .join('\n\n')
     );
 
     if (/VERDICT:\s*BLOCKED/i.test(diagnosis)) {

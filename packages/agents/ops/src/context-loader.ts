@@ -44,3 +44,22 @@ export function loadWorkflow(name: string, dir: string = CONTEXT_DIR): string {
   }
   return readFileSync(path, 'utf-8');
 }
+
+export interface SheetRef {
+  spreadsheetId: string;
+  range: string;
+}
+
+// A workflow file may declare its Google Sheet system of record with a line
+// like:
+//   **Sheet:** <spreadsheetId> | <range>
+// e.g. **Sheet:** 1a2B3cD4eFgH | Costs!A1:D100
+// This is how SOUL.md's Diagnose step ("pull the current real state —
+// inbox, sheet, API, files") gets an actual sheet to pull. Optional — a
+// workflow with no such line just skips the sheet-read entirely.
+export function parseSheetRef(workflowMarkdown: string): SheetRef | null {
+  const match = workflowMarkdown.match(/\*\*Sheet:\*\*\s*([^\s|]+)\s*\|\s*(.+)/);
+  if (!match) return null;
+  const [, spreadsheetId, range] = match;
+  return { spreadsheetId, range: range.trim() };
+}
