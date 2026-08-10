@@ -16,7 +16,7 @@ Skip this if the box is already provisioned and hardened. Do this before
 step 2 if you're starting from a clean Hostinger image.
 
 **OS.** Ubuntu 24.04 LTS or Debian 12 — matches the Dockerfile's base image
-(`node:20-bookworm-slim`) and has long support.
+(`node:22-bookworm-slim`) and has long support.
 
 **Sizing / swap.** `docker build` here compiles `better-sqlite3`'s native
 binding and runs a Next.js build — both spike RAM. Minimum workable is 2
