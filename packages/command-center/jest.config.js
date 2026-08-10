@@ -1,5 +1,4 @@
 module.exports = {
-  preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.test.ts'],
@@ -8,7 +7,17 @@ module.exports = {
     '^next/(.*)$': '<rootDir>/src/__mocks__/next.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
   },
-  globals: {
-    'ts-jest': { tsconfig: { esModuleInterop: true, jsx: 'react' } },
+  transform: {
+    '^.+\\.tsx?$': [
+      '@swc/jest',
+      {
+        jsc: {
+          parser: { syntax: 'typescript', tsx: true },
+          transform: { react: { runtime: 'automatic' } },
+          target: 'es2020',
+        },
+        module: { type: 'commonjs' },
+      },
+    ],
   },
 };

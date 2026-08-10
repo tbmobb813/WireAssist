@@ -1,5 +1,4 @@
 module.exports = {
-  preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.test.ts'],
@@ -8,11 +7,10 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'html'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   verbose: true,
-  globals: {
-    'ts-jest': {
-      tsconfig: {
-        esModuleInterop: true,
-      },
-    },
+  transform: {
+    '^.+\\.tsx?$': [
+      '@swc/jest',
+      { jsc: { parser: { syntax: 'typescript' }, target: 'es2020' }, module: { type: 'commonjs' } },
+    ],
   },
 };
