@@ -37,11 +37,36 @@ usermod -aG sudo <you>
 ```
 
 In `/etc/ssh/sshd_config`: set `PermitRootLogin no` and
-`PasswordAuthentication no`, then `systemctl restart sshd`. Install
-`fail2ban` for brute-force protection on whatever's left exposed:
+`PasswordAuthentication no`, then restart the SSH service — **`systemctl
+restart ssh`**, not `sshd`. Ubuntu and Debian both name the unit `ssh.service`
+(`sshd` is the RHEL/CentOS convention); `systemctl restart sshd` fails with
+"Unit sshd.service not found" on these images. If unsure, confirm first:
+`systemctl list-units --type=service | grep -i ssh`.
+
+**Before closing your current session**, open a second terminal and confirm
+you can still log in with your key — if the config or restart went wrong,
+you want a still-open session to fix it from, not to be locked out.
+
+Install `fail2ban` for brute-force protection on whatever's left exposed:
 
 ```bash
 apt install -y fail2ban
+```
+
+fail2ban's default `sshd` jail watches the systemd unit `sshd.service` via
+journal matching — which, per the naming difference above, doesn't exist on
+Ubuntu/Debian. Installed as-is, the jail runs but never sees a single log
+line, so it silently never bans anyone. Point it at the real unit name:
+
+```bash
+sudo tee /etc/fail2ban/jail.d/sshd.local <<'EOF'
+[sshd]
+enabled = true
+backend = systemd
+journalmatch = _SYSTEMD_UNIT=ssh.service + _COMM=sshd
+EOF
+sudo systemctl restart fail2ban
+sudo fail2ban-client status sshd   # confirm "Journal matches" shows ssh.service, not sshd.service
 ```
 
 **Firewall — deny by default.**
@@ -94,9 +119,34 @@ Do this on your laptop, **not** the VPS. The OAuth flow spins up a
 `localhost` callback server and tries to open a browser (`gmail-client.ts`)
 — that can't complete over a remote SSH session.
 
+**Create the OAuth client first**, if you don't already have one, in
+[Google Cloud Console](https://console.cloud.google.com/):
+
+1. Create or pick a project, then **APIs & Services → Library** — enable
+   **Gmail API**, **Google Calendar API**, and **Google Sheets API**.
+2. **APIs & Services → OAuth consent screen** — choose **External**, fill in
+   the minimal required fields. It starts in **Testing** mode, which caps
+   access to accounts you explicitly allow — scroll to **Test users → + Add
+   users** and add your own Google account. Skipping this gets you "Access
+   blocked: has not completed the Google verification process" the moment
+   you try to sign in.
+3. **APIs & Services → Credentials → Create Credentials → OAuth client ID**
+   — application type **Web application**, and under **Authorized redirect
+   URIs** add `http://localhost:8080/` (any unprivileged port works; just
+   don't leave it blank). Download the client JSON.
+
+   Do **not** pick "Desktop app" here — Google issues those with a
+   redirect URI of `http://localhost` with no port, and `gmail-client.ts`
+   defaults a portless redirect to port 80, which needs root to bind and
+   fails with `EACCES: permission denied 127.0.0.1:80` the moment you try
+   to authorize. "Web application" with an explicit port sidesteps this
+   entirely.
+
 ```bash
 # On your laptop, from the repo root
 export WIREASSIST_HOME=/tmp/wireassist-oauth
+mkdir -p /tmp/wireassist-oauth/.wireassist
+mv ~/Downloads/client_secret_*.json /tmp/wireassist-oauth/.wireassist/gmail-credentials.json
 pnpm build:core && pnpm build:admin
 node packages/agents/admin/dist/demo.js
 # Complete the Google OAuth prompt in your browser, then Ctrl+C once it's done.
@@ -128,6 +178,15 @@ git checkout main   # or whichever branch you want live
 ```
 
 ## 4. Configure secrets and copy the OAuth token
+
+**Getting a Telegram bot token and chat ID**, if you don't have them yet:
+
+1. Message **[@BotFather](https://t.me/BotFather)** on Telegram, send
+   `/newbot`, follow the prompts. It replies with your `TELEGRAM_BOT_TOKEN`.
+2. Send your new bot any message, then visit
+   `https://api.telegram.org/bot<TOKEN>/getUpdates` in a browser (swap in
+   your real token) — the JSON response includes `"chat":{"id":...}`, which
+   is your `TELEGRAM_CHAT_ID`.
 
 ```bash
 cat > .env <<'EOF'
@@ -202,6 +261,48 @@ and `sudo systemctl reload caddy`. Caddy issues and renews the TLS cert
 automatically. Only port 3001 needs to be reachable — the API on 3002 is
 deliberately not published (see `docker-compose.yml` comments).
 
+## 6b. Or instead: private access via Tailscale
+
+If you don't have a domain and would rather not expose the dashboard to the
+public internet at all, Tailscale gives you private access from your own
+devices with no TLS cert to manage and no public port beyond SSH. The
+Telegram bot already covers remote control from anywhere — this just adds
+the fuller dashboard UI, reachable only over your own tailnet.
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+# open the printed login URL in a browser, sign in to authorize the VPS
+```
+
+Install Tailscale on whatever device you'll browse from too
+(<https://tailscale.com/download>), signed into the same account. Then, on
+the VPS:
+
+```bash
+tailscale ip -4   # note this — it's the private address you'll browse to
+```
+
+Open the dashboard port to the Tailscale interface only — not the public
+internet. `docker-compose.yml` binds port 3001 to `127.0.0.1`, which
+Tailscale traffic can't reach either; widen it to all interfaces, then use
+`ufw` to restrict exposure to the Tailscale interface specifically:
+
+```bash
+sed -i "s/127.0.0.1:3001:3001/0.0.0.0:3001:3001/" docker-compose.yml
+sudo ufw allow in on tailscale0 to any port 3001 proto tcp
+docker compose up -d
+```
+
+The public internet still hits `ufw`'s default deny (nothing opened port
+3001 for it); only traffic arriving over the encrypted `tailscale0`
+interface gets through. Browse to `http://<tailscale-ip>:3001` from any
+device on your tailnet.
+
+**Note:** corporate/restrictive Wi-Fi sometimes blocks Tailscale's
+control-plane connection outright. If `tailscale up`'s login page or the
+admin console won't load, try a mobile hotspot as a quick test.
+
 ## 7. Off-box backups
 
 The named Docker volume survives container restarts and rebuilds, but not
@@ -216,10 +317,39 @@ environment (success is silent by design).
 ```bash
 # Install rclone (works with any of its 70+ supported providers — S3,
 # Backblaze B2, Google Drive, etc. Pick whichever you already have an
-# account with; B2's free tier is generous for this use case)
+# account with; B2's free tier is generous for this use case, and needs no
+# extra setup beyond an access key — if you're using B2 or S3, `rclone
+# config` alone is enough, skip straight to the "Add to .env" step below)
 curl https://rclone.org/install.sh | sudo bash
-rclone config   # interactive — set up a remote, name it whatever you like
+rclone config
 ```
+
+**If your remote is Google Drive**, `rclone config` needs a bit more —
+Google is retiring rclone's shared OAuth client, so it now requires you to
+bring your own:
+
+1. In `rclone config`: `n` → new remote → pick `drive` → for **scope**,
+   choose **`drive.file`** (access limited to files rclone itself creates,
+   not your whole Drive).
+2. When it asks for `client_id`, it'll first ask "Continue using the shared
+   client_id anyway?" — answer `n`, since that path is being retired. It
+   then requires a real `client_id`/`client_secret`: create one in
+   [Google Cloud Console](https://console.cloud.google.com/) → **APIs &
+   Services → Library** → enable **Google Drive API** → **Credentials →
+   Create Credentials → OAuth client ID** → type **Desktop app** (fine for
+   rclone specifically — it uses a dynamic loopback port correctly, unlike
+   the WireAssist OAuth flow's port-80 issue above). Paste the Client ID
+   and secret in when prompted.
+3. At **"Use auto config?"**, answer **`n`** — the VPS is headless, so
+   answering `y` here just hangs or fails trying to open a browser that
+   doesn't exist. Answering `n` prints an `rclone authorize "drive" "..."`
+   command instead — run that exact command on your laptop (install rclone
+   there too if needed), sign in when the browser opens, then paste the
+   resulting token blob back into the still-waiting VPS prompt.
+
+Verify with `rclone lsd <remote-name>:` — should list your Drive's
+top-level folders (empty output with no error is fine; `lsd` only lists
+directories, not files).
 
 Add to `.env` (or export in the cron environment directly — cron doesn't
 source `.env` automatically):
@@ -287,10 +417,30 @@ the dashboard's manual "Run" button use — is gated behind the app's
 `workforce`-tier license check (`tierGate('workforce')` in `server.ts`).
 Check `curl http://127.0.0.1:3001/api/license/status` on the VPS; if it
 returns anything other than `workforce`, ops workflow runs won't execute at
-all yet, cron or manual, until a license is activated via
-`/api/license/activate`. That's a separate, pre-existing gate this work
-surfaced rather than something new — worth deciding on independently of
-the heartbeat cron itself.
+all yet, cron or manual, until a license is activated.
+
+For your own self-hosted, single-owner deployment, there's no need to go
+through `/api/license/activate` (which calls out to LemonSqueezy) just to
+use your own instance — insert a `workforce`-tier row directly into the
+same local SQLite DB instead, entirely offline and fully reversible:
+
+```bash
+docker compose exec command-center node -e "
+const Database = require('better-sqlite3');
+const db = new Database('/data/.wireassist/wireassist.db');
+db.exec(\`CREATE TABLE IF NOT EXISTS licenses (
+  key TEXT PRIMARY KEY, tier TEXT NOT NULL DEFAULT 'trial', status TEXT NOT NULL DEFAULT 'inactive',
+  customer_email TEXT, activations_remaining INTEGER, verified_at TEXT NOT NULL, expires_grace_at TEXT NOT NULL
+)\`);
+const now = new Date().toISOString();
+const farFuture = new Date(Date.now() + 100*365*24*60*60*1000).toISOString();
+db.prepare(\`INSERT INTO licenses (key, tier, status, customer_email, activations_remaining, verified_at, expires_grace_at)
+  VALUES (?, 'workforce', 'active', NULL, NULL, ?, ?)
+  ON CONFLICT(key) DO UPDATE SET tier='workforce', status='active', verified_at=excluded.verified_at, expires_grace_at=excluded.expires_grace_at\`)
+  .run('self-hosted', now, farFuture);
+console.log('Granted workforce tier, expires', farFuture);
+"
+```
 
 ## Updating after a code change
 
