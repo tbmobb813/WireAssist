@@ -18,7 +18,9 @@ export function setupResearchMCP(mcp: MCPClient): void {
 
     if (!apiKey) {
       throw new Error(
-        'BRAVE_API_KEY is not set. Add it to .env.local to enable the Research Agent.'
+        'BRAVE_API_KEY is not set. Add it to .env (docker compose) or .env.local (local dev), ' +
+          'then restart with `docker compose up -d command-center` — a plain `restart` will not ' +
+          'pick up the change.'
       );
     }
 
