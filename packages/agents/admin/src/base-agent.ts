@@ -16,15 +16,27 @@ import {
   ProviderFactory,
 } from '@wireassist/core';
 
-// Single place to move the fleet to a new model: set WIREASSIST_MODEL in the
-// environment, or pass `model` in an individual agent's config to override.
-export const DEFAULT_MODEL = process.env.WIREASSIST_MODEL ?? 'claude-sonnet-5';
-
 // Single place to move the fleet to a new provider (e.g. OpenRouter): set
 // WIREASSIST_PROVIDER in the environment, or pass `provider` in an
 // individual agent's config to override. Defaults to talking to Anthropic
 // directly, same as before this existed.
 export const DEFAULT_PROVIDER = (process.env.WIREASSIST_PROVIDER as ProviderType) ?? 'anthropic';
+
+// Per-provider fallback model, used only when neither WIREASSIST_MODEL nor
+// an agent's own config.model is set. A bare "claude-sonnet-5" isn't a
+// valid OpenRouter slug; "openrouter/auto" lets OpenRouter pick the best
+// underlying model for each request instead of pinning one by default.
+const PROVIDER_DEFAULT_MODEL: Partial<Record<ProviderType, string>> = {
+  anthropic: 'claude-sonnet-5',
+  openrouter: 'openrouter/auto',
+};
+
+// Single place to move the fleet to a new model: set WIREASSIST_MODEL in the
+// environment, or pass `model` in an individual agent's config to override.
+// Falls back to a provider-appropriate default rather than one fixed model
+// string, since that string isn't valid across every provider.
+export const DEFAULT_MODEL =
+  process.env.WIREASSIST_MODEL ?? PROVIDER_DEFAULT_MODEL[DEFAULT_PROVIDER] ?? 'claude-sonnet-5';
 
 export abstract class BaseAgent {
   protected config: AgentConfig;
@@ -62,10 +74,21 @@ export abstract class BaseAgent {
     if (!this._provider) {
       this._provider = ProviderFactory.create({
         type: this.config.provider ?? DEFAULT_PROVIDER,
-        model: this.config.model ?? DEFAULT_MODEL,
+        model: this.resolveModel(),
       });
     }
     return this._provider;
+  }
+
+  // Resolves the model to use for this agent, provider-aware — an agent
+  // that overrides only `config.provider` (not `config.model`) should still
+  // get that provider's own default, not the fleet-wide one for whatever
+  // provider happens to be globally configured.
+  private resolveModel(): string {
+    if (this.config.model) return this.config.model;
+    if (process.env.WIREASSIST_MODEL) return process.env.WIREASSIST_MODEL;
+    const provider = this.config.provider ?? DEFAULT_PROVIDER;
+    return PROVIDER_DEFAULT_MODEL[provider] ?? DEFAULT_MODEL;
   }
 
   get role(): AgentRole {
@@ -107,7 +130,7 @@ export abstract class BaseAgent {
       ? `${this.config.systemPrompt}\n\n---\nCONTEXT:\n${extraContext}`
       : this.config.systemPrompt;
 
-    const model = this.config.model ?? DEFAULT_MODEL;
+    const model = this.resolveModel();
     const response = await this.getProvider().complete({
       prompt: userMessage,
       systemPrompt: system,

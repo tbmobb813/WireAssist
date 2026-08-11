@@ -335,6 +335,42 @@ describe('BaseAgent.think()', () => {
     expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'openrouter' }));
   });
 
+  it('defaults to openrouter/auto when provider is openrouter and no model is set', async () => {
+    const config: AgentConfig = {
+      role: 'admin',
+      name: 'Test Agent',
+      systemPrompt: 'You are a test agent.',
+      tools: [],
+      provider: 'openrouter',
+    };
+    const agent = new TestAgent(config, makeDeps());
+    await agent.testThink('hello');
+
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'openrouter', model: 'openrouter/auto' })
+    );
+    expect(completeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'openrouter/auto' })
+    );
+  });
+
+  it('config.model still overrides the provider-specific default', async () => {
+    const config: AgentConfig = {
+      role: 'admin',
+      name: 'Test Agent',
+      systemPrompt: 'You are a test agent.',
+      tools: [],
+      provider: 'openrouter',
+      model: 'anthropic/claude-sonnet-4.5',
+    };
+    const agent = new TestAgent(config, makeDeps());
+    await agent.testThink('hello');
+
+    expect(completeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'anthropic/claude-sonnet-4.5' })
+    );
+  });
+
   it('passes prompt, systemPrompt, model, and maxTokens to provider.complete()', async () => {
     const { agent } = makeAgent();
     await agent.testThink('hello', 'extra context');
