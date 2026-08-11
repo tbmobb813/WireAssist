@@ -452,7 +452,7 @@ function isValidPlatform(p: unknown): p is 'twitter' | 'linkedin' | 'instagram' 
 app.post('/api/tasks/generate-post', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const { topic, platform, tone } = await c.req.json();
+  const { topic, platform, tone, context } = await c.req.json();
   if (!topic || typeof topic !== 'string') return c.json({ error: 'topic required' }, 400);
   if (!isValidPlatform(platform)) {
     return c.json({ error: `platform must be one of: ${[...VALID_PLATFORMS].join(', ')}` }, 400);
@@ -460,7 +460,10 @@ app.post('/api/tasks/generate-post', async (c) => {
   if (tone !== undefined && (typeof tone !== 'string' || tone.length > 100)) {
     return c.json({ error: 'tone must be a string under 100 characters' }, 400);
   }
-  const task = ContentTasks.generatePost(topic, platform, tone);
+  if (context !== undefined && (typeof context !== 'string' || context.length > 4000)) {
+    return c.json({ error: 'context must be a string under 4000 characters' }, 400);
+  }
+  const task = ContentTasks.generatePost(topic, platform, tone, context || undefined);
   queueContentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
@@ -481,10 +484,17 @@ app.post('/api/tasks/generate-plan', async (c) => {
       400
     );
   }
+  if (
+    body.businessContext !== undefined &&
+    (typeof body.businessContext !== 'string' || body.businessContext.length > 4000)
+  ) {
+    return c.json({ error: 'businessContext must be a string under 4000 characters' }, 400);
+  }
   const task = ContentTasks.generatePlan(
     platforms as ('twitter' | 'linkedin' | 'instagram' | 'threads')[],
     body.weeksAhead ?? 1,
-    body.postsPerWeek ?? 3
+    body.postsPerWeek ?? 3,
+    body.businessContext || undefined
   );
   queueContentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });

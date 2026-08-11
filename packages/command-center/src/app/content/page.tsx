@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
+import { consumeContentHandoff } from '@/lib/content-handoff';
 import Link from 'next/link';
 
 const PLATFORMS = ['twitter', 'linkedin', 'instagram', 'threads'] as const;
@@ -45,10 +46,26 @@ export default function ContentPage() {
   const [topic, setTopic] = useState('');
   const [platform, setPlatform] = useState<Platform>('linkedin');
   const [tone, setTone] = useState('');
+  const [extraContext, setExtraContext] = useState('');
   const [planPlatforms, setPlanPlatforms] = useState<Platform[]>(['linkedin', 'twitter']);
   const [weeksAhead, setWeeksAhead] = useState(1);
   const [postsPerWeek, setPostsPerWeek] = useState(3);
+  const [businessContext, setBusinessContext] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handoff = consumeContentHandoff();
+    if (!handoff) return;
+    if (handoff.kind === 'research') {
+      setTopic(handoff.topic);
+      setExtraContext(handoff.context);
+      setHandoffNotice(`Pulled in from Research: "${handoff.topic}"`);
+    } else {
+      setBusinessContext(handoff.context);
+      setHandoffNotice(`Pulled in from GTM strategy: ${handoff.product || 'your product'}`);
+    }
+  }, []);
 
   const fetchPosts = useCallback(async () => {
     const res = await fetch('/api/content/posts?daysAhead=14');
@@ -107,7 +124,12 @@ export default function ContentPage() {
       const res = await fetch('/api/tasks/generate-post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: topic.trim(), platform, tone: tone.trim() || undefined }),
+        body: JSON.stringify({
+          topic: topic.trim(),
+          platform,
+          tone: tone.trim() || undefined,
+          context: extraContext.trim() || undefined,
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -128,7 +150,12 @@ export default function ContentPage() {
       const res = await fetch('/api/tasks/generate-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platforms: planPlatforms, weeksAhead, postsPerWeek }),
+        body: JSON.stringify({
+          platforms: planPlatforms,
+          weeksAhead,
+          postsPerWeek,
+          businessContext: businessContext.trim() || undefined,
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -181,6 +208,21 @@ export default function ContentPage() {
         </div>
       )}
 
+      {handoffNotice && (
+        <div
+          className="rounded-lg border p-3 mb-5 text-xs flex items-center justify-between"
+          style={{ background: '#4fc3f715', borderColor: '#4fc3f730', color: '#7dd3fc' }}
+        >
+          {handoffNotice}
+          <button
+            onClick={() => setHandoffNotice(null)}
+            className="text-gray-500 hover:text-gray-300 ml-3"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-6">
         {/* Left — Generator */}
         <div className="col-span-1 space-y-4">
@@ -208,6 +250,14 @@ export default function ContentPage() {
               onKeyDown={(e) => e.key === 'Enter' && generatePost()}
               placeholder="Tone (optional) — e.g. casual, authoritative, funny"
               className="w-full rounded px-3 py-2 text-sm mb-3 outline-none"
+              style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
+            />
+            <textarea
+              value={extraContext}
+              onChange={(e) => setExtraContext(e.target.value)}
+              placeholder="Context (optional) — a research finding or other grounding detail to write from"
+              rows={2}
+              className="w-full rounded px-3 py-2 text-sm mb-3 outline-none resize-none"
               style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
             />
             <div className="flex gap-2 mb-3 flex-wrap">
@@ -247,6 +297,14 @@ export default function ContentPage() {
             style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
           >
             <div className="text-xs tracking-widest text-gray-500 mb-3">WEEKLY PLAN</div>
+            <textarea
+              value={businessContext}
+              onChange={(e) => setBusinessContext(e.target.value)}
+              placeholder="Business context (optional) — or pull one in from a GTM strategy"
+              rows={2}
+              className="w-full rounded px-3 py-2 text-sm mb-3 outline-none resize-none"
+              style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
+            />
             <div className="flex gap-2 mb-3 flex-wrap">
               {PLATFORMS.map((p) => (
                 <button

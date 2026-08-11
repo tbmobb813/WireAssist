@@ -27,6 +27,16 @@ describe('ContentTasks.generatePost()', () => {
     const t = ContentTasks.generatePost('AI', 'threads');
     expect(t.description).toContain('threads');
   });
+
+  it('passes extraContext through when provided', () => {
+    const t = ContentTasks.generatePost('AI trends', 'linkedin', undefined, 'a research finding');
+    expect((t.input as { extraContext?: string }).extraContext).toBe('a research finding');
+  });
+
+  it('leaves extraContext undefined when not provided', () => {
+    const t = ContentTasks.generatePost('AI trends', 'linkedin');
+    expect((t.input as { extraContext?: string }).extraContext).toBeUndefined();
+  });
 });
 
 describe('ContentTasks.generatePlan()', () => {
@@ -47,12 +57,26 @@ describe('ContentTasks.generatePlan()', () => {
 
   it('stores all platforms in input', () => {
     const t = ContentTasks.generatePlan(['linkedin', 'twitter', 'instagram']);
-    expect((t.input as { platforms: string[] }).platforms).toEqual(['linkedin', 'twitter', 'instagram']);
+    expect((t.input as { platforms: string[] }).platforms).toEqual([
+      'linkedin',
+      'twitter',
+      'instagram',
+    ]);
   });
 
   it('has input type generate_plan', () => {
     const t = ContentTasks.generatePlan(['linkedin']);
     expect((t.input as { type: string }).type).toBe('generate_plan');
+  });
+
+  it('passes businessContext through when provided', () => {
+    const t = ContentTasks.generatePlan(['linkedin'], 1, 3, 'GTM strategy summary');
+    expect((t.input as { businessContext?: string }).businessContext).toBe('GTM strategy summary');
+  });
+
+  it('leaves businessContext undefined when not provided', () => {
+    const t = ContentTasks.generatePlan(['linkedin']);
+    expect((t.input as { businessContext?: string }).businessContext).toBeUndefined();
   });
 });
 
@@ -63,7 +87,12 @@ describe('ContentTasks.schedulePost()', () => {
     const t = ContentTasks.schedulePost('Hello world', 'twitter', at);
     expect(t.agentRole).toBe('content');
     expect(t.approvalRequired).toBe(true);
-    const input = t.input as { type: string; content: string; platform: string; scheduledAt: string };
+    const input = t.input as {
+      type: string;
+      content: string;
+      platform: string;
+      scheduledAt: string;
+    };
     expect(input.type).toBe('schedule_post');
     expect(input.content).toBe('Hello world');
     expect(input.platform).toBe('twitter');

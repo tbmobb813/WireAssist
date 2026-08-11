@@ -3,7 +3,7 @@ import type { AgentTask } from '@wireassist/core';
 import type { Platform } from '@wireassist/trendpost-mcp';
 
 export const ContentTasks = {
-  generatePost(topic: string, platform: Platform, tone?: string): AgentTask {
+  generatePost(topic: string, platform: Platform, tone?: string, extraContext?: string): AgentTask {
     return {
       id: randomUUID(),
       agentRole: 'content',
@@ -11,12 +11,17 @@ export const ContentTasks = {
       status: 'queued',
       createdAt: new Date(),
       updatedAt: new Date(),
-      input: { type: 'generate_post', topic, platform, tone },
+      input: { type: 'generate_post', topic, platform, tone, extraContext },
       approvalRequired: true,
     };
   },
 
-  generatePlan(platforms: Platform[], weeksAhead = 1, postsPerWeek = 3): AgentTask {
+  generatePlan(
+    platforms: Platform[],
+    weeksAhead = 1,
+    postsPerWeek = 3,
+    businessContext?: string
+  ): AgentTask {
     return {
       id: randomUUID(),
       agentRole: 'content',
@@ -24,7 +29,7 @@ export const ContentTasks = {
       status: 'queued',
       createdAt: new Date(),
       updatedAt: new Date(),
-      input: { type: 'generate_plan', platforms, weeksAhead, postsPerWeek },
+      input: { type: 'generate_plan', platforms, weeksAhead, postsPerWeek, businessContext },
       approvalRequired: true,
     };
   },
