@@ -153,12 +153,16 @@ describe('ResearchAgent.run() — research_topic', () => {
     );
   });
 
-  it('does NOT store to memory when rejected', async () => {
+  it('does NOT store findings to memory when rejected', async () => {
     const deps = makeDeps({ approval: { request: jest.fn().mockResolvedValue(false) } });
     const agent = new ResearchAgent(deps);
     (agent as any).think = jest.fn().mockResolvedValue('Findings.');
     await agent.run(makeTask());
-    expect(deps.memory.store).not.toHaveBeenCalled();
+    // proposeAction() itself still records a rejection trace — only the
+    // findings-specific remember() (gated on approval) should be skipped.
+    expect(deps.memory.store).not.toHaveBeenCalledWith(
+      expect.objectContaining({ tags: expect.arrayContaining(['research', 'findings']) })
+    );
   });
 
   it('handles empty search results gracefully', async () => {
@@ -197,7 +201,10 @@ describe('ResearchAgent.run() — synthesize_findings', () => {
     (agent as any).think = jest.fn().mockResolvedValue('Synthesized result.');
     const task = makeTask({ input: { type: 'synthesize_findings', topic: 'AI tools' } });
     await agent.run(task);
-    expect(deps.memory.searchAsync).toHaveBeenCalledWith('AI tools', { agentRole: 'research' });
+    expect(deps.memory.searchAsync).toHaveBeenCalledWith('AI tools', {
+      agentRole: 'research',
+      excludeTags: ['trace'],
+    });
     expect(deps.events.emit).toHaveBeenCalledWith(
       'agent:research_complete',
       expect.objectContaining({ summary: 'Synthesized result.' })
