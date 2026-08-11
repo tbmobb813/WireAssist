@@ -5,10 +5,10 @@ services, restarted automatically by Docker on crash or VPS reboot. State
 (SQLite DB, OAuth tokens, budget/trust-stage files) lives in a named volume
 so it survives image rebuilds.
 
-This covers punch-list item #1 (get it deployed and persistent), plus #8
-(off-box backups, step 7) and #9 (Telegram alerting on API downtime,
-already built into the bot — see `packages/telegram-bot`). Item #2 (the
-Stage-4 heartbeat cron) is still a follow-up — see the note at the bottom.
+This covers punch-list item #1 (get it deployed and persistent), plus #2
+(the Stage-4 heartbeat cron, step 8), #8 (off-box backups, step 7), and #9
+(Telegram alerting on API downtime, already built into the bot — see
+`packages/telegram-bot`).
 
 ## 0. Fresh VPS prep
 
@@ -240,16 +240,57 @@ then `gpg --decrypt <file>.tar.gz.gpg > <file>.tar.gz`, then extract into
 a fresh volume the same way `docker run ... busybox tar` was used to
 populate it in step 4.
 
+## 8. Unattended scheduled runs (heartbeat)
+
+`dev/heartbeat.sh` checks every NixOps workflow's trust stage and, for any
+workflow you've explicitly promoted to **Stage 4** ("heartbeat — unattended
+scheduled runs") _and_ given a `**Heartbeat brief:**` line in its own
+workflow file, triggers a run automatically. Workflows below Stage 4, or at
+Stage 4 without a Heartbeat brief defined, are skipped — this script never
+advances a workflow's trust stage itself. Advancing a workflow to Stage 4 is
+your call, per-workflow, via the Ops tab in Command Center (or `POST
+/api/ops/trust/:workflow`), same as the rest of the trust ladder (punch-list
+#7).
+
+**One-time setup** — add a `**Heartbeat brief:**` line to any workflow file
+you intend to run unattended, e.g. in
+`packages/agents/ops/context/workflows/<name>.md`:
+
+```
+**Trust stage:** 4 (heartbeat — unattended scheduled runs)
+**Heartbeat brief:** <the fixed brief this workflow should run with every time>
+```
+
+**Cron entry** (hourly, adjust to whatever cadence fits your workflows):
+
+```bash
+crontab -e
+# add:
+0 * * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/heartbeat.sh >> /var/log/wireassist-heartbeat.log 2>&1
+```
+
+Requires `jq` (`sudo apt install -y jq`). Run it manually once first
+(`WIREASSIST_API_URL=http://localhost:3002 ./dev/heartbeat.sh`) to confirm
+it skips as expected before trusting it to cron — with no workflow yet at
+Stage 4, it should just print a skip line per workflow and exit cleanly.
+
+Outcomes (approved, blocked, or failed) arrive the same way any other run's
+outcome does — the Telegram bot already alerts on those regardless of who
+triggered the run — so this script doesn't duplicate that notification.
+
+**Note:** `POST /api/tasks/ops-workflow` — the endpoint both this script and
+the dashboard's manual "Run" button use — is gated behind the app's
+`workforce`-tier license check (`tierGate('workforce')` in `server.ts`).
+Check `curl http://127.0.0.1:3001/api/license/status` on the VPS; if it
+returns anything other than `workforce`, ops workflow runs won't execute at
+all yet, cron or manual, until a license is activated via
+`/api/license/activate`. That's a separate, pre-existing gate this work
+surfaced rather than something new — worth deciding on independently of
+the heartbeat cron itself.
+
 ## Updating after a code change
 
 ```bash
 git pull
 docker compose up -d --build
 ```
-
-## What this does NOT cover yet
-
-- **Unattended scheduled runs (punch-list #2).** Nothing here triggers a
-  Stage-4 "heartbeat" workflow run on a schedule — that still needs a
-  crontab entry (or systemd timer) hitting the workflow-run endpoint. Next
-  piece of work, not part of this deploy.
