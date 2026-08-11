@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
 
@@ -9,6 +9,25 @@ const STAGE_LABEL: Record<string, string> = {
   take_action: 'Take Action',
   assess: 'Assess',
 };
+
+interface WorkflowTodo {
+  label: string;
+  instruction: string;
+}
+
+// Workflow files mark unfilled inputs as `- Label: _TODO: instruction_` (see
+// packages/agents/ops/context/workflows/*.md) — parse those into dedicated
+// fields instead of making JNix guess what to paste into one big brief box.
+function parseWorkflowTodos(markdown: string | null): WorkflowTodo[] {
+  if (!markdown) return [];
+  const todos: WorkflowTodo[] = [];
+  const re = /^-\s*(.+?):\s*_TODO:\s*(.+?)_\s*$/gm;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(markdown)) !== null) {
+    todos.push({ label: match[1].trim(), instruction: match[2].trim() });
+  }
+  return todos;
+}
 
 interface PastRun {
   id: string;
@@ -39,6 +58,7 @@ export default function OpsPage() {
   const [trustStage, setTrustStageState] = useState(2);
   const [savingTrustStage, setSavingTrustStage] = useState(false);
   const [brief, setBrief] = useState('');
+  const [todoValues, setTodoValues] = useState<Record<string, string>>({});
   const [freeformPrompt, setFreeformPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
   const [stages, setStages] = useState<string[]>([]);
@@ -92,11 +112,14 @@ export default function OpsPage() {
   useEffect(() => {
     if (!selectedWorkflow) return;
     setWorkflowPreview(null);
+    setTodoValues({});
     fetch(`/api/ops/workflows/${encodeURIComponent(selectedWorkflow)}`)
       .then((r) => r.json())
       .then((d) => setWorkflowPreview(typeof d.content === 'string' ? d.content : null))
       .catch(() => setWorkflowPreview(null));
   }, [selectedWorkflow]);
+
+  const workflowTodos = useMemo(() => parseWorkflowTodos(workflowPreview), [workflowPreview]);
 
   useEffect(() => {
     if (!selectedWorkflow) return;
@@ -202,10 +225,23 @@ export default function OpsPage() {
     }
   }
 
-  const runWorkflow = () =>
-    selectedWorkflow &&
-    brief.trim() &&
-    fire('/api/tasks/ops-workflow', { workflow: selectedWorkflow, brief: brief.trim() });
+  const runWorkflow = () => {
+    if (!selectedWorkflow || !brief.trim()) return;
+    const filledTodos = workflowTodos
+      .map((t) => ({ ...t, value: (todoValues[t.label] ?? '').trim() }))
+      .filter((t) => t.value);
+    const fullBrief =
+      filledTodos.length === 0
+        ? brief.trim()
+        : [
+            brief.trim(),
+            [
+              'ADDITIONAL INPUTS PROVIDED:',
+              ...filledTodos.map((t) => `- ${t.label}: ${t.value}`),
+            ].join('\n'),
+          ].join('\n\n');
+    fire('/api/tasks/ops-workflow', { workflow: selectedWorkflow, brief: fullBrief });
+  };
 
   const runFreeform = () =>
     freeformPrompt.trim() && fire('/api/tasks/ops-freeform', { prompt: freeformPrompt.trim() });
@@ -264,6 +300,37 @@ export default function OpsPage() {
                 {workflowPreview ?? 'Loading...'}
               </div>
             )}
+          </div>
+        )}
+        {workflowTodos.length > 0 && (
+          <div
+            className="rounded p-3 mb-3"
+            style={{ background: '#080810', border: '1px solid #1e2040' }}
+          >
+            <div className="text-xs tracking-widest text-gray-500 mb-2">
+              INPUTS THIS WORKFLOW NEEDS
+            </div>
+            <div className="space-y-2">
+              {workflowTodos.map((t) => (
+                <div key={t.label}>
+                  <label className="text-xs text-gray-400 block mb-1">{t.label}</label>
+                  <textarea
+                    value={todoValues[t.label] ?? ''}
+                    onChange={(e) =>
+                      setTodoValues((prev) => ({ ...prev, [t.label]: e.target.value }))
+                    }
+                    placeholder={t.instruction}
+                    rows={2}
+                    className="w-full rounded px-3 py-2 text-xs outline-none resize-none"
+                    style={{ background: '#0d0d1a', border: '1px solid #1e2040', color: '#e2e8f0' }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="text-xs text-gray-600 mt-2">
+              Optional — leave blank and the run will escalate back to you for whatever&apos;s
+              missing instead of guessing.
+            </div>
           </div>
         )}
         {selectedWorkflow && (
