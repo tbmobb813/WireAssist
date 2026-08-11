@@ -198,6 +198,12 @@ EOF
 chmod 600 .env
 ```
 
+**Adding or changing a variable in `.env` later?** `docker compose restart`
+does _not_ re-read it — that just restarts the existing container with
+whatever environment it was created with. Use
+`docker compose up -d command-center` instead, which recreates the
+container and picks up the new value.
+
 Start the stack once so the named volume exists, then copy the OAuth files
 in from your laptop:
 
