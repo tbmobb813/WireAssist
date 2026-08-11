@@ -27,6 +27,7 @@ import {
 import { registerTrendPostTools, TrendPostStorage } from '@wireassist/trendpost-mcp';
 import { registerPortfolioRoutes } from './portfolio-routes';
 import { routeChatMessage, type RouteDecision } from './chat-router';
+import { getLocation, setLocation, listNotes, addNote, deleteNote } from './dashboard-widgets';
 
 const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
 const DB_PATH = path.join(HOME_PATH, '.wireassist', 'wireassist.db');
@@ -311,6 +312,59 @@ app.post('/api/tasks/review-calendar', async (c) => {
   const task = AdminTasks.reviewCalendar(body.daysAhead ?? 7);
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// Raw upcoming events for the dashboard's calendar widget — no LLM analysis,
+// just the next few events, so it's cheap enough to poll.
+app.get('/api/calendar/upcoming', async (c) => {
+  if (!gmailReady) return c.json({ ready: false, events: [] });
+  try {
+    const events = await mcp.call('calendar_list_events', {
+      maxResults: 5,
+      timeMax: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    return c.json({ ready: true, events });
+  } catch (err) {
+    return c.json({
+      ready: false,
+      events: [],
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+// ── DASHBOARD WIDGETS ─────────────────────────────────────────────────────
+// Location for the weather chip — client geocodes and fetches weather
+// directly against Open-Meteo (public, no key needed); this just persists
+// the chosen coordinates so it survives a refresh/redeploy.
+app.get('/api/dashboard/location', (c) => c.json({ location: getLocation() }));
+
+app.post('/api/dashboard/location', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  if (
+    typeof body?.lat !== 'number' ||
+    typeof body?.lon !== 'number' ||
+    typeof body?.label !== 'string'
+  ) {
+    return c.json({ error: 'Required: lat (number), lon (number), label (string)' }, 400);
+  }
+  setLocation({ lat: body.lat, lon: body.lon, label: body.label });
+  return c.json({ ok: true });
+});
+
+app.get('/api/notes', (c) => c.json({ notes: listNotes() }));
+
+app.post('/api/notes', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  if (typeof body?.text !== 'string' || !body.text.trim()) {
+    return c.json({ error: 'Required: text (non-empty string)' }, 400);
+  }
+  return c.json({ note: addNote(body.text.trim()) }, 201);
+});
+
+app.delete('/api/notes/:id', (c) => {
+  deleteNote(c.req.param('id'));
+  return c.json({ ok: true });
 });
 
 app.post('/api/tasks/freeform', async (c) => {

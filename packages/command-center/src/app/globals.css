@@ -2,5 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-* { box-sizing: border-box; }
-body { background: #080810; }
+* {
+  box-sizing: border-box;
+}
+body {
+  background:
+    radial-gradient(ellipse 1200px 600px at 20% -10%, rgba(79, 195, 247, 0.06), transparent),
+    radial-gradient(ellipse 900px 500px at 100% 0%, rgba(192, 132, 252, 0.05), transparent), #080810;
+}
