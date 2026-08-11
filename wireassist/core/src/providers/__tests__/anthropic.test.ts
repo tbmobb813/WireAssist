@@ -115,4 +115,38 @@ describe('AnthropicProvider.complete()', () => {
       /Anthropic API error: 401 - invalid key/
     );
   });
+
+  it('omits temperature entirely when the caller does not specify one', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: 'x' }],
+        model: 'claude-sonnet-5',
+        stop_reason: 'end_turn',
+      }),
+    });
+
+    const provider = new AnthropicProvider({ type: 'anthropic', apiKey: 'k' });
+    await provider.complete({ prompt: 'hi' });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body).not.toHaveProperty('temperature');
+  });
+
+  it('sends temperature when the caller specifies one', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: 'x' }],
+        model: 'claude-sonnet-5',
+        stop_reason: 'end_turn',
+      }),
+    });
+
+    const provider = new AnthropicProvider({ type: 'anthropic', apiKey: 'k' });
+    await provider.complete({ prompt: 'hi', temperature: 0.3 });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.temperature).toBe(0.3);
+  });
 });

@@ -31,7 +31,10 @@ export class AnthropicProvider implements Provider {
       body: JSON.stringify({
         model: options.model || this.currentModel,
         max_tokens: options.maxTokens || 4096,
-        temperature: options.temperature ?? 0.7,
+        // Only send temperature when a caller actually asked for one — some
+        // models reject it outright ("temperature is deprecated for this
+        // model"), and nothing in this codebase currently passes one.
+        ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
         system: this.buildSystemPrompt(options),
         messages: this.buildMessages(options),
       }),
@@ -77,7 +80,7 @@ export class AnthropicProvider implements Provider {
       body: JSON.stringify({
         model: options.model || this.currentModel,
         max_tokens: options.maxTokens || 4096,
-        temperature: options.temperature ?? 0.7,
+        ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
         system: this.buildSystemPrompt(options),
         messages: this.buildMessages(options),
         stream: true,
