@@ -9,6 +9,13 @@ import {
 } from '@wireassist/core';
 import { BaseAgent } from './base-agent';
 
+// Models sometimes wrap JSON in ```json fences despite being told not to —
+// strip them before parsing rather than failing the whole task.
+function extractJson<T>(raw: string): T {
+  const clean = raw.replace(/```json|```/g, '').trim();
+  return JSON.parse(clean) as T;
+}
+
 const ADMIN_SYSTEM_PROMPT = `You are the Admin Agent for WireAssist — Jason's AI chief of staff,
 covering business and personal life together. Your job is to filter noise, hold context nobody
 else holds, and make sure nothing that matters gets missed — without adding noise of your own.
@@ -216,7 +223,7 @@ Only return valid JSON. No markdown fences.`;
 
     let triage: TriageCategories;
     try {
-      triage = JSON.parse(rawResponse) as TriageCategories;
+      triage = extractJson<TriageCategories>(rawResponse);
     } catch {
       throw new Error(
         `Admin Agent returned invalid JSON during triage: ${rawResponse.slice(0, 200)}`
@@ -326,7 +333,7 @@ Only return valid JSON. No markdown fences.`;
 
     let review: CalendarReview;
     try {
-      review = JSON.parse(rawResponse) as CalendarReview;
+      review = extractJson<CalendarReview>(rawResponse);
     } catch {
       throw new Error('Admin Agent returned invalid JSON during calendar review');
     }
