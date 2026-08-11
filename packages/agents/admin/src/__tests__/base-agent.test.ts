@@ -6,8 +6,11 @@ import type {
   EventBus,
   AgentConfig,
   Skill,
+  ProviderResponse,
 } from '@wireassist/core';
+import { ProviderFactory } from '@wireassist/core';
 import { BaseAgent } from '../base-agent';
+import { budgetTracker } from '../budget';
 
 // ── Minimal concrete subclass ─────────────────────────────────────────────
 class TestAgent extends BaseAgent {
@@ -24,6 +27,9 @@ class TestAgent extends BaseAgent {
   }
   testUseTool(name: string, params: Record<string, unknown>) {
     return this.useTool(name, params);
+  }
+  testThink(userMessage: string, extraContext?: string) {
+    return this.think(userMessage, extraContext);
   }
 }
 
@@ -276,5 +282,105 @@ describe('BaseAgent.run() — default skill dispatch', () => {
     const { agent } = makeDefaultRunAgent();
     const task = makeTask({ input: { type: 'unregistered' } });
     await expect(agent.run(task)).rejects.toThrow(/no skill or chain registered/);
+  });
+});
+
+describe('BaseAgent.think()', () => {
+  function stubResponse(overrides: Partial<ProviderResponse> = {}): ProviderResponse {
+    return { content: 'a reply', model: 'claude-sonnet-5', ...overrides };
+  }
+
+  let createSpy: jest.SpyInstance;
+  let completeMock: jest.Mock;
+
+  beforeEach(() => {
+    completeMock = jest.fn().mockResolvedValue(stubResponse());
+    createSpy = jest.spyOn(ProviderFactory, 'create').mockReturnValue({
+      type: 'anthropic',
+      currentModel: 'claude-sonnet-5',
+      complete: completeMock,
+      stream: jest.fn(),
+      listModels: jest.fn(),
+      validateConfig: jest.fn(),
+    });
+    jest.spyOn(budgetTracker, 'assertWithinBudget').mockImplementation(() => {});
+    jest.spyOn(budgetTracker, 'record').mockReturnValue(0);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('does not construct a provider at agent construction time', () => {
+    makeAgent();
+    expect(createSpy).not.toHaveBeenCalled();
+  });
+
+  it('defaults to the anthropic provider when config.provider is unset', async () => {
+    const { agent } = makeAgent();
+    await agent.testThink('hello');
+    expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'anthropic' }));
+  });
+
+  it('uses config.provider when set', async () => {
+    const config: AgentConfig = {
+      role: 'admin',
+      name: 'Test Agent',
+      systemPrompt: 'You are a test agent.',
+      tools: [],
+      provider: 'openrouter',
+    };
+    const agent = new TestAgent(config, makeDeps());
+    await agent.testThink('hello');
+    expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'openrouter' }));
+  });
+
+  it('passes prompt, systemPrompt, model, and maxTokens to provider.complete()', async () => {
+    const { agent } = makeAgent();
+    await agent.testThink('hello', 'extra context');
+    expect(completeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: 'hello',
+        systemPrompt: expect.stringContaining('extra context'),
+        model: 'claude-sonnet-5',
+        maxTokens: 2048,
+      })
+    );
+  });
+
+  it('returns response.content directly', async () => {
+    completeMock.mockResolvedValueOnce(stubResponse({ content: 'the answer' }));
+    const { agent } = makeAgent();
+    expect(await agent.testThink('hello')).toBe('the answer');
+  });
+
+  it('records the promptTokens/completionTokens split when the provider returns one', async () => {
+    completeMock.mockResolvedValueOnce(
+      stubResponse({ promptTokens: 10, completionTokens: 5, tokensUsed: 15 })
+    );
+    const { agent } = makeAgent();
+    await agent.testThink('hello');
+    expect(budgetTracker.record).toHaveBeenCalledWith('admin', 'claude-sonnet-5', 10, 5);
+  });
+
+  it('falls back to charging the full tokensUsed as output tokens when no split is returned', async () => {
+    completeMock.mockResolvedValueOnce(stubResponse({ tokensUsed: 42 }));
+    const { agent } = makeAgent();
+    await agent.testThink('hello');
+    expect(budgetTracker.record).toHaveBeenCalledWith('admin', 'claude-sonnet-5', 0, 42);
+  });
+
+  it('does not record budget usage when the provider returns no token counts at all', async () => {
+    completeMock.mockResolvedValueOnce(stubResponse());
+    const { agent } = makeAgent();
+    await agent.testThink('hello');
+    expect(budgetTracker.record).not.toHaveBeenCalled();
+  });
+
+  it('reuses the same provider instance across multiple think() calls', async () => {
+    const { agent } = makeAgent();
+    await agent.testThink('one');
+    await agent.testThink('two');
+    expect(createSpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -44,14 +44,19 @@ export class AnthropicProvider implements Provider {
     }
 
     const data = (await response.json()) as {
-      content: Array<{ text: string }>;
+      content: Array<{ type: string; text?: string }>;
       usage?: { input_tokens: number; output_tokens: number };
       model: string;
       stop_reason: string;
     };
     return {
-      content: data.content[0].text,
+      content: data.content
+        .filter((block) => block.type === 'text' && block.text)
+        .map((block) => block.text)
+        .join(''),
       tokensUsed: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+      promptTokens: data.usage?.input_tokens,
+      completionTokens: data.usage?.output_tokens,
       model: data.model,
       finishReason: data.stop_reason,
     };

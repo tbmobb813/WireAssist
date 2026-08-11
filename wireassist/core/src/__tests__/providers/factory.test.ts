@@ -48,6 +48,18 @@ describe('ProviderFactory', () => {
     expect(provider.currentModel).toBe('llama2');
   });
 
+  test('should create OpenRouter provider', () => {
+    const provider = ProviderFactory.create({
+      type: 'openrouter',
+      apiKey: 'test-key',
+      model: 'anthropic/claude-sonnet-4.5',
+    });
+
+    expect(provider).toBeDefined();
+    expect(provider.type).toBe('openrouter');
+    expect(provider.currentModel).toBe('anthropic/claude-sonnet-4.5');
+  });
+
   test('should throw error for unknown provider type', () => {
     expect(() => {
       ProviderFactory.create({
@@ -61,6 +73,15 @@ describe('ProviderFactory', () => {
       ProviderFactory.create({
         type: 'openai',
         model: 'gpt-4',
+      });
+    }).toThrow('API key is required');
+  });
+
+  test('should throw error when API key missing for OpenRouter', () => {
+    expect(() => {
+      ProviderFactory.create({
+        type: 'openrouter',
+        model: 'anthropic/claude-sonnet-4.5',
       });
     }).toThrow('API key is required');
   });

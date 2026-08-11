@@ -1,4 +1,3 @@
-import Anthropic, { type TextBlock } from '@anthropic-ai/sdk';
 import { budgetTracker } from './budget';
 import {
   type AgentConfig,
@@ -10,13 +9,22 @@ import {
   type MCPClient,
   type EventBus,
   type SkillAgentHandle,
+  type Provider,
+  type ProviderType,
   SkillRegistry,
   SkillExecutor,
+  ProviderFactory,
 } from '@wireassist/core';
 
 // Single place to move the fleet to a new model: set WIREASSIST_MODEL in the
 // environment, or pass `model` in an individual agent's config to override.
 export const DEFAULT_MODEL = process.env.WIREASSIST_MODEL ?? 'claude-sonnet-5';
+
+// Single place to move the fleet to a new provider (e.g. OpenRouter): set
+// WIREASSIST_PROVIDER in the environment, or pass `provider` in an
+// individual agent's config to override. Defaults to talking to Anthropic
+// directly, same as before this existed.
+export const DEFAULT_PROVIDER = (process.env.WIREASSIST_PROVIDER as ProviderType) ?? 'anthropic';
 
 export abstract class BaseAgent {
   protected config: AgentConfig;
@@ -24,7 +32,11 @@ export abstract class BaseAgent {
   protected memory: MemoryStore;
   protected mcp: MCPClient;
   protected events: EventBus;
-  protected client: Anthropic;
+  // Constructed lazily on first think() call, not in the constructor — an
+  // agent should be constructible without provider credentials on hand
+  // (tests routinely do), same as the old raw `new Anthropic()` client this
+  // replaced never validated a key until an actual API call was made.
+  private _provider?: Provider;
   protected skills: SkillRegistry;
   public status: AgentStatus = 'idle';
 
@@ -43,8 +55,17 @@ export abstract class BaseAgent {
     this.memory = deps.memory;
     this.mcp = deps.mcp;
     this.events = deps.events;
-    this.client = new Anthropic();
     this.skills = deps.skills ?? new SkillRegistry();
+  }
+
+  protected getProvider(): Provider {
+    if (!this._provider) {
+      this._provider = ProviderFactory.create({
+        type: this.config.provider ?? DEFAULT_PROVIDER,
+        model: this.config.model ?? DEFAULT_MODEL,
+      });
+    }
+    return this._provider;
   }
 
   get role(): AgentRole {
@@ -87,26 +108,23 @@ export abstract class BaseAgent {
       : this.config.systemPrompt;
 
     const model = this.config.model ?? DEFAULT_MODEL;
-    const response = await this.client.messages.create({
+    const response = await this.getProvider().complete({
+      prompt: userMessage,
+      systemPrompt: system,
       model,
-      max_tokens: this.config.maxTokens ?? 2048,
-      system,
-      messages: [{ role: 'user', content: userMessage }],
+      maxTokens: this.config.maxTokens ?? 2048,
     });
 
-    if (response.usage) {
-      budgetTracker.record(
-        this.role,
-        model,
-        response.usage.input_tokens,
-        response.usage.output_tokens
-      );
+    if (response.promptTokens !== undefined && response.completionTokens !== undefined) {
+      budgetTracker.record(this.role, model, response.promptTokens, response.completionTokens);
+    } else if (response.tokensUsed !== undefined) {
+      // Provider didn't split input/output (e.g. openai/gemini/ollama today) —
+      // charge it all at the pricier output-token rate so the budget cap
+      // errs toward stopping spend too early, never too late.
+      budgetTracker.record(this.role, model, 0, response.tokensUsed);
     }
 
-    return response.content
-      .filter((b): b is TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('');
+    return response.content;
   }
 
   // Propose an action — pauses and waits for human approval

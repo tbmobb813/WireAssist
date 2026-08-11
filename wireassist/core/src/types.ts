@@ -1,6 +1,6 @@
 // @aia/core/src/types.ts
 
-export type ProviderType = 'openai' | 'anthropic' | 'gemini' | 'ollama';
+export type ProviderType = 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'openrouter';
 
 export interface FileContext {
   path: string;

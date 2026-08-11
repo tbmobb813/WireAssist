@@ -1,3 +1,5 @@
+import type { ProviderType } from '../types';
+
 export type AgentRole = 'admin' | 'content' | 'research' | 'strategy' | 'gtm';
 
 export type AgentStatus = 'idle' | 'running' | 'waiting_approval' | 'error';
@@ -9,6 +11,10 @@ export interface AgentConfig {
   tools: string[];
   maxTokens?: number;
   model?: string;
+  // Which @wireassist/core Provider to route through. Defaults to 'anthropic'
+  // (see DEFAULT_PROVIDER in BaseAgent) — set this or WIREASSIST_PROVIDER to
+  // route through OpenRouter or another provider instead.
+  provider?: ProviderType;
 }
 
 export interface AgentTask {
