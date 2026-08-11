@@ -46,30 +46,6 @@ let trendpostStorage: TrendPostStorage;
 let agentReady = false;
 let gmailReady = false;
 
-// ── License tier gating ────────────────────────────────────────────────────
-import Database from 'better-sqlite3';
-let licenseDb: InstanceType<typeof Database> | null = null;
-
-const TIER_RANK: Record<string, number> = { trial: 0, solo: 1, operator: 2, workforce: 3 };
-
-function currentTier(): string {
-  if (!licenseDb) return 'trial';
-  const row = licenseDb
-    .prepare('SELECT tier, expires_grace_at FROM licenses ORDER BY verified_at DESC LIMIT 1')
-    .get() as { tier: string; expires_grace_at: string } | undefined;
-  if (!row) return 'trial';
-  return new Date(row.expires_grace_at) > new Date() ? row.tier : 'trial';
-}
-
-function tierGate(minTier: string): { allowed: boolean; error?: string } {
-  const tier = currentTier();
-  if ((TIER_RANK[tier] ?? 0) < (TIER_RANK[minTier] ?? 99)) {
-    const label = minTier.charAt(0).toUpperCase() + minTier.slice(1);
-    return { allowed: false, error: `This feature requires the ${label} plan or higher.` };
-  }
-  return { allowed: true };
-}
-
 function anthropicConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
 }
@@ -148,18 +124,6 @@ function openStores() {
     approval = new ApprovalQueue(DB_PATH);
     memory = new MemoryStore(DB_PATH);
     trendpostStorage = new TrendPostStorage(DB_PATH);
-    licenseDb = new Database(DB_PATH);
-    licenseDb.exec(`
-      CREATE TABLE IF NOT EXISTS licenses (
-        key TEXT PRIMARY KEY,
-        tier TEXT NOT NULL DEFAULT 'trial',
-        status TEXT NOT NULL DEFAULT 'inactive',
-        customer_email TEXT,
-        activations_remaining INTEGER,
-        verified_at TEXT NOT NULL,
-        expires_grace_at TEXT NOT NULL
-      )
-    `);
   } catch (err) {
     console.error(`❌ ${sqliteSetupHint()}`);
     throw err;
@@ -376,15 +340,11 @@ app.post('/api/tasks/freeform', async (c) => {
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'content_generate': {
-      const tg = tierGate('operator');
-      if (!tg.allowed) return c.json({ error: tg.error }, 403);
       const task = ContentTasks.generatePost(decision.topic, decision.platform, decision.tone);
       queueContentTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'content_plan': {
-      const tg = tierGate('operator');
-      if (!tg.allowed) return c.json({ error: tg.error }, 403);
       const task = ContentTasks.generatePlan(
         decision.platforms ?? ['linkedin', 'twitter'],
         decision.weeksAhead ?? 1,
@@ -394,22 +354,16 @@ app.post('/api/tasks/freeform', async (c) => {
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'research_topic': {
-      const tg = tierGate('workforce');
-      if (!tg.allowed) return c.json({ error: tg.error }, 403);
       const task = ResearchTasks.researchTopic(decision.query, decision.depth ?? 'quick');
       queueResearchTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'ops_freeform': {
-      const tg = tierGate('workforce');
-      if (!tg.allowed) return c.json({ error: tg.error }, 403);
       const task = OpsTasks.createOpsFreeformTask({ prompt: decision.prompt });
       queueOpsTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'ops_workflow': {
-      const tg = tierGate('workforce');
-      if (!tg.allowed) return c.json({ error: tg.error }, 403);
       const task = OpsTasks.createWorkflowRunTask({
         workflow: decision.workflow,
         brief: decision.brief,
@@ -444,8 +398,6 @@ function isValidPlatform(p: unknown): p is 'twitter' | 'linkedin' | 'instagram' 
 app.post('/api/tasks/generate-post', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const tg = tierGate('operator');
-  if (!tg.allowed) return c.json({ error: tg.error }, 403);
   const { topic, platform, tone } = await c.req.json();
   if (!topic || typeof topic !== 'string') return c.json({ error: 'topic required' }, 400);
   if (!isValidPlatform(platform)) {
@@ -462,8 +414,6 @@ app.post('/api/tasks/generate-post', async (c) => {
 app.post('/api/tasks/generate-plan', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const tg = tierGate('operator');
-  if (!tg.allowed) return c.json({ error: tg.error }, 403);
   const body = await c.req.json().catch(() => ({}));
   const platforms: unknown[] = Array.isArray(body.platforms)
     ? body.platforms
@@ -490,8 +440,6 @@ app.post('/api/tasks/generate-plan', async (c) => {
 app.post('/api/tasks/research-topic', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const tg = tierGate('workforce');
-  if (!tg.allowed) return c.json({ error: tg.error }, 403);
   const { query, depth } = await c.req.json();
   if (!query || typeof query !== 'string') return c.json({ error: 'query required' }, 400);
   const task = ResearchTasks.researchTopic(query, depth === 'deep' ? 'deep' : 'quick');
@@ -502,8 +450,6 @@ app.post('/api/tasks/research-topic', async (c) => {
 app.post('/api/tasks/synthesize', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const tg = tierGate('workforce');
-  if (!tg.allowed) return c.json({ error: tg.error }, 403);
   const { topic } = await c.req.json();
   if (!topic || typeof topic !== 'string') return c.json({ error: 'topic required' }, 400);
   const task = ResearchTasks.synthesizeFindings(topic);
@@ -563,8 +509,6 @@ app.post('/api/ops/trust/:workflow', async (c) => {
 app.post('/api/tasks/ops-workflow', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const tg = tierGate('workforce');
-  if (!tg.allowed) return c.json({ error: tg.error }, 403);
   const { workflow, brief } = await c.req.json();
   if (!workflow || typeof workflow !== 'string') return c.json({ error: 'workflow required' }, 400);
   if (!brief || typeof brief !== 'string') return c.json({ error: 'brief required' }, 400);
@@ -576,8 +520,6 @@ app.post('/api/tasks/ops-workflow', async (c) => {
 app.post('/api/tasks/ops-freeform', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const tg = tierGate('workforce');
-  if (!tg.allowed) return c.json({ error: tg.error }, 403);
   const { prompt } = await c.req.json();
   if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
   const task = OpsTasks.createOpsFreeformTask({ prompt });
@@ -621,8 +563,6 @@ function normalizeGtmProduct(body: unknown): GtmProductInput | null {
 app.post('/api/tasks/gtm/strategy', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const tg = tierGate('operator');
-  if (!tg.allowed) return c.json({ error: tg.error }, 403);
   const body = await c.req.json().catch(() => ({}));
   const product = normalizeGtmProduct(body);
   if (!product) return c.json({ error: 'product name required' }, 400);
@@ -634,8 +574,6 @@ app.post('/api/tasks/gtm/strategy', async (c) => {
 app.post('/api/tasks/gtm/psych', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const tg = tierGate('operator');
-  if (!tg.allowed) return c.json({ error: tg.error }, 403);
   const body = await c.req.json().catch(() => ({}));
   const product = normalizeGtmProduct(body);
   if (!product) return c.json({ error: 'product name required' }, 400);
@@ -649,8 +587,6 @@ app.post('/api/tasks/gtm/psych', async (c) => {
 // in its metadata pointing at a repo with a README.md/STATUS.md.
 app.get('/api/tasks/gtm/prefill', async (c) => {
   if (!agentReady) return c.json({ prefill: null });
-  const tg = tierGate('operator');
-  if (!tg.allowed) return c.json({ error: tg.error }, 403);
 
   const today = await portfolioStore.today();
   const targetId = today.focus?.productProjectId ?? today.active[0]?.id;
@@ -670,94 +606,6 @@ app.get('/api/tasks/gtm/prefill', async (c) => {
   } catch {
     return c.json({ prefill: { name: project.name, docFound: false } });
   }
-});
-
-// ── LICENSE ───────────────────────────────────────────────────────────────
-app.get('/api/license/status', (c) => {
-  return c.json({ tier: currentTier() });
-});
-
-app.post('/api/license/activate', async (c) => {
-  const { key } = (await c.req.json()) as { key?: string };
-  if (!key || typeof key !== 'string' || !key.trim()) {
-    return c.json({ error: 'key required' }, 400);
-  }
-
-  if (!licenseDb) {
-    return c.json({ error: 'License store not available' }, 503);
-  }
-
-  const lsApiKey = process.env.LS_API_KEY;
-  if (!lsApiKey) {
-    return c.json({ error: 'LS_API_KEY not configured on this server' }, 503);
-  }
-
-  let tier = 'unknown';
-  let status = 'inactive';
-  let customerEmail: string | null = null;
-  let activationsRemaining: number | null = null;
-
-  try {
-    const res = await fetch(`https://api.lemonsqueezy.com/v1/licenses/validate`, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${lsApiKey}`,
-      },
-      body: JSON.stringify({ license_key: key.trim() }),
-    });
-    const data = (await res.json()) as {
-      valid?: boolean;
-      license_key?: { status: string; activation_limit: number; activations_count: number };
-      meta?: { customer_email: string; variant_id: number };
-      error?: string;
-    };
-
-    if (!data.valid) {
-      return c.json({ error: data.error ?? 'Invalid license key' }, 400);
-    }
-
-    status = data.license_key?.status ?? 'active';
-    customerEmail = data.meta?.customer_email ?? null;
-    const variantId = String(data.meta?.variant_id ?? '');
-    activationsRemaining = data.license_key
-      ? data.license_key.activation_limit - data.license_key.activations_count
-      : null;
-
-    if (variantId === (process.env.LS_VARIANT_WORKFORCE ?? '')) tier = 'workforce';
-    else if (variantId === (process.env.LS_VARIANT_OPERATOR ?? '')) tier = 'operator';
-    else if (variantId === (process.env.LS_VARIANT_SOLO ?? '')) tier = 'solo';
-    else tier = 'solo'; // fallback for any valid key
-  } catch (err) {
-    console.error('[license] LemonSqueezy API error:', err);
-    return c.json({ error: 'Failed to reach LemonSqueezy API' }, 503);
-  }
-
-  const now = new Date().toISOString();
-  const grace = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-  try {
-    licenseDb
-      .prepare(
-        `
-    INSERT INTO licenses (key, tier, status, customer_email, activations_remaining, verified_at, expires_grace_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(key) DO UPDATE SET
-      tier = excluded.tier, status = excluded.status,
-      customer_email = excluded.customer_email,
-      activations_remaining = excluded.activations_remaining,
-      verified_at = excluded.verified_at,
-      expires_grace_at = excluded.expires_grace_at
-  `
-      )
-      .run(key.trim(), tier, status, customerEmail, activationsRemaining, now, grace);
-  } catch (err) {
-    console.error('[license] failed to persist license:', err);
-    return c.json({ error: 'Failed to store license' }, 503);
-  }
-
-  return c.json({ tier, status, activationsRemaining });
 });
 
 // ── CONTENT DATA ──────────────────────────────────────────────────────────

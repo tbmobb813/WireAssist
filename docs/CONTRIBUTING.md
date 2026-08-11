@@ -102,7 +102,7 @@ src/
 1. Extend `SupportedTaskInput` in that agent's `task-factory.ts`
 2. Add a factory function (e.g. `createMyTask`)
 3. Handle the type in that agent's `*-agent.ts` `run()` switch (e.g. `admin-agent.ts`, `nixops-agent.ts`)
-4. Expose via Command Center API in `packages/command-center/src/api/server.ts` if needed — decide whether it needs a `tierGate(...)` call to match the rest of that agent's endpoints
+4. Expose via Command Center API in `packages/command-center/src/api/server.ts` if needed
 
 ### UI component (AIA desktop)
 
