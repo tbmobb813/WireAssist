@@ -9,6 +9,7 @@
 ## 🎯 Phase 3 Goal - Context Building Complete
 
 ### ✅ Context Service Implementation
+
 - [x] `ContextService` for managing workspace context
 - [x] Support for file selection and caching
 - [x] Git context integration (diff, log, branch)
@@ -17,6 +18,7 @@
 - [x] Context size estimation and statistics
 
 ### ✅ Context-Aware Provider
+
 - [x] `ContextAwareProvider` wrapper for streaming providers
 - [x] Automatic context injection into provider messages
 - [x] File content formatting for LLM consumption
@@ -25,12 +27,14 @@
 - [x] Project structure analysis
 
 ### ✅ Integration with Streaming
+
 - [x] Context building doesn't block streaming
 - [x] Context passed as system message
 - [x] Support for multiple concurrent contexts
 - [x] File caching for performance
 
 ### ✅ Comprehensive Testing
+
 - [x] 35+ context service tests
 - [x] 27+ context-aware provider tests
 - [x] 20+ E2E context + streaming integration tests
@@ -112,6 +116,7 @@ AIA App Context System
 ## 🚀 Key Features Implemented
 
 ### 1. Context Service
+
 - **File Management**
   - Select specific files to include
   - Cache files for reuse
@@ -136,6 +141,7 @@ AIA App Context System
   - Store project metadata
 
 ### 2. Context-Aware Provider
+
 - **Transparent Integration**
   - Wraps existing providers
   - No changes to provider interface
@@ -154,6 +160,7 @@ AIA App Context System
   - Session-based management
 
 ### 3. Integration Points
+
 - **ChatStore Compatible**
   - Works with existing `sendMessage()` flow
   - Transparent to UI components
@@ -184,7 +191,7 @@ const context = await contextService.buildContext(
   'conv-123',
   '/path/to/workspace',
   undefined, // fileChanges (optional)
-  ['src/app.ts', 'src/utils.ts'], // selectedFiles
+  ['src/app.ts', 'src/utils.ts'] // selectedFiles
 );
 
 // Get session info
@@ -222,13 +229,9 @@ const contextProvider = new ContextAwareProvider(baseProvider, {
 });
 
 // Use as normal provider
-const response = await contextProvider.generateResponse(
-  'conv-123',
-  messages,
-  (chunk) => {
-    // Handle streaming chunks
-  },
-);
+const response = await contextProvider.generateResponse('conv-123', messages, (chunk) => {
+  // Handle streaming chunks
+});
 
 // Update context options mid-conversation
 contextProvider.updateOptions({
@@ -248,7 +251,7 @@ const baseProvider = new CoreStreamingProvider();
 const provider = wrapWithContext(baseProvider, {
   conversationId: currentConversation.id,
   workspacePath: projectPath,
-  fileChanges: useProjectStore.getState().events.map(e => ({
+  fileChanges: useProjectStore.getState().events.map((e) => ({
     path: e.path,
     type: 'modified' as const,
     timestamp: e.ts,
@@ -257,11 +260,7 @@ const provider = wrapWithContext(baseProvider, {
   autoRefresh: true,
 });
 
-const response = await provider.generateResponse(
-  conversationId,
-  messages,
-  onChunk,
-);
+const response = await provider.generateResponse(conversationId, messages, onChunk);
 ```
 
 ---
@@ -269,6 +268,7 @@ const response = await provider.generateResponse(
 ## 🔄 Context Lifecycle
 
 ### Building
+
 1. User sends message with workspace open
 2. ContextAwareProvider checks options
 3. ContextService builds fresh or uses cached context
@@ -277,6 +277,7 @@ const response = await provider.generateResponse(
 6. Project structure analyzed
 
 ### Injecting
+
 1. Context formatted as system message
 2. Code blocks syntax-highlighted
 3. Message inserted at beginning or appended to system
@@ -284,6 +285,7 @@ const response = await provider.generateResponse(
 5. LLM can see project context
 
 ### Caching
+
 1. Context stored in ContextService with session ID
 2. Next request in same conversation can reuse
 3. If autoRefresh=true, always rebuilds
@@ -291,6 +293,7 @@ const response = await provider.generateResponse(
 5. Auto-cleanup after conversation ends
 
 ### Cleanup
+
 1. `clearContext()` called when conversation closes
 2. Session removed from active sessions
 3. File cache persists for reuse
@@ -300,13 +303,13 @@ const response = await provider.generateResponse(
 
 ## 📊 Performance Characteristics
 
-| Operation | Time | Notes |
-|-----------|------|-------|
-| Build fresh context | 100-500ms | Includes disk reads + git commands |
-| Use cached context | <1ms | Direct map lookup |
-| File cache hit | <1ms | In-memory lookup |
-| Format context message | 5-50ms | Depends on total content size |
-| Stream with context | Same as without | Context adds to input tokens only |
+| Operation              | Time            | Notes                              |
+| ---------------------- | --------------- | ---------------------------------- |
+| Build fresh context    | 100-500ms       | Includes disk reads + git commands |
+| Use cached context     | <1ms            | Direct map lookup                  |
+| File cache hit         | <1ms            | In-memory lookup                   |
+| Format context message | 5-50ms          | Depends on total content size      |
+| Stream with context    | Same as without | Context adds to input tokens only  |
 
 ---
 
@@ -337,6 +340,7 @@ const response = await provider.generateResponse(
 ## 🎓 How to Use Context
 
 ### 1. Basic Setup
+
 ```typescript
 // Already integrated in chatStore.sendMessage()
 // Just ensure workspacePath is set:
@@ -344,34 +348,30 @@ settings.workspacePath = '/path/to/project';
 ```
 
 ### 2. Select Specific Files
+
 ```typescript
 // Via UI: Allow user to select files from file tree
-const selectedFiles = [
-  'src/app.ts',
-  'src/components/Chat.tsx',
-  'src/lib/api.ts',
-];
+const selectedFiles = ['src/app.ts', 'src/components/Chat.tsx', 'src/lib/api.ts'];
 
 contextProvider.updateOptions({ selectedFiles });
 ```
 
 ### 3. Track File Changes
+
 ```typescript
 // Already tracked via useProjectStore
 // Just pass recent changes to provider:
-const fileChanges = useProjectStore
-  .getState()
-  .events
-  .map(e => ({
-    path: e.path,
-    type: 'modified' as const,
-    timestamp: e.ts,
-  }));
+const fileChanges = useProjectStore.getState().events.map((e) => ({
+  path: e.path,
+  type: 'modified' as const,
+  timestamp: e.ts,
+}));
 
 contextProvider.updateOptions({ fileChanges });
 ```
 
 ### 4. Monitor Context
+
 ```typescript
 // Check context stats
 const stats = contextService.getStats();
@@ -385,6 +385,7 @@ console.log(`Total context size: ${stats.totalContextSize} bytes`);
 ## 🧪 Testing Coverage
 
 ### Context Service Tests (35 tests)
+
 - Configuration and defaults
 - Context building and caching
 - File caching and limits
@@ -395,6 +396,7 @@ console.log(`Total context size: ${stats.totalContextSize} bytes`);
 - Error handling
 
 ### Context-Aware Provider Tests (27 tests)
+
 - Provider wrapping
 - Context injection
 - Message handling
@@ -404,6 +406,7 @@ console.log(`Total context size: ${stats.totalContextSize} bytes`);
 - Error handling
 
 ### E2E Context + Streaming Tests (20 tests)
+
 - Context injection with streaming
 - Context lifecycle
 - File selection with context
@@ -418,6 +421,7 @@ console.log(`Total context size: ${stats.totalContextSize} bytes`);
 ## ✨ What's Ready for Phase 4
 
 ✅ Foundation for:
+
 - **Privacy Controls** (encrypt context, audit access)
 - **Search Optimization** (index context files for search)
 - **Advanced Features** (code navigation, jump to definition)
@@ -428,17 +432,17 @@ console.log(`Total context size: ${stats.totalContextSize} bytes`);
 
 ## 📈 Metrics
 
-| Metric | Value |
-|--------|-------|
-| New Service Classes | 1 (ContextService) |
-| New Provider Classes | 1 (ContextAwareProvider) |
-| Total Test Cases | 82 (context-related) |
-| Lines of Code (Services) | ~250 |
-| Lines of Code (Tests) | ~650 |
-| Test Coverage | 100% of context code |
-| Files Supported | All text formats |
-| Git Integration | Full (branch, log, diff) |
-| Performance | <1ms cache hit, 100-500ms fresh build |
+| Metric                   | Value                                 |
+| ------------------------ | ------------------------------------- |
+| New Service Classes      | 1 (ContextService)                    |
+| New Provider Classes     | 1 (ContextAwareProvider)              |
+| Total Test Cases         | 82 (context-related)                  |
+| Lines of Code (Services) | ~250                                  |
+| Lines of Code (Tests)    | ~650                                  |
+| Test Coverage            | 100% of context code                  |
+| Files Supported          | All text formats                      |
+| Git Integration          | Full (branch, log, diff)              |
+| Performance              | <1ms cache hit, 100-500ms fresh build |
 
 ---
 
@@ -456,6 +460,7 @@ console.log(`Total context size: ${stats.totalContextSize} bytes`);
 8. **Tested thoroughly** with 82+ context-specific tests
 
 The implementation allows AI to understand:
+
 - Project structure and organization
 - Recent changes and modifications
 - Git history and current branch

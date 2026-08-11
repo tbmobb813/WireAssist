@@ -136,10 +136,18 @@ SQLite state for approvals and memory defaults to `~/.wireassist/wireassist.db`.
 
 ### UI routes
 
-- `/` — dashboard, run triage / calendar tasks
+- `/` — dashboard: workforce cards, portfolio zones (active/paused/icebox projects), activity feed
+- `/focus` — weekly-focus gate; pick a product project + career milestone, or create a new project
 - `/approvals` — approve or reject agent actions
-- `/chat` — freeform agent instructions
+- `/chat` — freeform agent instructions, routed to the right agent automatically
+- `/content` — Content agent (posts, plans)
+- `/research` — Research agent
+- `/ops` — NixOps agent (workflows, trust stages)
+- `/gtm` — GTM agent (strategy + psych tactics wizard)
 - `/memory` — browse agent memory store
+- `/onboarding` — first-run setup helper
+
+Only the Admin agent has dedicated dashboard buttons ("Triage inbox" / "Review calendar"); the other agents are reached via their own page. `packages/agents/content`, `research`, `ops`, and `gtm` follow the same build/env-var pattern as the Admin Agent below — see `docs/ARCHITECTURE.md`'s "Other agents" section for what each does and any tier requirements.
 
 ## Run Admin Agent demo (CLI)
 

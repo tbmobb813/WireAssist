@@ -65,8 +65,14 @@ src/
 ```
 src/
 ├── api/server.ts      # Hono API + agent bootstrap
-└── app/               # Next.js pages (dashboard, approvals, chat, memory)
+└── app/               # Next.js pages (dashboard, approvals, chat, focus, content, research, ops, gtm, memory)
 ```
+
+### Other agent packages
+
+`packages/agents/content/`, `packages/agents/research/`, `packages/agents/ops/` (NixOps), and `packages/agents/gtm/` follow the same shape as `@wireassist/agent-admin` above (one `*-agent.ts` with task handlers, a `task-factory.ts`, an `mcp-setup.ts` where relevant). See `docs/ARCHITECTURE.md`'s "Other agents" section for what each one does and, for NixOps specifically, its trust-stage ladder — don't add a new agent without reading that first if it needs unattended/cron-triggered runs.
+
+`packages/telegram-bot/` and `packages/trendpost-mcp/` are single-file-ish support packages, not agents — see `docs/ARCHITECTURE.md`.
 
 ## Common tasks
 
@@ -93,10 +99,10 @@ src/
 
 ### Add a new agent task type
 
-1. Extend `SupportedTaskInput` in `task-factory.ts`
+1. Extend `SupportedTaskInput` in that agent's `task-factory.ts`
 2. Add a factory function (e.g. `createMyTask`)
-3. Handle the type in `admin-agent.ts` `run()` switch
-4. Expose via Command Center API in `packages/command-center/src/api/server.ts` if needed
+3. Handle the type in that agent's `*-agent.ts` `run()` switch (e.g. `admin-agent.ts`, `nixops-agent.ts`)
+4. Expose via Command Center API in `packages/command-center/src/api/server.ts` if needed — decide whether it needs a `tierGate(...)` call to match the rest of that agent's endpoints
 
 ### UI component (AIA desktop)
 
