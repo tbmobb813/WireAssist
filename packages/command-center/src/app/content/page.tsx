@@ -15,6 +15,21 @@ interface ScheduledPost {
   tags: string[];
 }
 
+interface ContentApproval {
+  id: string;
+  taskId: string;
+  agentRole: string;
+  action: string;
+  payload: {
+    content?: string;
+    platform?: string;
+    analysis?: { score: number; estimatedEngagement: string; suggestion: string };
+    ideas?: { topic?: string; platform?: string; angle?: string }[];
+  };
+  status: string;
+  createdAt: string;
+}
+
 const platformColor: Record<string, string> = {
   twitter: '#1da1f2',
   linkedin: '#0077b5',
@@ -24,10 +39,15 @@ const platformColor: Record<string, string> = {
 
 export default function ContentPage() {
   const [posts, setPosts] = useState<ScheduledPost[]>([]);
+  const [pending, setPending] = useState<ContentApproval[]>([]);
+  const [acting, setActing] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [topic, setTopic] = useState('');
   const [platform, setPlatform] = useState<Platform>('linkedin');
-  const [lastGenerated, setLastGenerated] = useState<string | null>(null);
+  const [tone, setTone] = useState('');
+  const [planPlatforms, setPlanPlatforms] = useState<Platform[]>(['linkedin', 'twitter']);
+  const [weeksAhead, setWeeksAhead] = useState(1);
+  const [postsPerWeek, setPostsPerWeek] = useState(3);
   const [error, setError] = useState<string | null>(null);
 
   const fetchPosts = useCallback(async () => {
@@ -35,17 +55,26 @@ export default function ContentPage() {
     if (res.ok) setPosts(await res.json());
   }, []);
 
+  const fetchPending = useCallback(async () => {
+    const res = await fetch('/api/approvals');
+    if (!res.ok) return;
+    const all = (await res.json()) as ContentApproval[];
+    setPending(all.filter((a) => a.agentRole === 'content'));
+  }, []);
+
   useEffect(() => {
     fetchPosts();
-  }, [fetchPosts]);
+    fetchPending();
+  }, [fetchPosts, fetchPending]);
 
   useAgentEvents(
     useCallback(
       (e) => {
-        if (e.event === 'content_generated') {
-          const p = e.payload as { content: string };
-          setLastGenerated(p.content);
+        if (e.event === 'content_generated' || e.event === 'content_plan_generated') {
           setGenerating(false);
+        }
+        if (e.event === 'waiting_approval' || e.event === 'approval_resolved') {
+          fetchPending();
         }
         if (e.event === 'post_scheduled') {
           fetchPosts();
@@ -55,20 +84,30 @@ export default function ContentPage() {
           setError(typeof e.payload.error === 'string' ? e.payload.error : 'Task failed');
         }
       },
-      [fetchPosts]
+      [fetchPosts, fetchPending]
     )
   );
+
+  const resolveApproval = async (id: string, approved: boolean) => {
+    setActing(id);
+    await fetch(`/api/approvals/${id}/${approved ? 'approve' : 'reject'}`, { method: 'POST' });
+    setPending((prev) => prev.filter((a) => a.id !== id));
+    setActing(null);
+  };
+
+  const togglePlanPlatform = (p: Platform) => {
+    setPlanPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
+  };
 
   const generatePost = async () => {
     if (!topic.trim() || generating) return;
     setError(null);
     setGenerating(true);
-    setLastGenerated(null);
     try {
       const res = await fetch('/api/tasks/generate-post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: topic.trim(), platform }),
+        body: JSON.stringify({ topic: topic.trim(), platform, tone: tone.trim() || undefined }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -82,17 +121,14 @@ export default function ContentPage() {
   };
 
   const generatePlan = async () => {
+    if (planPlatforms.length === 0 || generating) return;
     setError(null);
     setGenerating(true);
     try {
       const res = await fetch('/api/tasks/generate-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          platforms: ['linkedin', 'twitter'],
-          weeksAhead: 1,
-          postsPerWeek: 3,
-        }),
+        body: JSON.stringify({ platforms: planPlatforms, weeksAhead, postsPerWeek }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -165,6 +201,15 @@ export default function ContentPage() {
               className="w-full rounded px-3 py-2 text-sm mb-3 outline-none"
               style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
             />
+            <input
+              type="text"
+              value={tone}
+              onChange={(e) => setTone(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && generatePost()}
+              placeholder="Tone (optional) — e.g. casual, authoritative, funny"
+              className="w-full rounded px-3 py-2 text-sm mb-3 outline-none"
+              style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
+            />
             <div className="flex gap-2 mb-3 flex-wrap">
               {PLATFORMS.map((p) => (
                 <button
@@ -202,108 +247,205 @@ export default function ContentPage() {
             style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
           >
             <div className="text-xs tracking-widest text-gray-500 mb-3">WEEKLY PLAN</div>
-            <p className="text-xs text-gray-600 mb-3">
-              Generate a full week of content ideas across LinkedIn and Twitter. 3 posts/week.
-            </p>
+            <div className="flex gap-2 mb-3 flex-wrap">
+              {PLATFORMS.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => togglePlanPlatform(p)}
+                  className="text-xs px-3 py-1 rounded transition-colors"
+                  style={{
+                    background: planPlatforms.includes(p) ? `${platformColor[p]}20` : 'transparent',
+                    border: `1px solid ${planPlatforms.includes(p) ? platformColor[p] : '#1e2040'}`,
+                    color: planPlatforms.includes(p) ? platformColor[p] : '#475569',
+                  }}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2 mb-3">
+              <label className="flex-1 text-xs text-gray-500">
+                Weeks ahead
+                <input
+                  type="number"
+                  min={1}
+                  max={4}
+                  value={weeksAhead}
+                  onChange={(e) => setWeeksAhead(Math.max(1, Number(e.target.value) || 1))}
+                  className="w-full mt-1 rounded px-3 py-2 text-sm outline-none"
+                  style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
+                />
+              </label>
+              <label className="flex-1 text-xs text-gray-500">
+                Posts/week
+                <input
+                  type="number"
+                  min={1}
+                  max={14}
+                  value={postsPerWeek}
+                  onChange={(e) => setPostsPerWeek(Math.max(1, Number(e.target.value) || 1))}
+                  className="w-full mt-1 rounded px-3 py-2 text-sm outline-none"
+                  style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
+                />
+              </label>
+            </div>
             <button
               onClick={generatePlan}
-              disabled={generating}
+              disabled={generating || planPlatforms.length === 0}
               className="w-full py-2 rounded text-xs font-bold tracking-widest transition-colors"
               style={{
                 background: '#ffb34720',
                 border: '1px solid #ffb34740',
-                color: generating ? '#475569' : '#ffb347',
-                cursor: generating ? 'not-allowed' : 'pointer',
+                color: generating || planPlatforms.length === 0 ? '#475569' : '#ffb347',
+                cursor: generating || planPlatforms.length === 0 ? 'not-allowed' : 'pointer',
               }}
             >
-              → GENERATE PLAN
+              {generating ? 'GENERATING...' : '→ GENERATE PLAN'}
             </button>
           </div>
-
-          {/* Last generated preview */}
-          {lastGenerated && (
-            <div
-              className="rounded-lg border p-4"
-              style={{ background: '#0d0d1a', borderColor: '#00ff9d30' }}
-            >
-              <div className="text-xs tracking-widest mb-2" style={{ color: '#00ff9d' }}>
-                GENERATED — CHECK APPROVALS
-              </div>
-              <p className="text-sm text-gray-400 whitespace-pre-wrap leading-relaxed">
-                {lastGenerated}
-              </p>
-            </div>
-          )}
         </div>
 
-        {/* Right — Calendar */}
-        <div className="col-span-2">
-          <div className="text-xs tracking-widest text-gray-500 mb-4">
-            CONTENT CALENDAR — NEXT 14 DAYS
-          </div>
-
-          {Object.keys(postsByDate).length === 0 ? (
-            <div
-              className="rounded-lg border p-12 text-center"
-              style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
-            >
-              <div className="text-gray-600 text-sm">
-                No scheduled posts. Generate content to populate the calendar.
+        {/* Middle — Pending review + Calendar */}
+        <div className="col-span-2 space-y-6">
+          {pending.length > 0 && (
+            <div>
+              <div className="text-xs tracking-widest text-gray-500 mb-4">
+                PENDING REVIEW — {pending.length}
               </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {Object.entries(postsByDate).map(([date, datePosts]) => (
-                <div
-                  key={date}
-                  className="rounded-lg border overflow-hidden"
-                  style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
-                >
+              <div className="space-y-3">
+                {pending.map((p) => (
                   <div
-                    className="px-4 py-2 text-xs tracking-widest text-gray-500"
-                    style={{ borderBottom: '1px solid #1e2040', background: '#0f0e1a' }}
+                    key={p.id}
+                    className="rounded-lg border overflow-hidden"
+                    style={{ background: '#0d0d1a', borderColor: '#ffb34740' }}
                   >
-                    {date}
-                  </div>
-                  {datePosts.map((post) => (
+                    <div className="px-4 py-3">
+                      <div className="text-sm font-bold mb-2">{p.action}</div>
+                      {p.payload.content && (
+                        <p className="text-sm text-gray-400 whitespace-pre-wrap leading-relaxed mb-2">
+                          {p.payload.content}
+                        </p>
+                      )}
+                      {p.payload.analysis && (
+                        <p className="text-xs text-gray-600">
+                          Score: {p.payload.analysis.score} · Est. engagement:{' '}
+                          {p.payload.analysis.estimatedEngagement}
+                        </p>
+                      )}
+                      {p.payload.ideas && (
+                        <ul className="text-xs text-gray-400 space-y-1 mt-1">
+                          {p.payload.ideas.map((idea, i) => (
+                            <li key={i}>
+                              · {idea.platform ? `[${idea.platform}] ` : ''}
+                              {idea.topic ?? idea.angle ?? JSON.stringify(idea)}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                     <div
-                      key={post.id}
-                      className="px-4 py-3 flex items-start gap-3"
-                      style={{ borderBottom: '1px solid #0d0d1a' }}
+                      className="px-4 py-3 flex gap-3"
+                      style={{ borderTop: '1px solid #1e2040' }}
                     >
-                      <span
-                        className="text-xs px-2 py-0.5 rounded mt-0.5 flex-shrink-0"
+                      <button
+                        onClick={() => resolveApproval(p.id, true)}
+                        disabled={acting === p.id}
+                        className="flex-1 py-2 rounded text-xs font-bold tracking-widest transition-colors"
                         style={{
-                          color: platformColor[post.platform],
-                          background: `${platformColor[post.platform]}20`,
-                          border: `1px solid ${platformColor[post.platform]}40`,
+                          background: '#00ff9d20',
+                          border: '1px solid #00ff9d40',
+                          color: '#00ff9d',
                         }}
                       >
-                        {post.platform}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-300 truncate">{post.content}</p>
-                        <div className="flex items-center gap-3 mt-1">
-                          <span className="text-xs text-gray-600">
-                            {new Date(post.scheduledAt).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                          <span
-                            className="text-xs tracking-widest"
-                            style={{ color: post.status === 'published' ? '#00ff9d' : '#4fc3f7' }}
-                          >
-                            {post.status.toUpperCase()}
-                          </span>
-                        </div>
-                      </div>
+                        {acting === p.id ? '...' : '✓ APPROVE'}
+                      </button>
+                      <button
+                        onClick={() => resolveApproval(p.id, false)}
+                        disabled={acting === p.id}
+                        className="flex-1 py-2 rounded text-xs font-bold tracking-widest transition-colors"
+                        style={{
+                          background: '#ef444420',
+                          border: '1px solid #ef444440',
+                          color: '#ef4444',
+                        }}
+                      >
+                        {acting === p.id ? '...' : '✕ REJECT'}
+                      </button>
                     </div>
-                  ))}
-                </div>
-              ))}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+
+          <div>
+            <div className="text-xs tracking-widest text-gray-500 mb-4">
+              CONTENT CALENDAR — NEXT 14 DAYS
+            </div>
+
+            {Object.keys(postsByDate).length === 0 ? (
+              <div
+                className="rounded-lg border p-12 text-center"
+                style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
+              >
+                <div className="text-gray-600 text-sm">
+                  No scheduled posts. Approve generated content above to populate the calendar.
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {Object.entries(postsByDate).map(([date, datePosts]) => (
+                  <div
+                    key={date}
+                    className="rounded-lg border overflow-hidden"
+                    style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
+                  >
+                    <div
+                      className="px-4 py-2 text-xs tracking-widest text-gray-500"
+                      style={{ borderBottom: '1px solid #1e2040', background: '#0f0e1a' }}
+                    >
+                      {date}
+                    </div>
+                    {datePosts.map((post) => (
+                      <div
+                        key={post.id}
+                        className="px-4 py-3 flex items-start gap-3"
+                        style={{ borderBottom: '1px solid #0d0d1a' }}
+                      >
+                        <span
+                          className="text-xs px-2 py-0.5 rounded mt-0.5 flex-shrink-0"
+                          style={{
+                            color: platformColor[post.platform],
+                            background: `${platformColor[post.platform]}20`,
+                            border: `1px solid ${platformColor[post.platform]}40`,
+                          }}
+                        >
+                          {post.platform}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-300 truncate">{post.content}</p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-xs text-gray-600">
+                              {new Date(post.scheduledAt).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                            <span
+                              className="text-xs tracking-widest"
+                              style={{ color: post.status === 'published' ? '#00ff9d' : '#4fc3f7' }}
+                            >
+                              {post.status.toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
