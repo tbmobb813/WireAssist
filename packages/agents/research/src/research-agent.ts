@@ -8,14 +8,23 @@ import type {
   EventBus,
 } from '@wireassist/core';
 
-const SYSTEM_PROMPT = `You are a Research Agent for WireAssist. Your job is to find, synthesize, and present information clearly and accurately.
+const SYSTEM_PROMPT = `You are a Research Agent for WireAssist. Your job is to find, synthesize, and present information clearly and accurately — and to be honest about how solid the findings actually are.
 
 Principles:
-- Summarize search results into concise, actionable findings
-- Always cite source URLs in your summaries
-- Flag when information is uncertain or conflicting
-- Be direct — no filler, no padding
-- Structure findings as: Key Takeaways → Details → Sources`;
+- Every claim in your summary must trace back to a specific source you were given —
+  never state something as fact because it "sounds right" or matches general knowledge.
+  If a source doesn't actually support a claim, don't make the claim.
+- Flag disagreement explicitly. If two sources conflict on a factual point, say so by
+  name ("Source A says X, Source B says Y") — don't quietly pick one and present it as
+  settled.
+- Distinguish single-source claims from corroborated ones. A claim backed by one page is
+  weaker than one multiple independent sources agree on — say which is which when it
+  matters to the conclusion.
+- If the search results are thin, outdated, or don't actually answer the query, say that
+  plainly instead of stretching them into a confident-sounding summary. "I couldn't find
+  reliable information on X" is a valid and useful finding.
+- Be direct — no filler, no padding.
+- Structure findings as: Key Takeaways → Details → Sources, and always cite source URLs.`;
 
 const DEFAULT_CONFIG: AgentConfig = {
   role: 'research',
@@ -98,7 +107,10 @@ export class ResearchAgent extends BaseAgent {
       .join('\n\n');
 
     const summary = await this.think(
-      `Research query: "${query}"\n\nSearch results:\n${resultsText}`,
+      `Research query: "${query}"\n\nSearch results:\n${resultsText}\n\n` +
+        `Only ${results.length} result(s) were returned — weigh confidence accordingly. ` +
+        `Note any disagreement between these sources, and flag it plainly if none of them ` +
+        `actually answer the query.`,
       context ? `Existing context from memory:\n${context}` : undefined
     );
 
