@@ -21,3 +21,13 @@ The GitHub name `WireAssist` is currently held by the legacy repo. Order matters
 Deferred from the legacy desktop repo. Builds AppImage/DEB/RPM for the Tauri app, which is frozen.
 
 Do not wire this into `.github/workflows/` unless the desktop app is revived as **WireAssist Desktop**. When that day comes, rewrite paths from `linux-ai-assistant/` to the current package layout before enabling.
+
+## Historical phase/setup notes
+
+Moved from the repo root — each already carried a "Historical document" banner pointing at current docs before the move:
+
+- `PHASE_1_COMPLETE.md`, `PHASE_2_STREAMING.md`, `PHASE_3_CONTEXT_BUILDING.md` — AIA-app development milestones (Nov 2024), reference `packages/core`/`@aia/core` paths that no longer exist.
+- `MONOREPO_SETUP.md` — original pnpm-workspace layout before the `wireassist/` + `packages/agents/*` restructure.
+- `PRIVACY_CONTROLS.md` — AIA app's encryption/audit-log implementation notes; the code they describe now lives under `wireassist/aia/src/lib/services/`.
+
+For current setup/architecture, see the root `README.md` and `docs/SETUP.md` / `docs/ARCHITECTURE.md`.

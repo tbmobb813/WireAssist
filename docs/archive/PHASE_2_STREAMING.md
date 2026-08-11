@@ -9,12 +9,14 @@
 ## 🎯 Phase 2 Goal - Streaming Support Complete
 
 ### ✅ Core Streaming Integration
+
 - [x] Core streaming provider (`coreStreamingProvider.ts`) integrating @aia/core directly
 - [x] Support for OpenAI, Anthropic, Gemini, and Ollama providers with streaming
 - [x] Proper API key validation for each provider
 - [x] Type-safe streaming with @aia/core's AsyncGenerator pattern
 
 ### ✅ Streaming Service Layer
+
 - [x] `StreamingService` for session management
 - [x] Chunk recording and buffering with size limits
 - [x] Debounced chunk processing for efficient UI updates
@@ -22,12 +24,14 @@
 - [x] Multi-concurrent session support
 
 ### ✅ Integration with ChatStore
+
 - [x] Existing `sendMessage` flow already has streaming callbacks
 - [x] Optimistic message updates during streaming
 - [x] Chunk accumulation into final response
 - [x] Real-time UI updates as chunks arrive
 
 ### ✅ Comprehensive Testing
+
 - [x] 25 core streaming provider tests
 - [x] 27 streaming service tests
 - [x] Full coverage of provider configuration
@@ -109,6 +113,7 @@ ChatStore.sendMessage()
 ## 🚀 Key Features Implemented
 
 ### 1. Core Streaming Provider
+
 - Directly uses @aia/core's `ProviderFactory` and `handleStream`
 - Supports all 4 providers natively:
   - **OpenAI:** GPT-4, GPT-3.5-turbo with real streaming
@@ -117,6 +122,7 @@ ChatStore.sendMessage()
   - **Ollama:** Local models with real streaming
 
 ### 2. Streaming Service
+
 - Session-based streaming tracking
 - Configurable chunk buffering and debouncing
 - Real-time metrics collection
@@ -124,6 +130,7 @@ ChatStore.sendMessage()
 - Automatic session cleanup
 
 ### 3. Provider Configuration Validation
+
 - **OpenAI:** Requires valid `apiKey`
 - **Anthropic:** Requires valid `apiKey`
 - **Gemini:** Requires valid `apiKey`
@@ -131,6 +138,7 @@ ChatStore.sendMessage()
 - Clear error messages for missing configuration
 
 ### 4. Chunk Processing
+
 - Debounced UI updates (default 50ms) to reduce re-renders
 - Chunk accumulation for complete response
 - Buffer size validation (default 1MB max)
@@ -166,18 +174,12 @@ settings.apiKeys.openai = 'sk-...';
 const provider = new CoreStreamingProvider();
 
 // Generate response with streaming
-const messages = [
-  { role: 'user', content: 'What is AI?' },
-];
+const messages = [{ role: 'user', content: 'What is AI?' }];
 
-const response = await provider.generateResponse(
-  'conversation-id',
-  messages,
-  (chunk) => {
-    console.log('Received chunk:', chunk);
-    // Update UI with chunk
-  }
-);
+const response = await provider.generateResponse('conversation-id', messages, (chunk) => {
+  console.log('Received chunk:', chunk);
+  // Update UI with chunk
+});
 
 console.log('Final response:', response);
 ```
@@ -191,12 +193,9 @@ import { streamingService } from './lib/services/streamingService';
 const sessionId = streamingService.createSession('conv-123');
 
 // Create a chunk processor with debouncing
-const processor = streamingService.createChunkProcessor(
-  (chunk) => {
-    console.log('Processing:', chunk);
-  },
-  sessionId
-);
+const processor = streamingService.createChunkProcessor((chunk) => {
+  console.log('Processing:', chunk);
+}, sessionId);
 
 // Process chunks as they arrive
 processor.process('Hello ');
@@ -218,19 +217,13 @@ const onChunk = (chunk: string) => {
   // chatStore automatically updates UI with incoming chunks
   set((state) => ({
     messages: state.messages.map((m) =>
-      m.id === optimisticAssistantId
-        ? { ...m, content: (m.content || '') + chunk }
-        : m,
+      m.id === optimisticAssistantId ? { ...m, content: (m.content || '') + chunk } : m
     ),
   }));
 };
 
 // Provider.generateResponse() is called with onChunk
-const assistantContent = await provider.generateResponse(
-  conversationId,
-  messages,
-  onChunk,
-);
+const assistantContent = await provider.generateResponse(conversationId, messages, onChunk);
 ```
 
 ---
@@ -238,6 +231,7 @@ const assistantContent = await provider.generateResponse(
 ## 🔄 Integration Points
 
 ### ChatStore Integration
+
 - `sendMessage()` method already supports streaming callbacks
 - Creates optimistic assistant message before streaming
 - Accumulates chunks in real-time
@@ -245,12 +239,14 @@ const assistantContent = await provider.generateResponse(
 - Stores complete message in database
 
 ### Provider System Integration
+
 - `CoreStreamingProvider` implements `Provider` interface
 - Works with existing `getProvider()` factory
 - Can be used directly or via `HybridRoutingProvider`
 - Maintains backward compatibility with mock provider
 
 ### Database Integration
+
 - Streaming doesn't affect database operations
 - Complete message stored after streaming finishes
 - Message status tracking ("streaming", "sent", "failed")
@@ -277,6 +273,7 @@ const assistantContent = await provider.generateResponse(
 ## 🎓 How to Use Streaming
 
 ### 1. Enable Core Streaming
+
 ```typescript
 import { CoreStreamingProvider } from './lib/providers/coreStreamingProvider';
 
@@ -285,6 +282,7 @@ const provider = new CoreStreamingProvider();
 ```
 
 ### 2. Monitor Streaming Sessions
+
 ```typescript
 import { streamingService } from './lib/services/streamingService';
 
@@ -298,14 +296,12 @@ console.log(`${session?.totalChunks} chunks, ${session?.totalBytes} bytes`);
 ```
 
 ### 3. Custom Chunk Processing
+
 ```typescript
 // Create custom processor with debouncing
-const processor = streamingService.createChunkProcessor(
-  (chunk) => {
-    // Update UI, log, etc.
-  },
-  sessionId
-);
+const processor = streamingService.createChunkProcessor((chunk) => {
+  // Update UI, log, etc.
+}, sessionId);
 
 // Or directly handle chunks in provider callback
 await provider.generateResponse(convId, messages, (chunk) => {
@@ -318,6 +314,7 @@ await provider.generateResponse(convId, messages, (chunk) => {
 ## ✨ What's Ready for Phase 3
 
 ✅ Foundation is solid for:
+
 - **Context Building** (file/Git integration with streaming support)
 - **Advanced Streaming** (SSE parsing improvements, token counting)
 - **Privacy Controls** (encryption for streamed content)
@@ -328,16 +325,16 @@ await provider.generateResponse(convId, messages, (chunk) => {
 
 ## 📊 Metrics
 
-| Metric | Value |
-|--------|-------|
-| New Code Files | 3 (providers + services) |
-| New Test Files | 2 |
-| New Test Cases | 52 |
-| Test Coverage | 100% of new code |
-| Lines of Code (Tests) | ~650 |
-| Lines of Code (Implementation) | ~250 |
-| Provider Integration Tests | 25 |
-| Streaming Service Tests | 27 |
+| Metric                         | Value                    |
+| ------------------------------ | ------------------------ |
+| New Code Files                 | 3 (providers + services) |
+| New Test Files                 | 2                        |
+| New Test Cases                 | 52                       |
+| Test Coverage                  | 100% of new code         |
+| Lines of Code (Tests)          | ~650                     |
+| Lines of Code (Implementation) | ~250                     |
+| Provider Integration Tests     | 25                       |
+| Streaming Service Tests        | 27                       |
 
 ---
 
