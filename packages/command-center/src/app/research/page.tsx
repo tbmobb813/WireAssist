@@ -15,6 +15,20 @@ interface PastResearch {
   createdAt: string;
 }
 
+interface ResearchApproval {
+  id: string;
+  taskId: string;
+  agentRole: string;
+  action: string;
+  payload: {
+    summary?: string;
+    sources?: string[];
+    synthesis?: string;
+  };
+  status: string;
+  createdAt: string;
+}
+
 export default function ResearchPage() {
   const [query, setQuery] = useState('');
   const [depth, setDepth] = useState<'quick' | 'deep'>('quick');
@@ -24,6 +38,8 @@ export default function ResearchPage() {
   const [error, setError] = useState<string | null>(null);
   const [pastResearch, setPastResearch] = useState<PastResearch[]>([]);
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
+  const [pending, setPending] = useState<ResearchApproval[]>([]);
+  const [acting, setActing] = useState<string | null>(null);
 
   const pendingTaskId = useRef<string | null>(null);
 
@@ -34,9 +50,17 @@ export default function ResearchPage() {
       .catch(() => {});
   }, []);
 
+  const fetchPending = useCallback(async () => {
+    const res = await fetch('/api/approvals');
+    if (!res.ok) return;
+    const all = (await res.json()) as ResearchApproval[];
+    setPending(all.filter((a) => a.agentRole === 'research'));
+  }, []);
+
   useEffect(() => {
     loadPastResearch();
-  }, [loadPastResearch]);
+    fetchPending();
+  }, [loadPastResearch, fetchPending]);
 
   useAgentEvents(
     useCallback(
@@ -53,13 +77,16 @@ export default function ResearchPage() {
           setGenerating(false);
           pendingTaskId.current = null;
         }
+        if (e.event === 'waiting_approval' || e.event === 'approval_resolved') {
+          fetchPending();
+        }
         // Findings are only remembered once approved (see /approvals) —
         // refresh so a newly-stored finding shows up here without a reload.
         if (e.event === 'approval_resolved' && e.payload.approved) {
           loadPastResearch();
         }
       },
-      [loadPastResearch]
+      [loadPastResearch, fetchPending]
     )
   );
 
@@ -90,6 +117,13 @@ export default function ResearchPage() {
     query.trim() && fire('/api/tasks/research-topic', { query: query.trim(), depth });
   const runSynthesize = () =>
     synthesizeTopic.trim() && fire('/api/tasks/synthesize', { topic: synthesizeTopic.trim() });
+
+  const resolveApproval = async (id: string, approved: boolean) => {
+    setActing(id);
+    await fetch(`/api/approvals/${id}/${approved ? 'approve' : 'reject'}`, { method: 'POST' });
+    setPending((prev) => prev.filter((a) => a.id !== id));
+    setActing(null);
+  };
 
   return (
     <div className="min-h-screen p-8 max-w-3xl mx-auto">
@@ -197,11 +231,11 @@ export default function ResearchPage() {
 
       {result && (
         <div
-          className="rounded-lg border p-5"
+          className="rounded-lg border p-5 mb-5"
           style={{ background: '#0d0d1a', borderColor: '#00ff9d30' }}
         >
           <div className="text-xs tracking-widest mb-3" style={{ color: '#00ff9d' }}>
-            FINDINGS — CHECK APPROVALS TO STORE
+            JUST COMPLETED
           </div>
           <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed mb-4">
             {result.summary}
@@ -228,7 +262,77 @@ export default function ResearchPage() {
       )}
 
       <div
-        className="rounded-lg border p-5 mt-5"
+        className="rounded-lg border p-5 mb-5"
+        style={{ background: '#0d0d1a', borderColor: '#ffb34740' }}
+      >
+        <div className="text-xs tracking-widest mb-3" style={{ color: '#ffb347' }}>
+          PENDING REVIEW {pending.length > 0 ? `— ${pending.length}` : ''}
+        </div>
+        {pending.length === 0 ? (
+          <p className="text-xs text-gray-600">
+            Nothing awaiting review. Findings land here once a search or synthesis completes.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {pending.map((p) => (
+              <div
+                key={p.id}
+                className="rounded p-4"
+                style={{ background: '#080810', border: '1px solid #1e2040' }}
+              >
+                <div className="text-xs text-gray-500 mb-2">{p.action}</div>
+                <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed mb-3">
+                  {p.payload.summary ?? p.payload.synthesis}
+                </p>
+                {p.payload.sources && p.payload.sources.length > 0 && (
+                  <div className="space-y-1 mb-3">
+                    {p.payload.sources.map((s, i) => (
+                      <a
+                        key={i}
+                        href={s}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block text-xs text-gray-500 hover:text-accent truncate"
+                      >
+                        {s}
+                      </a>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => resolveApproval(p.id, true)}
+                    disabled={acting === p.id}
+                    className="flex-1 py-2 rounded text-xs font-bold tracking-widest transition-colors"
+                    style={{
+                      background: '#00ff9d20',
+                      border: '1px solid #00ff9d40',
+                      color: '#00ff9d',
+                    }}
+                  >
+                    {acting === p.id ? '...' : '✓ APPROVE'}
+                  </button>
+                  <button
+                    onClick={() => resolveApproval(p.id, false)}
+                    disabled={acting === p.id}
+                    className="flex-1 py-2 rounded text-xs font-bold tracking-widest transition-colors"
+                    style={{
+                      background: '#ef444420',
+                      border: '1px solid #ef444440',
+                      color: '#ef4444',
+                    }}
+                  >
+                    {acting === p.id ? '...' : '✕ REJECT'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div
+        className="rounded-lg border p-5"
         style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
       >
         <div className="text-xs tracking-widest text-gray-500 mb-3">PAST RESEARCH</div>
