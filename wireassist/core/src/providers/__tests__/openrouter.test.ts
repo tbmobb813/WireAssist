@@ -144,6 +144,36 @@ describe('OpenRouterProvider.complete()', () => {
       /OpenRouter API error: 401 - invalid key/
     );
   });
+
+  it('omits temperature entirely when the caller does not specify one', async () => {
+    mockFetchOnce({
+      json: async () => ({
+        choices: [{ message: { content: 'x' }, finish_reason: 'stop' }],
+        model: 'm',
+      }),
+    });
+
+    const provider = new OpenRouterProvider({ type: 'openrouter', apiKey: 'k' });
+    await provider.complete({ prompt: 'hi' });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body).not.toHaveProperty('temperature');
+  });
+
+  it('sends temperature when the caller specifies one', async () => {
+    mockFetchOnce({
+      json: async () => ({
+        choices: [{ message: { content: 'x' }, finish_reason: 'stop' }],
+        model: 'm',
+      }),
+    });
+
+    const provider = new OpenRouterProvider({ type: 'openrouter', apiKey: 'k' });
+    await provider.complete({ prompt: 'hi', temperature: 0.3 });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.temperature).toBe(0.3);
+  });
 });
 
 describe('OpenRouterProvider.listModels()', () => {

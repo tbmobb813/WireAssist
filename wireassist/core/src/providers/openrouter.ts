@@ -46,7 +46,9 @@ export class OpenRouterProvider implements Provider {
       body: JSON.stringify({
         model: options.model || this.currentModel,
         messages: this.buildMessages(options),
-        temperature: options.temperature ?? 0.7,
+        // Only send temperature when a caller actually asked for one — some
+        // underlying models OpenRouter proxies to reject it outright.
+        ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
         max_tokens: options.maxTokens,
       }),
       signal: AbortSignal.timeout(this.timeout),
@@ -87,7 +89,7 @@ export class OpenRouterProvider implements Provider {
       body: JSON.stringify({
         model: options.model || this.currentModel,
         messages: this.buildMessages(options),
-        temperature: options.temperature ?? 0.7,
+        ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
         max_tokens: options.maxTokens,
         stream: true,
       }),
