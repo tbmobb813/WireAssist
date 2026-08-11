@@ -28,6 +28,7 @@ export default function ContentPage() {
   const [topic, setTopic] = useState('');
   const [platform, setPlatform] = useState<Platform>('linkedin');
   const [lastGenerated, setLastGenerated] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchPosts = useCallback(async () => {
     const res = await fetch('/api/content/posts?daysAhead=14');
@@ -51,6 +52,7 @@ export default function ContentPage() {
         }
         if (e.event === 'task_failed' && e.payload.agentRole === 'content') {
           setGenerating(false);
+          setError(typeof e.payload.error === 'string' ? e.payload.error : 'Task failed');
         }
       },
       [fetchPosts]
@@ -59,24 +61,48 @@ export default function ContentPage() {
 
   const generatePost = async () => {
     if (!topic.trim() || generating) return;
+    setError(null);
     setGenerating(true);
     setLastGenerated(null);
-    const res = await fetch('/api/tasks/generate-post', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ topic: topic.trim(), platform }),
-    });
-    if (!res.ok) setGenerating(false);
+    try {
+      const res = await fetch('/api/tasks/generate-post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: topic.trim(), platform }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? `Request failed (${res.status})`);
+        setGenerating(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reach the API');
+      setGenerating(false);
+    }
   };
 
   const generatePlan = async () => {
+    setError(null);
     setGenerating(true);
-    const res = await fetch('/api/tasks/generate-plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ platforms: ['linkedin', 'twitter'], weeksAhead: 1, postsPerWeek: 3 }),
-    });
-    if (!res.ok) setGenerating(false);
+    try {
+      const res = await fetch('/api/tasks/generate-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platforms: ['linkedin', 'twitter'],
+          weeksAhead: 1,
+          postsPerWeek: 3,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? `Request failed (${res.status})`);
+        setGenerating(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reach the API');
+      setGenerating(false);
+    }
   };
 
   // Group posts by date for calendar view
@@ -109,6 +135,15 @@ export default function ContentPage() {
           Generate, schedule, and manage your content pipeline.
         </p>
       </div>
+
+      {error && (
+        <div
+          className="rounded-lg border p-4 mb-5 text-sm"
+          style={{ background: '#2a0f0f', borderColor: '#f0525240', color: '#f87171' }}
+        >
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-6">
         {/* Left — Generator */}

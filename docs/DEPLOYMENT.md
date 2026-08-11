@@ -412,36 +412,6 @@ Outcomes (approved, blocked, or failed) arrive the same way any other run's
 outcome does — the Telegram bot already alerts on those regardless of who
 triggered the run — so this script doesn't duplicate that notification.
 
-**Note:** `POST /api/tasks/ops-workflow` — the endpoint both this script and
-the dashboard's manual "Run" button use — is gated behind the app's
-`workforce`-tier license check (`tierGate('workforce')` in `server.ts`).
-Check `curl http://127.0.0.1:3001/api/license/status` on the VPS; if it
-returns anything other than `workforce`, ops workflow runs won't execute at
-all yet, cron or manual, until a license is activated.
-
-For your own self-hosted, single-owner deployment, there's no need to go
-through `/api/license/activate` (which calls out to LemonSqueezy) just to
-use your own instance — insert a `workforce`-tier row directly into the
-same local SQLite DB instead, entirely offline and fully reversible:
-
-```bash
-docker compose exec command-center node -e "
-const Database = require('better-sqlite3');
-const db = new Database('/data/.wireassist/wireassist.db');
-db.exec(\`CREATE TABLE IF NOT EXISTS licenses (
-  key TEXT PRIMARY KEY, tier TEXT NOT NULL DEFAULT 'trial', status TEXT NOT NULL DEFAULT 'inactive',
-  customer_email TEXT, activations_remaining INTEGER, verified_at TEXT NOT NULL, expires_grace_at TEXT NOT NULL
-)\`);
-const now = new Date().toISOString();
-const farFuture = new Date(Date.now() + 100*365*24*60*60*1000).toISOString();
-db.prepare(\`INSERT INTO licenses (key, tier, status, customer_email, activations_remaining, verified_at, expires_grace_at)
-  VALUES (?, 'workforce', 'active', NULL, NULL, ?, ?)
-  ON CONFLICT(key) DO UPDATE SET tier='workforce', status='active', verified_at=excluded.verified_at, expires_grace_at=excluded.expires_grace_at\`)
-  .run('self-hosted', now, farFuture);
-console.log('Granted workforce tier, expires', farFuture);
-"
-```
-
 ## Updating after a code change
 
 ```bash

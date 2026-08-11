@@ -49,8 +49,6 @@ flowchart TB
   CA --> TP
 ```
 
-`POST /api/tasks/*` endpoints are additionally gated by a license tier (`trial` < `solo` < `operator` < `workforce`), checked per-endpoint against a row in the same SQLite DB — see [Licensing](#licensing) below.
-
 ## Packages
 
 ### `@wireassist/core` (`wireassist/core/`)
@@ -150,23 +148,16 @@ Operational UI for running agents.
 - `POST /api/tasks/triage-email` / `POST /api/tasks/review-calendar` — Admin agent
 - `POST /api/tasks/generate-post` / `POST /api/tasks/generate-plan` — Content agent
 - `POST /api/tasks/research-topic` / `POST /api/tasks/synthesize` — Research agent
-- `POST /api/tasks/ops-workflow` / `POST /api/tasks/ops-freeform` — NixOps agent (workforce tier)
-- `POST /api/tasks/gtm/strategy` / `POST /api/tasks/gtm/psych` — GTM agent (operator tier)
+- `POST /api/tasks/ops-workflow` / `POST /api/tasks/ops-freeform` — NixOps agent
+- `POST /api/tasks/gtm/strategy` / `POST /api/tasks/gtm/psych` — GTM agent
 - `GET/POST /api/ops/trust/:workflow` — read/set a workflow's trust stage
 - `POST /api/tasks/freeform` — ad-hoc instruction, routed to the right agent automatically
 - `GET/POST /api/approvals/*` — approval queue
 - `GET/POST /api/portfolio/*` — weekly-focus gate and project tracking (Zones 1–2)
 - `GET /api/budget` — month-to-date spend vs. `WIREASSIST_BUDGET_MONTHLY`
-- `GET /api/license/status` / `POST /api/license/activate` — license tier (see Licensing below)
 - `GET /api/events` — SSE stream of agent events; `GET /api/activity` — recent event log for hydration
 
 Bootstrap wires `setupAdminMCP` and each other agent's setup into their respective agent instances, all sharing one SQLite DB at `~/.wireassist/wireassist.db`.
-
-## Licensing
-
-Most `POST /api/tasks/*` endpoints (and a few `GET`s) are gated behind `tierGate(minTier)` in `server.ts`, checked against `currentTier()` — the most recent non-expired row in the `licenses` table (`trial` < `solo` < `operator` < `workforce`; `trial` if no row exists). Real activation goes through `POST /api/license/activate`, which validates a key against the LemonSqueezy API and maps its variant ID to a tier via `LS_VARIANT_SOLO`/`LS_VARIANT_OPERATOR`/`LS_VARIANT_WORKFORCE` env vars.
-
-For a self-hosted single-owner deployment, there is no external LemonSqueezy call required to use your own instance — insert a `workforce`-tier row directly into the `licenses` table (same SQLite DB, no payment, fully reversible). See `docs/DEPLOYMENT.md`.
 
 ## Deployment
 
@@ -255,13 +246,13 @@ Email triage additionally emits `agent:triage_complete` with structured per-emai
 
 ## Data locations
 
-| Path                                   | Contents                                                          |
-| -------------------------------------- | ----------------------------------------------------------------- |
-| `~/.wireassist/gmail-credentials.json` | Google OAuth client secret (user-provided)                        |
-| `~/.wireassist/gmail-token.json`       | OAuth access + refresh token (Gmail, Calendar, Sheets)            |
-| `~/.wireassist/wireassist.db`          | Approvals, memory, portfolio/focus, license tier (Command Center) |
-| `~/.wireassist/ops-trust.json`         | Per-workflow NixOps trust stage                                   |
-| `~/.wireassist/budget.json`            | Month-to-date spend tracking                                      |
+| Path                                   | Contents                                               |
+| -------------------------------------- | ------------------------------------------------------ |
+| `~/.wireassist/gmail-credentials.json` | Google OAuth client secret (user-provided)             |
+| `~/.wireassist/gmail-token.json`       | OAuth access + refresh token (Gmail, Calendar, Sheets) |
+| `~/.wireassist/wireassist.db`          | Approvals, memory, portfolio/focus (Command Center)    |
+| `~/.wireassist/ops-trust.json`         | Per-workflow NixOps trust stage                        |
+| `~/.wireassist/budget.json`            | Month-to-date spend tracking                           |
 
 Override base directory with `WIREASSIST_HOME` (in Docker: `/data`, via the named volume).
 
