@@ -1,7 +1,9 @@
 'use client';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
+import { setContentHandoff } from '@/lib/content-handoff';
 import type { GtmProductInput, GtmStrategy, GtmPsychPrinciple } from '@wireassist/agent-gtm';
 
 const EMPTY_PRODUCT: GtmProductInput = {
@@ -109,6 +111,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 }
 
 export default function GtmPage() {
+  const router = useRouter();
   const [step, setStep] = useState(0);
   const [product, setProduct] = useState<GtmProductInput>(EMPTY_PRODUCT);
   const [generating, setGenerating] = useState(false);
@@ -174,6 +177,24 @@ export default function GtmPage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function useStrategyInContentPlan() {
+    if (!gtm) return;
+    const context = [
+      `Product: ${product.name}${product.cat ? ` (${product.cat})` : ''}`,
+      `Positioning: "${gtm.positioning?.headline ?? ''}" — ${gtm.positioning?.subheadline ?? ''}`,
+      `ICP: ${gtm.positioning?.icp ?? ''}`,
+      product.benefit ? `Core benefit: ${product.benefit}` : '',
+      product.diff ? `Differentiator: ${product.diff}` : '',
+      (gtm.positioning?.message_hierarchy ?? []).length
+        ? `Key messages: ${(gtm.positioning?.message_hierarchy ?? []).join(' / ')}`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+    setContentHandoff({ kind: 'gtm', product: product.name, context });
+    router.push('/content');
+  }
 
   const checkDone = useCallback((taskId: string) => {
     pendingTaskIds.current.delete(taskId);
@@ -700,6 +721,15 @@ export default function GtmPage() {
                 style={{ background: '#ffb347', color: '#000' }}
               >
                 View Psych Tactics →
+              </button>
+            )}
+            {gtm && (
+              <button
+                onClick={useStrategyInContentPlan}
+                className="rounded px-6 py-3 text-sm font-bold"
+                style={{ background: '#4fc3f720', border: '1px solid #4fc3f740', color: '#4fc3f7' }}
+              >
+                → Use in Content Plan
               </button>
             )}
           </div>

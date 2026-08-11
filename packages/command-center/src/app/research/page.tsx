@@ -1,7 +1,9 @@
 'use client';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
+import { setContentHandoff } from '@/lib/content-handoff';
 
 interface ResearchResult {
   summary: string;
@@ -29,7 +31,15 @@ interface ResearchApproval {
   createdAt: string;
 }
 
+// Research/synthesis entries are stored as `Research on "<query>":\n\n<summary>` —
+// pull the quoted topic back out for a sensible pre-filled Content topic field.
+function extractTopic(content: string): string {
+  const match = content.match(/^(?:Research on|Synthesis on) "(.+)":/);
+  return match ? match[1] : content.split('\n')[0].slice(0, 80);
+}
+
 export default function ResearchPage() {
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [depth, setDepth] = useState<'quick' | 'deep'>('quick');
   const [synthesizeTopic, setSynthesizeTopic] = useState('');
@@ -362,8 +372,28 @@ export default function ResearchPage() {
                     </span>
                   </button>
                   {open && (
-                    <div className="px-3 pb-3 text-xs text-gray-300 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
-                      {entry.content}
+                    <div className="px-3 pb-3">
+                      <div className="text-xs text-gray-300 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto mb-3">
+                        {entry.content}
+                      </div>
+                      <button
+                        onClick={() => {
+                          setContentHandoff({
+                            kind: 'research',
+                            topic: extractTopic(entry.content),
+                            context: entry.content,
+                          });
+                          router.push('/content');
+                        }}
+                        className="text-xs px-3 py-1.5 rounded font-bold tracking-wide"
+                        style={{
+                          background: '#4fc3f720',
+                          border: '1px solid #4fc3f740',
+                          color: '#4fc3f7',
+                        }}
+                      >
+                        → Use in Content
+                      </button>
                     </div>
                   )}
                 </div>

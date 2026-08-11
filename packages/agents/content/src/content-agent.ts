@@ -101,13 +101,18 @@ export class ContentAgent extends BaseAgent {
   // ─── GENERATE SINGLE POST ─────────────────────────────────────
 
   private async generatePost(task: AgentTask): Promise<void> {
-    const { topic, platform, tone } = task.input as {
+    const { topic, platform, tone, extraContext } = task.input as {
       topic: string;
       platform: Platform;
       tone?: string;
+      extraContext?: string;
     };
 
-    const context = await this.loadContext('business description products services audience');
+    const memoryContext = await this.loadContext('business description products services audience');
+    // extraContext carries a handoff from another agent (e.g. a research finding) —
+    // it takes precedence in the prompt since it's more specific to this post than
+    // the agent's general business-context memory.
+    const context = [extraContext, memoryContext].filter(Boolean).join('\n\n');
 
     const result = (await this.useTool('content_generate', {
       topic,
@@ -159,18 +164,25 @@ export class ContentAgent extends BaseAgent {
       platforms,
       weeksAhead = 1,
       postsPerWeek = 3,
+      businessContext: providedContext,
     } = task.input as {
       platforms: Platform[];
       weeksAhead?: number;
       postsPerWeek?: number;
+      businessContext?: string;
     };
 
-    const businessContext = await this.loadContext(
+    const memoryContext = await this.loadContext(
       'business description products services recent news'
     );
+    // providedContext carries a handoff from another agent (e.g. a GTM strategy) —
+    // it takes precedence since it's a more specific, current business description
+    // than whatever's accumulated in memory.
+    const businessContext =
+      [providedContext, memoryContext].filter(Boolean).join('\n\n') || 'Solo business operator';
 
     const result = (await this.useTool('content_generate_plan', {
-      businessContext: businessContext || 'Solo business operator',
+      businessContext,
       platforms,
       weeksAhead,
       postsPerWeek,
