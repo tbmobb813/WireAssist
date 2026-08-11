@@ -90,7 +90,11 @@ export class GtmAgent extends BaseAgent {
     const gtm = extractJson<GtmStrategy>(raw);
 
     this.events.emit('agent:gtm_generated', { taskId: task.id, gtm });
-    this.remember(`Generated GTM strategy for ${product.name}`, ['gtm', 'strategy']);
+    this.remember(JSON.stringify({ product: product.name, gtm }), [
+      'gtm',
+      'strategy',
+      product.name,
+    ]);
   }
 
   // ─── PSYCH TACTICS ─────────────────────────────────────────────
@@ -102,7 +106,7 @@ export class GtmAgent extends BaseAgent {
     const psych = extractJson<GtmPsychPrinciple[]>(raw);
 
     this.events.emit('agent:gtm_psych_generated', { taskId: task.id, psych });
-    this.remember(`Generated psych tactics for ${product.name}`, ['gtm', 'psych']);
+    this.remember(JSON.stringify({ product: product.name, psych }), ['gtm', 'psych', product.name]);
   }
 
   // ─── FREEFORM ──────────────────────────────────────────────────
