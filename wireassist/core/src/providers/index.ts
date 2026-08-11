@@ -4,6 +4,7 @@ import { OpenAIProvider } from './openai';
 import { AnthropicProvider } from './anthropic';
 import { GeminiProvider } from './gemini';
 import { OllamaProvider } from './ollama';
+import { OpenRouterProvider } from './openrouter';
 import type { Provider, ProviderType } from './base';
 import type { ProviderConfig } from '../types';
 
@@ -18,6 +19,8 @@ export class ProviderFactory {
         return new GeminiProvider(config);
       case 'ollama':
         return new OllamaProvider(config);
+      case 'openrouter':
+        return new OpenRouterProvider(config);
       default:
         throw new Error(`Unknown provider type: ${config.type}`);
     }
@@ -40,6 +43,7 @@ export class ProviderFactory {
     if (process.env.OPENAI_API_KEY) available.push('openai');
     if (process.env.ANTHROPIC_API_KEY) available.push('anthropic');
     if (process.env.GEMINI_API_KEY) available.push('gemini');
+    if (process.env.OPENROUTER_API_KEY) available.push('openrouter');
 
     return available;
   }

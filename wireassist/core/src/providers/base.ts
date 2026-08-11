@@ -24,6 +24,11 @@ export interface ProviderCompletionOptions {
 export interface ProviderResponse {
   content: string;
   tokensUsed?: number;
+  // Split input/output counts, when the provider's API exposes them —
+  // needed for accurate per-token cost accounting (output tokens are
+  // priced differently than input tokens).
+  promptTokens?: number;
+  completionTokens?: number;
   model: string;
   finishReason?: string;
 }

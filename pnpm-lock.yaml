@@ -32,9 +32,6 @@ importers:
 
   packages/agents/admin:
     dependencies:
-      '@anthropic-ai/sdk':
-        specifier: ^0.27.0
-        version: 0.27.3
       '@wireassist/core':
         specifier: workspace:*
         version: link:../../../wireassist/core
