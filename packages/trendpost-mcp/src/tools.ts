@@ -32,7 +32,13 @@ PLATFORM GUIDELINES:
 
 Never use phrases like "Excited to share" or "Thrilled to announce".
 Never use excessive emojis.
-Write like a smart human, not a marketing bot.`;
+Write like a smart human, not a marketing bot.
+
+When business context is given, the post must be specific to that business — not
+content that could have been written for anyone in the same industry. When no business
+context is given, don't invent fake specifics (numbers, customer stories, product
+details) to fill the gap — write a solid, topic-focused post that stays honest about
+what you actually know.`;
 
 export function registerTrendPostTools(mcp: MCPClient, storage: TrendPostStorage): void {
   // ── GENERATE CONTENT ──────────────────────────────────────────
@@ -86,11 +92,15 @@ Business context: ${businessContext}
 Platforms: ${platforms.join(', ')}
 Posts needed: ${totalPosts} posts over ${weeksAhead} week(s)
 
+Distribute posts across ALL of the given platforms roughly evenly — don't default every
+idea to the first one. Every idea must be specific to the business context above, not a
+generic content-calendar filler topic that could apply to any business in the industry.
+
 Return a JSON array of content ideas. Each item:
 {
-  "topic": "specific topic",
+  "topic": "specific topic grounded in the business context",
   "angle": "unique angle or hook",
-  "platform": "${platforms[0]}",
+  "platform": "one of: ${platforms.join(', ')}",
   "suggestedDay": "Monday"
 }
 
@@ -184,6 +194,14 @@ Return only valid JSON array. No markdown fences.`;
   "estimatedEngagement": "low",
   "suggestion": "one specific rewrite suggestion"
 }
+
+Score against this rubric, not gut feel:
+- 1-3: generic — could have been written for any business in this industry
+- 4-6: solid but not distinctive — no reason someone stops scrolling for it
+- 7-8: specific and platform-native — a real hook, a real detail, fits the platform's format
+- 9-10: exceptional — the kind of post that gets screenshotted or replied to unprompted
+"suggestion" must name the specific weak line/word and what to replace it with, not
+generic advice like "make it more engaging."
 
 POST:
 ${content}
