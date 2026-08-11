@@ -133,6 +133,32 @@ describe('MemoryStore.searchAsync()', () => {
     const results = await store.searchAsync('memory', { agentRole: 'admin' });
     expect(results.every((r) => r.agentRole === 'admin')).toBe(true);
   });
+
+  test('excludeTags filters out entries carrying any of the given tags', async () => {
+    const store = freshStore();
+    await store.storeAsync({
+      content: 'real context memory',
+      agentRole: 'admin',
+      tags: [],
+      createdAt: new Date(),
+    });
+    await store.storeAsync({
+      content: 'trace memory',
+      agentRole: 'admin',
+      tags: ['trace', 'proposeAction'],
+      createdAt: new Date(),
+    });
+
+    const withoutExclusion = await store.searchAsync('memory', { agentRole: 'admin' });
+    expect(withoutExclusion.some((r) => r.content === 'trace memory')).toBe(true);
+
+    const withExclusion = await store.searchAsync('memory', {
+      agentRole: 'admin',
+      excludeTags: ['trace'],
+    });
+    expect(withExclusion.some((r) => r.content === 'trace memory')).toBe(false);
+    expect(withExclusion.some((r) => r.content === 'real context memory')).toBe(true);
+  });
 });
 
 describe('MemoryStore.upgradeEmbeddings()', () => {
