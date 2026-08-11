@@ -25,6 +25,34 @@ const EMPTY_PRODUCT: GtmProductInput = {
 
 const STEPS = ['Product', 'Market', 'Business', 'GTM Strategy', 'Psych Tactics'] as const;
 
+interface PastGtmEntry {
+  id: string;
+  content: string;
+  tags: string[];
+  createdAt: string;
+}
+
+type ParsedPastEntry =
+  | { kind: 'strategy'; product: string; gtm: GtmStrategy }
+  | { kind: 'psych'; product: string; psych: GtmPsychPrinciple[] };
+
+// Pre-fix entries stored a one-line note instead of the real content — those
+// fail to parse as JSON here and are simply skipped, not shown as broken.
+function parsePastEntry(entry: PastGtmEntry): ParsedPastEntry | null {
+  try {
+    const parsed = JSON.parse(entry.content);
+    if (entry.tags.includes('strategy') && parsed.gtm) {
+      return { kind: 'strategy', product: parsed.product, gtm: parsed.gtm };
+    }
+    if (entry.tags.includes('psych') && parsed.psych) {
+      return { kind: 'psych', product: parsed.product, psych: parsed.psych };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 function Field({
   label,
   value,
@@ -89,8 +117,33 @@ export default function GtmPage() {
   const [psych, setPsych] = useState<GtmPsychPrinciple[] | null>(null);
   const [openPsychCard, setOpenPsychCard] = useState<number | null>(0);
   const [prefilledFrom, setPrefilledFrom] = useState<string | null>(null);
+  const [pastGtm, setPastGtm] = useState<PastGtmEntry[]>([]);
 
   const pendingTaskIds = useRef<Set<string>>(new Set());
+
+  const loadPastGtm = useCallback(() => {
+    fetch('/api/memory?agentRole=gtm')
+      .then((r) => r.json())
+      .then((d) => Array.isArray(d) && setPastGtm(d))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadPastGtm();
+  }, [loadPastGtm]);
+
+  function loadPastEntry(entry: PastGtmEntry) {
+    const parsed = parsePastEntry(entry);
+    if (!parsed) return;
+    setProduct((p) => ({ ...p, name: parsed.product }));
+    if (parsed.kind === 'strategy') {
+      setGtm(parsed.gtm);
+      setStep(3);
+    } else {
+      setPsych(parsed.psych);
+      setStep(4);
+    }
+  }
 
   function set<K extends keyof GtmProductInput>(field: K, value: string) {
     setProduct((p) => ({ ...p, [field]: value }));
@@ -133,10 +186,12 @@ export default function GtmPage() {
         if (e.event === 'gtm_generated') {
           setGtm(e.payload.gtm as GtmStrategy);
           checkDone(e.payload.taskId);
+          loadPastGtm();
         }
         if (e.event === 'gtm_psych_generated') {
           setPsych(e.payload.psych as GtmPsychPrinciple[]);
           checkDone(e.payload.taskId);
+          loadPastGtm();
         }
         if (e.event === 'task_failed' && e.payload.agentRole === 'gtm') {
           setError(
@@ -145,7 +200,7 @@ export default function GtmPage() {
           checkDone(e.payload.taskId);
         }
       },
-      [checkDone]
+      [checkDone, loadPastGtm]
     )
   );
 
@@ -751,6 +806,39 @@ export default function GtmPage() {
           </div>
         </>
       )}
+
+      <Card title="Past Generations">
+        <p className="text-xs text-gray-600 mb-3">
+          Strategies and psych tactics from earlier runs — click to reload one without regenerating.
+          Entries from before this list existed can&apos;t be recovered.
+        </p>
+        {pastGtm.filter((e) => parsePastEntry(e)).length === 0 ? (
+          <p className="text-xs text-gray-600">Nothing generated yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {pastGtm.map((entry) => {
+              const parsed = parsePastEntry(entry);
+              if (!parsed) return null;
+              return (
+                <button
+                  key={entry.id}
+                  onClick={() => loadPastEntry(entry)}
+                  className="w-full text-left rounded px-3 py-2 text-xs text-gray-400 hover:text-accent"
+                  style={{ background: '#080810', border: '1px solid #1e2040' }}
+                >
+                  <span style={{ color: '#ffb347' }}>
+                    {parsed.kind === 'strategy' ? 'Strategy' : 'Psych tactics'}
+                  </span>{' '}
+                  — {parsed.product || 'Untitled product'}
+                  <span className="text-gray-600 ml-2">
+                    {new Date(entry.createdAt).toLocaleString()}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
