@@ -151,9 +151,13 @@ scp /tmp/wireassist-oauth/.wireassist/gmail-credentials.json \
     /tmp/wireassist-oauth/.wireassist/gmail-token.json \
     user@vps-host:/tmp/
 
-# Back on the VPS — copy into the running volume via a throwaway container:
+# Back on the VPS — copy into the running volume via a throwaway container.
+# gmail-client.ts reads these from $WIREASSIST_HOME/.wireassist/ (== /data/.wireassist
+# in the container, since the Dockerfile sets WIREASSIST_HOME=/data) — they must
+# land in that subdirectory, not the volume root, or the agent reports
+# "Gmail credentials not found" despite the files genuinely being present.
 docker run --rm -v wireassist_wireassist-data:/data -v /tmp:/src busybox \
-  sh -c "cp /src/gmail-credentials.json /src/gmail-token.json /data/"
+  sh -c "mkdir -p /data/.wireassist && cp /src/gmail-credentials.json /src/gmail-token.json /data/.wireassist/"
 ```
 
 (Volume name is `<project-dir-name>_wireassist-data` — check the real name
