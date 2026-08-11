@@ -44,6 +44,7 @@ export * from './memory';
 export * from './approval';
 export * from './mcp';
 export * from './events';
+export * from './skills';
 
 // Command Center portfolio (Zone 1/2 data layer)
 export * from './portfolio/store';

@@ -9,6 +9,9 @@ import {
   type MemoryStore,
   type MCPClient,
   type EventBus,
+  type SkillAgentHandle,
+  SkillRegistry,
+  SkillExecutor,
 } from '@wireassist/core';
 
 // Single place to move the fleet to a new model: set WIREASSIST_MODEL in the
@@ -22,6 +25,7 @@ export abstract class BaseAgent {
   protected mcp: MCPClient;
   protected events: EventBus;
   protected client: Anthropic;
+  protected skills: SkillRegistry;
   public status: AgentStatus = 'idle';
 
   constructor(
@@ -31,6 +35,7 @@ export abstract class BaseAgent {
       memory: MemoryStore;
       mcp: MCPClient;
       events: EventBus;
+      skills?: SkillRegistry;
     }
   ) {
     this.config = config;
@@ -39,6 +44,7 @@ export abstract class BaseAgent {
     this.mcp = deps.mcp;
     this.events = deps.events;
     this.client = new Anthropic();
+    this.skills = deps.skills ?? new SkillRegistry();
   }
 
   get role(): AgentRole {
@@ -49,7 +55,26 @@ export abstract class BaseAgent {
     return this.config.name;
   }
 
-  abstract run(task: AgentTask): Promise<void>;
+  // Default dispatch — resolves task.input.type against this agent's
+  // SkillRegistry. Subclasses with their own switch-based run() (the
+  // pre-skills pattern) simply override this and never call it.
+  async run(task: AgentTask): Promise<void> {
+    const executor = new SkillExecutor(this.skills);
+    await executor.run(this.asSkillHandle(), task);
+  }
+
+  // Binds this agent's protected methods into the narrower handle a Skill
+  // is allowed to see — no access to config/client/status.
+  protected asSkillHandle(): SkillAgentHandle {
+    return {
+      think: (userMessage, extraContext) => this.think(userMessage, extraContext),
+      useTool: (toolName, params) => this.useTool(toolName, params),
+      loadContext: (query) => this.loadContext(query),
+      remember: (content, tags) => this.remember(content, tags),
+      proposeAction: (task, action, payload) => this.proposeAction(task, action, payload),
+      emit: (event, payload) => this.events.emit(event, payload),
+    };
+  }
 
   // Core reasoning — call Claude with this agent's system prompt.
   // Enforces the monthly budget: refuses new calls once the cap is hit and
@@ -115,6 +140,12 @@ export abstract class BaseAgent {
       approved,
     });
 
+    this.remember(`task=${task.id} action=${action} -> ${approved ? 'APPROVED' : 'REJECTED'}`, [
+      'trace',
+      'proposeAction',
+      approved ? 'approved' : 'rejected',
+    ]);
+
     return approved;
   }
 
@@ -129,7 +160,10 @@ export abstract class BaseAgent {
   // Pull relevant memories for context
   protected async loadContext(query: string): Promise<string> {
     try {
-      const memories = await this.memory.searchAsync(query, { agentRole: this.role });
+      const memories = await this.memory.searchAsync(query, {
+        agentRole: this.role,
+        excludeTags: ['trace'],
+      });
       if (memories.length === 0) return '';
       return memories.map((m) => m.content).join('\n\n');
     } catch {

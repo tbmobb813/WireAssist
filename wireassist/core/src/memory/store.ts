@@ -14,6 +14,13 @@ export interface MemoryEntry {
 const DIMS = 384;
 const SIMILARITY_THRESHOLD = 0.3;
 
+export interface MemoryFilters {
+  agentRole?: AgentRole;
+  // Excludes entries with any of these tags — e.g. traces written by
+  // BaseAgent.proposeAction() shouldn't surface as context for future tasks.
+  excludeTags?: string[];
+}
+
 export class MemoryStore {
   private db: Database.Database;
   private queryEmbCache = new Map<string, Float32Array>();
@@ -107,7 +114,7 @@ export class MemoryStore {
       .run(this.vecToBuffer(vec), id);
   }
 
-  listRecent(limit = 50, filters?: { agentRole?: AgentRole }): MemoryEntry[] {
+  listRecent(limit = 50, filters?: MemoryFilters): MemoryEntry[] {
     let sql = `SELECT id, content, agent_role, tags, created_at FROM memories`;
     const params: unknown[] = [];
     if (filters?.agentRole) {
@@ -123,7 +130,7 @@ export class MemoryStore {
    * Synchronous search — returns vector results if the query embedding is already cached,
    * otherwise falls back to FTS5 and primes the cache for the next call.
    */
-  search(query: string, filters?: { agentRole?: AgentRole }): MemoryEntry[] {
+  search(query: string, filters?: MemoryFilters): MemoryEntry[] {
     const cached = this.queryEmbCache.get(query);
     if (cached) return this.vectorSearch(cached, filters);
 
@@ -143,7 +150,7 @@ export class MemoryStore {
   }
 
   /** Async search — always uses vector similarity, falls back to FTS5 if no vectors exist yet. */
-  async searchAsync(query: string, filters?: { agentRole?: AgentRole }): Promise<MemoryEntry[]> {
+  async searchAsync(query: string, filters?: MemoryFilters): Promise<MemoryEntry[]> {
     let vec = this.queryEmbCache.get(query);
     if (!vec) {
       vec = await embed(query);
@@ -175,7 +182,7 @@ export class MemoryStore {
 
   // ── Private helpers ───────────────────────────────────────────────────────
 
-  private vectorSearch(queryVec: Float32Array, filters?: { agentRole?: AgentRole }): MemoryEntry[] {
+  private vectorSearch(queryVec: Float32Array, filters?: MemoryFilters): MemoryEntry[] {
     let sql = `SELECT id, content, agent_role, tags, created_at, embedding FROM memories WHERE embedding IS NOT NULL`;
     const params: unknown[] = [];
 
@@ -195,10 +202,13 @@ export class MemoryStore {
       .sort((a, b) => b.score - a.score)
       .slice(0, 20);
 
-    return scored.map(({ row: r }) => this.mapRow(r));
+    return this.excludeByTags(
+      scored.map(({ row: r }) => this.mapRow(r)),
+      filters?.excludeTags
+    );
   }
 
-  private ftsSearch(query: string, filters?: { agentRole?: AgentRole }): MemoryEntry[] {
+  private ftsSearch(query: string, filters?: MemoryFilters): MemoryEntry[] {
     const ftsQuery = this.toFtsQuery(query);
     if (!ftsQuery) return [];
 
@@ -217,10 +227,17 @@ export class MemoryStore {
     sql += ` ORDER BY rank LIMIT 20`;
 
     try {
-      return this.mapRows(this.db.prepare(sql).all(...params) as RawRow[]);
+      const rows = this.mapRows(this.db.prepare(sql).all(...params) as RawRow[]);
+      return this.excludeByTags(rows, filters?.excludeTags);
     } catch {
       return [];
     }
+  }
+
+  private excludeByTags(entries: MemoryEntry[], excludeTags?: string[]): MemoryEntry[] {
+    if (!excludeTags || excludeTags.length === 0) return entries;
+    const excluded = new Set(excludeTags);
+    return entries.filter((e) => !e.tags.some((t) => excluded.has(t)));
   }
 
   private toFtsQuery(raw: string): string | null {

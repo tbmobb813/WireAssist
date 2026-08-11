@@ -5,6 +5,7 @@ import type {
   MCPClient,
   EventBus,
   AgentConfig,
+  Skill,
 } from '@wireassist/core';
 import { BaseAgent } from '../base-agent';
 
@@ -23,6 +24,13 @@ class TestAgent extends BaseAgent {
   }
   testUseTool(name: string, params: Record<string, unknown>) {
     return this.useTool(name, params);
+  }
+}
+
+// Doesn't override run() — exercises BaseAgent's own default skill dispatch.
+class DefaultRunTestAgent extends BaseAgent {
+  testRegisterSkill(skill: Skill) {
+    this.skills.registerSkill(skill);
   }
 }
 
@@ -100,14 +108,26 @@ function makeAgent(toolOverrides: string[] = ['tool_a', 'tool_b'], depOverrides 
   return { agent: new TestAgent(config, deps), deps };
 }
 
+function makeDefaultRunAgent(depOverrides = {}) {
+  const config: AgentConfig = {
+    role: 'admin',
+    name: 'Test Agent',
+    systemPrompt: 'You are a test agent.',
+    tools: [],
+  };
+  const deps = makeDeps(depOverrides);
+  return { agent: new DefaultRunTestAgent(config, deps), deps };
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────
 
 describe('BaseAgent.loadContext()', () => {
-  it('calls searchAsync with the query and agentRole filter', async () => {
+  it('calls searchAsync with the query, agentRole filter, and trace exclusion', async () => {
     const { agent, deps } = makeAgent();
     await agent.testLoadContext('email preferences');
     expect(deps.memory.searchAsync).toHaveBeenCalledWith('email preferences', {
       agentRole: 'admin',
+      excludeTags: ['trace'],
     });
   });
 
@@ -194,6 +214,30 @@ describe('BaseAgent.proposeAction()', () => {
       expect.objectContaining({ agentRole: 'admin', taskId: 'task-1', approved: true })
     );
   });
+
+  it('records a trace memory tagged "approved" when approval.request resolves true', async () => {
+    const { agent, deps } = makeAgent();
+    await agent.testProposeAction(makeTask(), 'Send email', {});
+    expect(deps.memory.store).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags: ['trace', 'proposeAction', 'approved'],
+        agentRole: 'admin',
+      })
+    );
+  });
+
+  it('records a trace memory tagged "rejected" when approval.request resolves false', async () => {
+    const { agent, deps } = makeAgent(undefined, {
+      approval: { request: jest.fn().mockResolvedValue(false) },
+    });
+    await agent.testProposeAction(makeTask(), 'Send email', {});
+    expect(deps.memory.store).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags: ['trace', 'proposeAction', 'rejected'],
+        agentRole: 'admin',
+      })
+    );
+  });
 });
 
 describe('BaseAgent.useTool()', () => {
@@ -213,5 +257,24 @@ describe('BaseAgent.useTool()', () => {
     (deps.mcp.call as jest.Mock).mockResolvedValueOnce({ data: 42 });
     const result = await agent.testUseTool('tool_a', {});
     expect(result).toEqual({ data: 42 });
+  });
+});
+
+describe('BaseAgent.run() — default skill dispatch', () => {
+  it('resolves task.input.type against the registered SkillRegistry and executes it', async () => {
+    const { agent } = makeDefaultRunAgent();
+    const execute = jest.fn().mockResolvedValue(undefined);
+    agent.testRegisterSkill({ name: 'do_thing', role: 'admin', description: 'x', execute });
+
+    const task = makeTask({ input: { type: 'do_thing' } });
+    await agent.run(task);
+
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ task, input: task.input }));
+  });
+
+  it('rejects when task.input.type has no matching skill', async () => {
+    const { agent } = makeDefaultRunAgent();
+    const task = makeTask({ input: { type: 'unregistered' } });
+    await expect(agent.run(task)).rejects.toThrow(/no skill or chain registered/);
   });
 });
