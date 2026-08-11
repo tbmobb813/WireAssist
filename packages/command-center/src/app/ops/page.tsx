@@ -17,6 +17,20 @@ interface PastRun {
   createdAt: string;
 }
 
+interface OpsApproval {
+  id: string;
+  taskId: string;
+  agentRole: string;
+  action: string;
+  payload: {
+    workflow?: string;
+    brief?: string;
+    assessment?: string;
+  };
+  status: string;
+  createdAt: string;
+}
+
 export default function OpsPage() {
   const [workflows, setWorkflows] = useState<string[]>([]);
   const [selectedWorkflow, setSelectedWorkflow] = useState('');
@@ -40,6 +54,8 @@ export default function OpsPage() {
   const [error, setError] = useState<string | null>(null);
   const [pastRuns, setPastRuns] = useState<PastRun[]>([]);
   const [expandedRun, setExpandedRun] = useState<string | null>(null);
+  const [pending, setPending] = useState<OpsApproval[]>([]);
+  const [acting, setActing] = useState<string | null>(null);
 
   const pendingTaskId = useRef<string | null>(null);
 
@@ -48,6 +64,13 @@ export default function OpsPage() {
       .then((r) => r.json())
       .then((d) => Array.isArray(d) && setPastRuns(d))
       .catch(() => {});
+  }, []);
+
+  const fetchPending = useCallback(async () => {
+    const res = await fetch('/api/approvals');
+    if (!res.ok) return;
+    const all = (await res.json()) as OpsApproval[];
+    setPending(all.filter((a) => a.agentRole === 'strategy'));
   }, []);
 
   useEffect(() => {
@@ -61,7 +84,8 @@ export default function OpsPage() {
       })
       .catch(() => {});
     loadPastRuns();
-  }, [loadPastRuns]);
+    fetchPending();
+  }, [loadPastRuns, fetchPending]);
 
   // Preview what a workflow actually requires, so the brief can be written to
   // satisfy it instead of guessing and hitting VERDICT: BLOCKED.
@@ -136,10 +160,20 @@ export default function OpsPage() {
           setGenerating(false);
           pendingTaskId.current = null;
         }
+        if (e.event === 'waiting_approval' || e.event === 'approval_resolved') {
+          fetchPending();
+        }
       },
-      [loadPastRuns]
+      [loadPastRuns, fetchPending]
     )
   );
+
+  const resolveApproval = async (id: string, approved: boolean) => {
+    setActing(id);
+    await fetch(`/api/approvals/${id}/${approved ? 'approve' : 'reject'}`, { method: 'POST' });
+    setPending((prev) => prev.filter((a) => a.id !== id));
+    setActing(null);
+  };
 
   async function fire(path: string, body: Record<string, unknown>) {
     setError(null);
@@ -329,6 +363,68 @@ export default function OpsPage() {
           {error}
         </div>
       )}
+
+      <div
+        className="rounded-lg border p-5 mb-5"
+        style={{ background: '#0d0d1a', borderColor: '#ffb34740' }}
+      >
+        <div className="text-xs tracking-widest mb-3" style={{ color: '#ffb347' }}>
+          PENDING REVIEW {pending.length > 0 ? `— ${pending.length}` : ''}
+        </div>
+        {pending.length === 0 ? (
+          <p className="text-xs text-gray-600">
+            Nothing awaiting review. A trust-stage-2 run stays here until you approve or reject it —
+            the run itself is paused until you decide, whether from here, the Approvals tab, or
+            Telegram.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {pending.map((p) => (
+              <div
+                key={p.id}
+                className="rounded p-4"
+                style={{ background: '#080810', border: '1px solid #1e2040' }}
+              >
+                <div className="text-xs text-gray-500 mb-2">
+                  Workflow &quot;{p.payload.workflow}&quot;
+                </div>
+                {p.payload.brief && (
+                  <div className="text-xs text-gray-600 mb-2">Brief: {p.payload.brief}</div>
+                )}
+                <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed mb-3 max-h-64 overflow-y-auto">
+                  {p.payload.assessment}
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => resolveApproval(p.id, true)}
+                    disabled={acting === p.id}
+                    className="flex-1 py-2 rounded text-xs font-bold tracking-widest transition-colors"
+                    style={{
+                      background: '#00ff9d20',
+                      border: '1px solid #00ff9d40',
+                      color: '#00ff9d',
+                    }}
+                  >
+                    {acting === p.id ? '...' : '✓ APPROVE'}
+                  </button>
+                  <button
+                    onClick={() => resolveApproval(p.id, false)}
+                    disabled={acting === p.id}
+                    className="flex-1 py-2 rounded text-xs font-bold tracking-widest transition-colors"
+                    style={{
+                      background: '#ef444420',
+                      border: '1px solid #ef444440',
+                      color: '#ef4444',
+                    }}
+                  >
+                    {acting === p.id ? '...' : '✕ REJECT'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {stages.length > 0 && (
         <div
