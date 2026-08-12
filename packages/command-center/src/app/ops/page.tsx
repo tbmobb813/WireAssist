@@ -2,6 +2,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
+import { consumeOpsHandoff } from '@/lib/ops-handoff';
 
 const STAGE_LABEL: Record<string, string> = {
   diagnose: 'Diagnose',
@@ -76,6 +77,7 @@ export default function OpsPage() {
   const [expandedRun, setExpandedRun] = useState<string | null>(null);
   const [pending, setPending] = useState<OpsApproval[]>([]);
   const [acting, setActing] = useState<string | null>(null);
+  const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
 
   const pendingTaskId = useRef<string | null>(null);
 
@@ -105,6 +107,14 @@ export default function OpsPage() {
       .catch(() => {});
     loadPastRuns();
     fetchPending();
+
+    const handoff = consumeOpsHandoff();
+    if (handoff) {
+      setBrief(handoff.context);
+      setHandoffNotice(
+        `Pulled in from Research: "${handoff.topic}" — pick the right workflow below.`
+      );
+    }
   }, [loadPastRuns, fetchPending]);
 
   // Preview what a workflow actually requires, so the brief can be written to
@@ -262,6 +272,21 @@ export default function OpsPage() {
           Assess), or ask a general ops question.
         </p>
       </div>
+
+      {handoffNotice && (
+        <div
+          className="rounded-lg border p-3 mb-5 text-xs flex items-center justify-between"
+          style={{ background: '#ffb34715', borderColor: '#ffb34730', color: '#fcd34d' }}
+        >
+          {handoffNotice}
+          <button
+            onClick={() => setHandoffNotice(null)}
+            className="text-gray-500 hover:text-gray-300 ml-3"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div
         className="rounded-lg border p-5 mb-5"
