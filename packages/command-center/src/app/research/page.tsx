@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
 import { setContentHandoff } from '@/lib/content-handoff';
+import { setOpsHandoff } from '@/lib/ops-handoff';
 
 interface ResearchResult {
   summary: string;
@@ -376,24 +377,43 @@ export default function ResearchPage() {
                       <div className="text-xs text-gray-300 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto mb-3">
                         {entry.content}
                       </div>
-                      <button
-                        onClick={() => {
-                          setContentHandoff({
-                            kind: 'research',
-                            topic: extractTopic(entry.content),
-                            context: entry.content,
-                          });
-                          router.push('/content');
-                        }}
-                        className="text-xs px-3 py-1.5 rounded font-bold tracking-wide"
-                        style={{
-                          background: '#4fc3f720',
-                          border: '1px solid #4fc3f740',
-                          color: '#4fc3f7',
-                        }}
-                      >
-                        → Use in Content
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setContentHandoff({
+                              kind: 'research',
+                              topic: extractTopic(entry.content),
+                              context: entry.content,
+                            });
+                            router.push('/content');
+                          }}
+                          className="text-xs px-3 py-1.5 rounded font-bold tracking-wide"
+                          style={{
+                            background: '#4fc3f720',
+                            border: '1px solid #4fc3f740',
+                            color: '#4fc3f7',
+                          }}
+                        >
+                          → Use in Content
+                        </button>
+                        <button
+                          onClick={() => {
+                            setOpsHandoff({
+                              topic: extractTopic(entry.content),
+                              context: entry.content,
+                            });
+                            router.push('/ops');
+                          }}
+                          className="text-xs px-3 py-1.5 rounded font-bold tracking-wide"
+                          style={{
+                            background: '#ffb34720',
+                            border: '1px solid #ffb34740',
+                            color: '#ffb347',
+                          }}
+                        >
+                          → Use in NixOps
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
