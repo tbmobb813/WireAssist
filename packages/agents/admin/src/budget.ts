@@ -47,7 +47,12 @@ export class BudgetTracker {
     this.filePath =
       options?.filePath ??
       process.env.WIREASSIST_BUDGET_FILE ??
-      join(homedir(), '.wireassist', 'budget.json');
+      // Every other persisted file in this codebase (wordpress-client,
+      // youtube-client, run-log, gmail-client) honors WIREASSIST_HOME so
+      // Docker deployments can point it at a mounted volume — this one
+      // silently didn't, so budget history was being written to the
+      // container's throwaway filesystem and wiped on every redeploy.
+      join(process.env.WIREASSIST_HOME ?? homedir(), '.wireassist', 'budget.json');
     this.monthlyBudget =
       options?.monthlyBudget ?? Number(process.env.WIREASSIST_BUDGET_MONTHLY ?? 30);
   }

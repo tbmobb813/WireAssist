@@ -1,5 +1,5 @@
 import { BudgetTracker, BudgetExceededError } from '../budget';
-import { mkdtempSync } from 'fs';
+import { mkdtempSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -34,5 +34,26 @@ describe('BudgetTracker', () => {
   it('allows calls while under budget', () => {
     const t = new BudgetTracker({ filePath: file(), monthlyBudget: 30 });
     expect(() => t.assertWithinBudget()).not.toThrow();
+  });
+
+  describe('default file path', () => {
+    const originalHome = process.env.WIREASSIST_HOME;
+    const originalBudgetFile = process.env.WIREASSIST_BUDGET_FILE;
+
+    afterEach(() => {
+      process.env.WIREASSIST_HOME = originalHome;
+      process.env.WIREASSIST_BUDGET_FILE = originalBudgetFile;
+    });
+
+    it('honors WIREASSIST_HOME when no explicit filePath is given', () => {
+      delete process.env.WIREASSIST_BUDGET_FILE;
+      const home = mkdtempSync(join(tmpdir(), 'wireassist-home-'));
+      process.env.WIREASSIST_HOME = home;
+
+      const t = new BudgetTracker({ monthlyBudget: 30 });
+      t.record('strategy', 'claude-sonnet-5', 1000, 1000);
+
+      expect(existsSync(join(home, '.wireassist', 'budget.json'))).toBe(true);
+    });
   });
 });
