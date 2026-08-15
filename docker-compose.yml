@@ -12,7 +12,7 @@ services:
       # 3002 (the Hono API) is not published at all — the web UI on 3001
       # proxies /api/* to it internally (next.config.ts), and the
       # telegram-bot service reaches it over the compose network.
-      - '127.0.0.1:3001:3001'
+      - '100.71.202.102:3001:3001'
     env_file:
       - .env
     environment:
