@@ -449,6 +449,30 @@ Outcomes arrive the same way any other task's do — the Telegram bot already
 alerts on `daily_briefing_complete`/`task_failed` regardless of who
 triggered the run — so this script doesn't duplicate that notification.
 
+## 10. Proactive insights
+
+`dev/proactive-insights.sh` triggers the Admin Agent's `proactive_insights`
+task — it reflects on the shared approval/rejection history across every
+agent (not just Admin's own) and surfaces any repeated pattern, e.g.
+"you've rejected the last 3 proposed Friday moves in a row." Like the daily
+briefing above, there's nothing to configure or promote first — the skill
+only reads history and phrases a digest, it never proposes or takes an
+action itself. If there's no new pattern since the last run, it says so and
+skips pinging Telegram — only genuinely new findings result in a push.
+
+**Cron entry** (weekly makes more sense than daily — decision streaks need
+time to accumulate):
+
+```bash
+crontab -e
+# add:
+0 8 * * 1 cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/proactive-insights.sh >> /var/log/wireassist-proactive-insights.log 2>&1
+```
+
+No `jq` needed (no request body). Run it manually once first
+(`WIREASSIST_API_URL=http://localhost:3002 ./dev/proactive-insights.sh`) to
+confirm it queues successfully before trusting it to cron.
+
 ## Updating after a code change
 
 ```bash

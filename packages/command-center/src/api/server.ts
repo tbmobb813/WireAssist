@@ -191,6 +191,7 @@ events.on('agent:gtm_psych_generated', (p) => broadcast('gtm_psych_generated', p
 events.on('agent:auto_approved', (p) => broadcast('auto_approved', p));
 events.on('agent:daily_briefing_complete', (p) => broadcast('daily_briefing_complete', p));
 events.on('agent:follow_up_nudges_complete', (p) => broadcast('follow_up_nudges_complete', p));
+events.on('agent:proactive_insights_complete', (p) => broadcast('proactive_insights_complete', p));
 
 // Agent-to-agent handoff: a skill (e.g. Research's research_topic, once its
 // own approval for the handoff is granted) hands a fully-formed AgentTask
@@ -365,6 +366,14 @@ app.post('/api/tasks/follow-up-nudges', async (c) => {
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const body = await c.req.json().catch(() => ({}));
   const task = AdminTasks.followUpNudges(body.daysStale ?? 3);
+  queueAgentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/proactive-insights', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const task = AdminTasks.proactiveInsights();
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });

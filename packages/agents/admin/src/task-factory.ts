@@ -21,7 +21,8 @@ type SupportedTaskInput =
     }
   | { type: 'freeform'; prompt: string }
   | { type: 'daily_briefing'; maxEmails?: number; daysAhead?: number }
-  | { type: 'follow_up_nudges'; daysStale?: number };
+  | { type: 'follow_up_nudges'; daysStale?: number }
+  | { type: 'proactive_insights' };
 
 function baseTask(role: AgentRole, description: string, input: SupportedTaskInput): AgentTask {
   const now = new Date();
@@ -125,5 +126,13 @@ export function createFollowUpNudgesTask(options?: {
     'admin',
     options?.description ?? 'Check for sent threads awaiting reply and draft follow-ups.',
     { type: 'follow_up_nudges', daysStale: options?.daysStale }
+  );
+}
+
+export function createProactiveInsightsTask(options?: { description?: string }): AgentTask {
+  return baseTask(
+    'admin',
+    options?.description ?? 'Reflect on approval/rejection patterns across every agent.',
+    { type: 'proactive_insights' }
   );
 }

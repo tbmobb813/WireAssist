@@ -4,6 +4,7 @@ import {
   createFreeformTask,
   createDailyBriefingTask,
   createFollowUpNudgesTask,
+  createProactiveInsightsTask,
 } from './task-factory';
 
 /** Convenience factories used by Command Center API routes and demos. */
@@ -26,5 +27,9 @@ export const AdminTasks = {
 
   followUpNudges(daysStale = 3) {
     return createFollowUpNudgesTask({ daysStale });
+  },
+
+  proactiveInsights() {
+    return createProactiveInsightsTask();
   },
 };
