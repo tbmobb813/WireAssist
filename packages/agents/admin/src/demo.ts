@@ -22,6 +22,11 @@ class CliApprovalQueue implements IApprovalQueue {
   }
 
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  getResolved(): never[] {
+    return [];
+  }
+
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   resolve(_id: string, _approved: boolean): void {
     // No-op in CLI mode – approvals are handled inline.
   }

@@ -94,15 +94,46 @@ export class ApprovalQueue {
       )
       .all() as any[];
 
-    return rows.map((r) => ({
-      id: r.id,
-      taskId: r.task_id,
-      agentRole: r.agent_role as AgentRole,
-      action: r.action,
-      payload: JSON.parse(r.payload),
-      status: r.status,
-      createdAt: new Date(r.created_at),
-      resolvedAt: r.resolved_at ? new Date(r.resolved_at) : undefined,
-    }));
+    return rows.map(mapRow);
   }
+
+  getResolved(params?: { agentRole?: AgentRole; limit?: number }): ApprovalRequest[] {
+    const limit = params?.limit ?? 200;
+    const rows = params?.agentRole
+      ? (this.db
+          .prepare(
+            `
+      SELECT * FROM approval_queue
+      WHERE status IN ('approved', 'rejected') AND agent_role = ?
+      ORDER BY resolved_at DESC
+      LIMIT ?
+    `
+          )
+          .all(params.agentRole, limit) as any[])
+      : (this.db
+          .prepare(
+            `
+      SELECT * FROM approval_queue
+      WHERE status IN ('approved', 'rejected')
+      ORDER BY resolved_at DESC
+      LIMIT ?
+    `
+          )
+          .all(limit) as any[]);
+
+    return rows.map(mapRow);
+  }
+}
+
+function mapRow(r: any): ApprovalRequest {
+  return {
+    id: r.id,
+    taskId: r.task_id,
+    agentRole: r.agent_role as AgentRole,
+    action: r.action,
+    payload: JSON.parse(r.payload),
+    status: r.status,
+    createdAt: new Date(r.created_at),
+    resolvedAt: r.resolved_at ? new Date(r.resolved_at) : undefined,
+  };
 }

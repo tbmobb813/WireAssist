@@ -55,6 +55,35 @@ export type AgentEvent =
   | {
       event: 'ops_freeform_response';
       payload: { agentRole: string; taskId: string; response: string };
+    }
+  | {
+      event: 'daily_briefing_complete';
+      payload: { taskId: string; summary: string; triageSummary: string; calendarSummary: string };
+    }
+  | {
+      event: 'follow_up_nudges_complete';
+      payload: {
+        taskId: string;
+        staleThreads: {
+          threadId: string;
+          from: string;
+          subject: string;
+          daysSinceLastMessage: number;
+        }[];
+      };
+    }
+  | {
+      event: 'proactive_insights_complete';
+      payload: {
+        taskId: string;
+        summary: string;
+        findings: {
+          agentRole: string;
+          action: string;
+          streak: 'rejected' | 'approved';
+          count: number;
+        }[];
+      };
     };
 
 export function useAgentEvents(onEvent: (e: AgentEvent) => void) {

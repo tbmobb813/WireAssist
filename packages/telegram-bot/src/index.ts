@@ -275,6 +275,21 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
     case 'task_failed':
       await send(`🔴 Task failed (${p.agentRole}): ${String(p.error ?? '').slice(0, 500)}`);
       break;
+    case 'daily_briefing_complete':
+      await send(`☀️ ${String(p.summary ?? '').slice(0, 3500)}`);
+      break;
+    case 'follow_up_nudges_complete': {
+      const staleThreads = Array.isArray(p.staleThreads) ? p.staleThreads : [];
+      if (staleThreads.length === 0) break;
+      await send(`📨 ${staleThreads.length} follow-up nudge(s) drafted. Check /approvals.`);
+      break;
+    }
+    case 'proactive_insights_complete': {
+      const findings = Array.isArray(p.findings) ? p.findings : [];
+      if (findings.length === 0) break;
+      await send(`💡 ${String(p.summary ?? '').slice(0, 3000)}`);
+      break;
+    }
   }
 }
 

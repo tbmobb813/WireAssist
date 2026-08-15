@@ -1,4 +1,5 @@
 import type { AgentRole, AgentTask } from '../agents/types';
+import type { ApprovalRequest } from '../approval/types';
 
 // Narrower than BaseAgent itself — a Skill can reach these, but never
 // `config`, `client`, or `status` directly.
@@ -21,6 +22,10 @@ export interface SkillAgentHandle {
     userMessage: string,
     opts?: { extraContext?: string; maxIterations?: number }
   ): Promise<string>;
+  // Approved/rejected decision history — for skills that reflect on
+  // patterns in what's been approved vs. rejected over time. Omitting
+  // agentRole returns history across every agent, not just this one.
+  listDecisions(params?: { agentRole?: AgentRole; limit?: number }): ApprovalRequest[];
 }
 
 export interface SkillExecutionContext<TInput = unknown> {

@@ -20,4 +20,7 @@ export interface IApprovalQueue {
   }): Promise<boolean>;
   resolve(id: string, approved: boolean): void;
   getPending(): ApprovalRequest[];
+  // Approved/rejected history, most recently resolved first — for agents
+  // reflecting on patterns in what's been approved vs. rejected over time.
+  getResolved(params?: { agentRole?: AgentRole; limit?: number }): ApprovalRequest[];
 }

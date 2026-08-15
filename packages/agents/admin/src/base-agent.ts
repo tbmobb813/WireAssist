@@ -9,6 +9,7 @@ import {
   type MCPClient,
   type EventBus,
   type SkillAgentHandle,
+  type ApprovalRequest,
   type Provider,
   type ProviderType,
   type ProviderMessage,
@@ -149,6 +150,7 @@ export abstract class BaseAgent {
       proposeAction: (task, action, payload) => this.proposeAction(task, action, payload),
       emit: (event, payload) => this.events.emit(event, payload),
       runToolLoop: (task, userMessage, opts) => this.runToolLoop(task, userMessage, opts),
+      listDecisions: (params) => this.listDecisions(params),
     };
   }
 
@@ -343,5 +345,12 @@ export abstract class BaseAgent {
       tags,
       createdAt: new Date(),
     });
+  }
+
+  // Approved/rejected decision history from the shared approval queue —
+  // omitting agentRole returns history across every agent, not just this
+  // one, since approval_queue is one shared table.
+  protected listDecisions(params?: { agentRole?: AgentRole; limit?: number }): ApprovalRequest[] {
+    return this.approval.getResolved(params);
   }
 }

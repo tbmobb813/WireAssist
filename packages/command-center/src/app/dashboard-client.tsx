@@ -206,6 +206,21 @@ function describeEvent(event: string, payload: unknown): { description: string; 
         role: 'content',
       };
     }
+    case 'daily_briefing_complete': {
+      const summary = p.summary ? String(p.summary) : '';
+      return { description: `Daily briefing: ${summary}`.trim(), role: 'admin' };
+    }
+    case 'follow_up_nudges_complete': {
+      const count = Array.isArray(p.staleThreads) ? p.staleThreads.length : 0;
+      return {
+        description: `Follow-up nudges: ${count} stale thread${count !== 1 ? 's' : ''} found`,
+        role: 'admin',
+      };
+    }
+    case 'proactive_insights_complete': {
+      const summary = p.summary ? String(p.summary) : '';
+      return { description: `Proactive insight: ${summary}`.trim(), role: 'admin' };
+    }
     default:
       return { description: event, role: typeof p.agentRole === 'string' ? p.agentRole : 'admin' };
   }
@@ -671,6 +686,9 @@ export default function DashboardClient() {
         case 'content_approved':
         case 'content_plan_generated':
         case 'post_scheduled':
+        case 'daily_briefing_complete':
+        case 'follow_up_nudges_complete':
+        case 'proactive_insights_complete':
           addActivity(e.event, e.payload);
           break;
       }
