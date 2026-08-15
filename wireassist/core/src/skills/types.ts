@@ -13,6 +13,14 @@ export interface SkillAgentHandle {
     payload: Record<string, unknown>
   ): Promise<boolean>;
   emit(event: string, payload: unknown): void;
+  // Multi-turn tool-calling loop (see BaseAgent.runToolLoop). Falls back to
+  // a plain think() call when the agent's provider doesn't support tool
+  // calling or it has no toolSchemas configured — always safe to call.
+  runToolLoop(
+    task: AgentTask,
+    userMessage: string,
+    opts?: { extraContext?: string; maxIterations?: number }
+  ): Promise<string>;
 }
 
 export interface SkillExecutionContext<TInput = unknown> {

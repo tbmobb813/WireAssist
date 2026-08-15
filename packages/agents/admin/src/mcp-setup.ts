@@ -78,6 +78,14 @@ export async function setupAdminMCP(mcp: MCPClient): Promise<void> {
     return { status: 'unlabeled' };
   });
 
+  mcp.register('gmail_get_profile', async () => {
+    return gmail.getProfile();
+  });
+
+  mcp.register('gmail_thread_last_message', async (params) => {
+    return gmail.getLastMessageInfo(params.threadId as string);
+  });
+
   mcp.register('gmail_archive_thread', async (params) => {
     await gmail.archiveThread(params.threadId as string);
     return { status: 'archived' };

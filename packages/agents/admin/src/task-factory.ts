@@ -19,7 +19,9 @@ type SupportedTaskInput =
       attendees?: string[];
       description?: string;
     }
-  | { type: 'freeform'; prompt: string };
+  | { type: 'freeform'; prompt: string }
+  | { type: 'daily_briefing'; maxEmails?: number; daysAhead?: number }
+  | { type: 'follow_up_nudges'; daysStale?: number };
 
 function baseTask(role: AgentRole, description: string, input: SupportedTaskInput): AgentTask {
   const now = new Date();
@@ -101,4 +103,27 @@ export function createFreeformTask(params: { prompt: string; description?: strin
     type: 'freeform',
     prompt: params.prompt,
   });
+}
+
+export function createDailyBriefingTask(options?: {
+  description?: string;
+  maxEmails?: number;
+  daysAhead?: number;
+}): AgentTask {
+  return baseTask('admin', options?.description ?? 'Morning briefing: inbox + calendar.', {
+    type: 'daily_briefing',
+    maxEmails: options?.maxEmails,
+    daysAhead: options?.daysAhead,
+  });
+}
+
+export function createFollowUpNudgesTask(options?: {
+  description?: string;
+  daysStale?: number;
+}): AgentTask {
+  return baseTask(
+    'admin',
+    options?.description ?? 'Check for sent threads awaiting reply and draft follow-ups.',
+    { type: 'follow_up_nudges', daysStale: options?.daysStale }
+  );
 }

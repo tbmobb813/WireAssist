@@ -5,7 +5,14 @@ import { cors } from 'hono/cors';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { ApprovalQueue, MemoryStore, MCPClient, EventBus, type AgentRole } from '@wireassist/core';
+import {
+  ApprovalQueue,
+  MemoryStore,
+  MCPClient,
+  EventBus,
+  type AgentRole,
+  type AgentTask,
+} from '@wireassist/core';
 import {
   AdminAgent,
   setupAdminMCP,
@@ -35,6 +42,7 @@ import { registerTrendPostTools, TrendPostStorage } from '@wireassist/trendpost-
 import { registerPortfolioRoutes } from './portfolio-routes';
 import { routeChatMessage, type RouteDecision } from './chat-router';
 import { getLocation, setLocation, listNotes, addNote, deleteNote } from './dashboard-widgets';
+import { routeHandoffTask } from '../lib/route-handoff';
 
 const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
 const DB_PATH = path.join(HOME_PATH, '.wireassist', 'wireassist.db');
@@ -180,6 +188,26 @@ events.on('agent:ops_run_complete', (p) => broadcast('ops_run_complete', p));
 events.on('agent:ops_freeform_response', (p) => broadcast('ops_freeform_response', p));
 events.on('agent:gtm_generated', (p) => broadcast('gtm_generated', p));
 events.on('agent:gtm_psych_generated', (p) => broadcast('gtm_psych_generated', p));
+events.on('agent:auto_approved', (p) => broadcast('auto_approved', p));
+events.on('agent:daily_briefing_complete', (p) => broadcast('daily_briefing_complete', p));
+events.on('agent:follow_up_nudges_complete', (p) => broadcast('follow_up_nudges_complete', p));
+
+// Agent-to-agent handoff: a skill (e.g. Research's research_topic, once its
+// own approval for the handoff is granted) hands a fully-formed AgentTask
+// for another agent to run. Routed by task.agentRole to that agent's own
+// serialized queue — generic by construction, not specific to Research ->
+// Content, so future handoffs to any agent reuse this unchanged.
+events.on('agent:handoff_requested', (p) => {
+  const { task } = p as { task: AgentTask };
+  const routed = routeHandoffTask(task, {
+    content: (t) => queueContentTask(t as Parameters<ContentAgent['run']>[0]),
+    research: (t) => queueResearchTask(t as Parameters<ResearchAgent['run']>[0]),
+    strategy: (t) => queueOpsTask(t as Parameters<NixOpsAgent['run']>[0]),
+    gtm: (t) => queueGtmTask(t as Parameters<GtmAgent['run']>[0]),
+    admin: (t) => queueAgentTask(t as Parameters<AdminAgent['run']>[0]),
+  });
+  if (routed) broadcast('handoff_queued', p);
+});
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 async function bootstrap() {
@@ -317,6 +345,26 @@ app.post('/api/tasks/review-calendar', async (c) => {
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const body = await c.req.json().catch(() => ({}));
   const task = AdminTasks.reviewCalendar(body.daysAhead ?? 7);
+  queueAgentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/daily-briefing', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!gmailReady) return c.json(gmailRequired(), 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const body = await c.req.json().catch(() => ({}));
+  const task = AdminTasks.dailyBriefing(body.maxEmails ?? 20, body.daysAhead ?? 7);
+  queueAgentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/follow-up-nudges', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!gmailReady) return c.json(gmailRequired(), 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const body = await c.req.json().catch(() => ({}));
+  const task = AdminTasks.followUpNudges(body.daysStale ?? 3);
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
@@ -511,9 +559,19 @@ app.post('/api/tasks/generate-plan', async (c) => {
 app.post('/api/tasks/research-topic', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const { query, depth } = await c.req.json();
+  const { query, depth, contentDraftPlatform, contentDraftTone } = await c.req.json();
   if (!query || typeof query !== 'string') return c.json({ error: 'query required' }, 400);
-  const task = ResearchTasks.researchTopic(query, depth === 'deep' ? 'deep' : 'quick');
+  const offerContentDraft = isValidPlatform(contentDraftPlatform)
+    ? {
+        platform: contentDraftPlatform,
+        tone: typeof contentDraftTone === 'string' ? contentDraftTone : undefined,
+      }
+    : undefined;
+  const task = ResearchTasks.researchTopic(
+    query,
+    depth === 'deep' ? 'deep' : 'quick',
+    offerContentDraft
+  );
   queueResearchTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });

@@ -303,6 +303,90 @@ describe('BaseAgent.run() — default skill dispatch', () => {
     const task = makeTask({ input: { type: 'unregistered' } });
     await expect(agent.run(task)).rejects.toThrow(/no skill or chain registered/);
   });
+
+  it('sets status to running then idle around a successful run, and emits the full lifecycle', async () => {
+    const { agent, deps } = makeDefaultRunAgent();
+    const statusesAtExecute: string[] = [];
+    const execute = jest.fn().mockImplementation(async () => {
+      statusesAtExecute.push(agent.status);
+    });
+    agent.testRegisterSkill({ name: 'do_thing', role: 'admin', description: 'x', execute });
+
+    expect(agent.status).toBe('idle');
+    const task = makeTask({ input: { type: 'do_thing' } });
+    await agent.run(task);
+
+    expect(statusesAtExecute).toEqual(['running']);
+    expect(agent.status).toBe('idle');
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:task_started',
+      expect.objectContaining({
+        agentRole: 'admin',
+        agentName: 'Test Agent',
+        taskId: 'task-1',
+        description: 'test task',
+      })
+    );
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:task_complete',
+      expect.objectContaining({ agentRole: 'admin', taskId: 'task-1' })
+    );
+  });
+
+  it('sets status to error and emits agent:task_failed with the error message on throw', async () => {
+    const { agent, deps } = makeDefaultRunAgent();
+    const execute = jest.fn().mockRejectedValue(new Error('boom'));
+    agent.testRegisterSkill({ name: 'do_thing', role: 'admin', description: 'x', execute });
+
+    const task = makeTask({ input: { type: 'do_thing' } });
+    await expect(agent.run(task)).rejects.toThrow('boom');
+
+    expect(agent.status).toBe('error');
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:task_failed',
+      expect.objectContaining({ agentRole: 'admin', taskId: 'task-1', error: 'boom' })
+    );
+  });
+
+  it('extracts a string message even when the thrown value is not an Error instance', async () => {
+    const { agent, deps } = makeDefaultRunAgent();
+    const execute = jest.fn().mockRejectedValue('a plain string failure');
+    agent.testRegisterSkill({ name: 'do_thing', role: 'admin', description: 'x', execute });
+
+    const task = makeTask({ input: { type: 'do_thing' } });
+    await expect(agent.run(task)).rejects.toBe('a plain string failure');
+
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:task_failed',
+      expect.objectContaining({ error: 'a plain string failure' })
+    );
+  });
+
+  it('does not re-enter while already running (concurrency guard)', async () => {
+    const { agent, deps } = makeDefaultRunAgent();
+    let resolveExecute: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      resolveExecute = resolve;
+    });
+    const execute = jest.fn().mockImplementation(async () => gate);
+    agent.testRegisterSkill({ name: 'do_thing', role: 'admin', description: 'x', execute });
+
+    const task = makeTask({ input: { type: 'do_thing' } });
+    const firstRun = agent.run(task);
+    expect(agent.status).toBe('running');
+
+    // A second run() call while the first is still in flight should be a
+    // silent no-op — not a second execute() call, not a second task_started.
+    await agent.run(task);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(
+      (deps.events.emit as jest.Mock).mock.calls.filter(([event]) => event === 'agent:task_started')
+    ).toHaveLength(1);
+
+    resolveExecute();
+    await firstRun;
+    expect(agent.status).toBe('idle');
+  });
 });
 
 describe('BaseAgent.think()', () => {

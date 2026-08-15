@@ -6,6 +6,9 @@ import { useAgentEvents } from '@/hooks/useAgentEvents';
 import { setContentHandoff } from '@/lib/content-handoff';
 import { setOpsHandoff } from '@/lib/ops-handoff';
 
+const CONTENT_PLATFORMS = ['twitter', 'linkedin', 'instagram', 'threads'] as const;
+type ContentPlatform = (typeof CONTENT_PLATFORMS)[number];
+
 interface ResearchResult {
   summary: string;
   sources?: string[];
@@ -43,6 +46,8 @@ export default function ResearchPage() {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [depth, setDepth] = useState<'quick' | 'deep'>('quick');
+  const [draftContent, setDraftContent] = useState(false);
+  const [draftPlatform, setDraftPlatform] = useState<ContentPlatform>('linkedin');
   const [synthesizeTopic, setSynthesizeTopic] = useState('');
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<ResearchResult | null>(null);
@@ -125,7 +130,12 @@ export default function ResearchPage() {
   }
 
   const runResearch = () =>
-    query.trim() && fire('/api/tasks/research-topic', { query: query.trim(), depth });
+    query.trim() &&
+    fire('/api/tasks/research-topic', {
+      query: query.trim(),
+      depth,
+      ...(draftContent ? { contentDraftPlatform: draftPlatform } : {}),
+    });
   const runSynthesize = () =>
     synthesizeTopic.trim() && fire('/api/tasks/synthesize', { topic: synthesizeTopic.trim() });
 
@@ -182,6 +192,32 @@ export default function ResearchPage() {
             </button>
           ))}
         </div>
+        <label className="flex items-center gap-2 mb-3 text-xs text-gray-400 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={draftContent}
+            onChange={(e) => setDraftContent(e.target.checked)}
+          />
+          Also draft content from this research (asks for approval separately)
+        </label>
+        {draftContent && (
+          <div className="flex gap-2 mb-3">
+            {CONTENT_PLATFORMS.map((p) => (
+              <button
+                key={p}
+                onClick={() => setDraftPlatform(p)}
+                className="text-xs px-3 py-1 rounded transition-colors capitalize"
+                style={{
+                  background: draftPlatform === p ? '#4fc3f720' : 'transparent',
+                  border: `1px solid ${draftPlatform === p ? '#4fc3f7' : '#1e2040'}`,
+                  color: draftPlatform === p ? '#4fc3f7' : '#475569',
+                }}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        )}
         <button
           onClick={runResearch}
           disabled={generating || !query.trim()}

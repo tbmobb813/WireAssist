@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto';
 import {
   type AgentConfig,
   type AgentTask,
@@ -11,17 +10,17 @@ import {
 import { BaseAgent } from './base-agent';
 import { ADMIN_TOOL_SCHEMAS, READ_ONLY_ADMIN_TOOLS } from './tool-schemas';
 import {
-  isAutoApproveEligibleType,
-  isEligibleForAutoApproval,
-  recordDecision,
-} from './auto-approve-policy';
+  ADMIN_SKILLS,
+  proposeOrAutoApprove,
+  emailTriageSkill,
+  calendarReviewSkill,
+  sendEmailSkill,
+  scheduleEventSkill,
+  freeformSkill,
+} from './skills';
+import type { CalendarReview, EmailTriageResult, ProposedAction } from './types';
 
-// Models sometimes wrap JSON in ```json fences despite being told not to —
-// strip them before parsing rather than failing the whole task.
-function extractJson<T>(raw: string): T {
-  const clean = raw.replace(/```json|```/g, '').trim();
-  return JSON.parse(clean) as T;
-}
+export * from './types';
 
 const ADMIN_SYSTEM_PROMPT = `You are the Admin Agent for WireAssist — Jason's AI chief of staff,
 covering business and personal life together. Your job is to filter noise, hold context nobody
@@ -94,6 +93,8 @@ const ADMIN_TOOLS = [
   'gmail_search',
   'gmail_get_thread',
   'gmail_list_labels',
+  'gmail_get_profile',
+  'gmail_thread_last_message',
   'gmail_create_draft',
   'gmail_send',
   'gmail_label_thread',
@@ -136,274 +137,37 @@ export class AdminAgent extends BaseAgent {
       maxTokens: 4096,
     };
     super(config, deps);
-  }
-
-  // Main entry point — route task to the right handler
-  async run(task: AgentTask): Promise<void> {
-    this.status = 'running';
-    this.events.emit('agent:task_started', {
-      agentRole: this.role,
-      taskId: task.id,
-      description: task.description,
-    });
-
-    try {
-      switch (task.input.type) {
-        case 'email_triage':
-          await this.triageEmail(task);
-          break;
-        case 'calendar_review':
-          await this.reviewCalendar(task);
-          break;
-        case 'send_email':
-          await this.sendEmail(task);
-          break;
-        case 'schedule_event':
-          await this.scheduleEvent(task);
-          break;
-        default:
-          await this.handleFreeform(task);
-      }
-
-      this.status = 'idle';
-      this.events.emit('agent:task_complete', {
-        agentRole: this.role,
-        taskId: task.id,
-      });
-    } catch (error) {
-      this.status = 'error';
-      this.events.emit('agent:task_failed', {
-        agentRole: this.role,
-        taskId: task.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    for (const skill of ADMIN_SKILLS) {
+      this.skills.registerSkill(skill);
     }
   }
 
-  // ─── EMAIL TRIAGE ──────────────────────────────────────────────
+  // run() is inherited from BaseAgent — it resolves task.input.type against
+  // the skills registered above via SkillRegistry/SkillExecutor. No
+  // per-agent switch statement anymore; see skills/ for each capability.
+
+  // ─── PUBLIC ENTRY POINTS (thin delegators to skills/) ─────────────
+  //
+  // These exist for direct/testable callers and backward compatibility —
+  // run() (inherited from BaseAgent) reaches the same skills via
+  // SkillExecutor for normal task-queue dispatch. The actual logic lives in
+  // skills/*.ts.
 
   async triageEmail(task: AgentTask): Promise<EmailTriageResult> {
-    // 1. Fetch inbox threads
-    const threads = (await this.useTool('gmail_list_threads', {
-      maxResults: (task.input as { maxEmails?: number }).maxEmails ?? 20,
-      labelIds: ['INBOX'],
-      q: 'is:unread',
-    })) as GmailThread[];
-
-    if (!threads || threads.length === 0) {
-      const result: EmailTriageResult = {
-        taskId: task.id,
-        totalEmails: 0,
-        categories: { urgent: [], replyNeeded: [], fyi: [], ignore: [] },
-        proposedActions: [],
-        summary: 'Inbox is empty or no unread messages.',
-      };
-      this.events.emit('agent:triage_complete', result);
-      return result;
-    }
-
-    // 2. Fetch thread details in parallel (cap at 10 to avoid token bloat)
-    const threadDetails = await Promise.all(
-      threads
-        .slice(0, 10)
-        .map(
-          (t) => this.useTool('gmail_get_thread', { threadId: t.id }) as Promise<GmailThreadDetail>
-        )
-    );
-
-    // 3. Load memory context — who we know, past decisions
-    const context = await this.loadContext('email contacts preferences ignore rules');
-
-    // 4. Ask Claude to triage
-    const triagePrompt = `
-Triage these ${threadDetails.length} email threads. 
-
-THREADS:
-${threadDetails
-  .map(
-    (t, i) => `
-ThreadId: ${t.id}
-[${i + 1}] From: ${t.from}
-Subject: ${t.subject}
-Snippet: ${t.snippet}
-Date: ${t.date}
-`
-  )
-  .join('\n')}
-
-Return a JSON object with this exact structure:
-{
-  "categories": {
-    "urgent": [{ "threadId": string, "from": string, "subject": string, "reason": string }],
-    "replyNeeded": [{ "threadId": string, "from": string, "subject": string, "draftReply": string }],
-    "fyi": [{ "threadId": string, "from": string, "subject": string }],
-    "ignore": [{ "threadId": string, "from": string, "reason": string }]
-  },
-  "summary": "2-3 sentence overview of inbox state",
-  "urgentCount": number,
-  "replyNeededCount": number
-}
-
-For "urgent", the "reason" must state the specific cost of inaction (what breaks, by when) —
-not a generic "this seems important." For "ignore", the "reason" must say why it's safe to
-skip, even when it's an obvious newsletter/receipt — Jason should be able to verify the ignore
-pile by skimming reasons, not by re-reading every email himself.
-
-Only return valid JSON. No markdown fences.`;
-
-    const rawResponse = await this.think(triagePrompt, context);
-
-    let triage: TriageCategories;
-    try {
-      triage = extractJson<TriageCategories>(rawResponse);
-    } catch {
-      throw new Error(
-        `Admin Agent returned invalid JSON during triage: ${rawResponse.slice(0, 200)}`
-      );
-    }
-
-    // 5. Build proposed actions
-    const proposedActions: ProposedAction[] = [];
-    const validThreadIds = new Set(threadDetails.map((thread) => thread.id));
-
-    // Propose drafts for reply-needed emails
-    for (const email of triage.categories.replyNeeded ?? []) {
-      if (!validThreadIds.has(email.threadId)) continue;
-      proposedActions.push({
-        id: randomUUID(),
-        type: 'gmail_create_draft',
-        label: `Draft reply to: "${email.subject}" from ${email.from}`,
-        payload: {
-          threadId: email.threadId,
-          body: email.draftReply,
-        },
-      });
-    }
-
-    // Propose labeling urgent emails
-    for (const email of triage.categories.urgent ?? []) {
-      if (!validThreadIds.has(email.threadId)) continue;
-      proposedActions.push({
-        id: randomUUID(),
-        type: 'gmail_label_thread',
-        label: `Mark as URGENT: "${email.subject}"`,
-        payload: {
-          threadId: email.threadId,
-          labelName: 'URGENT',
-        },
-      });
-    }
-
-    // Propose ignore-labeling for the ignore category — this is what makes
-    // the ignore pile actionable (and auto-approvable, see
-    // proposeOrAutoApprove) rather than just reported.
-    for (const email of triage.categories.ignore ?? []) {
-      if (!validThreadIds.has(email.threadId)) continue;
-      proposedActions.push({
-        id: randomUUID(),
-        type: 'gmail_label_thread',
-        label: `Ignore: "${email.reason}"`,
-        payload: {
-          threadId: email.threadId,
-          labelName: 'IGNORED',
-          from: email.from,
-        },
-      });
-    }
-
-    const result: EmailTriageResult = {
-      taskId: task.id,
-      totalEmails: threadDetails.length,
-      categories: triage.categories,
-      proposedActions,
-      summary: triage.summary,
-    };
-
-    // 6. Emit the result — Command Center UI picks this up and renders it
-    this.events.emit('agent:triage_complete', result);
-
-    // 7. For each proposed action, request approval (or auto-approve, for
-    // the narrow ignore-labeling carve-out) individually.
-    for (const action of proposedActions) {
-      const approved = await this.proposeOrAutoApprove(task, action);
-      if (approved) {
-        await this.useTool(action.type, action.payload);
-      }
-    }
-
-    return result;
-  }
-
-  // ─── CALENDAR REVIEW ───────────────────────────────────────────
-
-  async reviewCalendar(task: AgentTask): Promise<void> {
-    const { daysAhead = 7 } = task.input as { daysAhead?: number };
-
-    const now = new Date();
-    const until = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
-
-    const events = (await this.useTool('calendar_list_events', {
-      timeMin: now.toISOString(),
-      timeMax: until.toISOString(),
-      maxResults: 50,
-    })) as CalendarEvent[];
-
-    const context = await this.loadContext('calendar preferences meeting preferences work hours');
-
-    const reviewPrompt = `
-Review my calendar for the next ${daysAhead} days and identify:
-1. Real scheduling conflicts (double-booked events)
-2. Overloaded days — 5+ hours of meetings in one day, or 3+ meetings with no buffer between any
-   of them
-3. Missing prep/buffer time before anything that needs it
-4. Any events that look like they could be async instead
-
-EVENTS:
-${events.map((e) => `- ${e.summary} | ${e.start} → ${e.end} | ${e.attendees?.length ?? 0} attendees`).join('\n')}
-
-Return a JSON object:
-{
-  "conflicts": [{ "event1": string, "event2": string, "overlap": string }],
-  "overloadedDays": [{ "date": string, "eventCount": number, "recommendation": string }],
-  "suggestions": [{ "type": string, "description": string, "action": string }],
-  "summary": string
-}
-
-Each "recommendation" and "suggestion.description" must name the specific event and where it
-should move — not generic "consider taking more breaks" advice.
-
-Only return valid JSON. No markdown fences.`;
-
-    const rawResponse = await this.think(reviewPrompt, context);
-
-    let review: CalendarReview;
-    try {
-      review = extractJson<CalendarReview>(rawResponse);
-    } catch {
-      throw new Error('Admin Agent returned invalid JSON during calendar review');
-    }
-
-    this.events.emit('agent:calendar_review_complete', {
-      taskId: task.id,
-      events,
-      review,
+    return emailTriageSkill.execute({
+      agent: this.asSkillHandle(),
+      task,
+      input: { maxEmails: (task.input as { maxEmails?: number }).maxEmails },
     });
-
-    // Propose and await approval for any suggested changes
-    for (const suggestion of review.suggestions ?? []) {
-      if (suggestion.type === 'reschedule' || suggestion.type === 'cancel') {
-        const approved = await this.proposeAction(task, suggestion.description, {
-          action: suggestion.action,
-        });
-        if (approved) {
-          this.remember(`Calendar: ${suggestion.description} — approved`, ['calendar', 'approved']);
-        }
-      }
-    }
   }
 
-  // ─── SEND EMAIL ────────────────────────────────────────────────
+  async reviewCalendar(task: AgentTask): Promise<CalendarReview> {
+    return calendarReviewSkill.execute({
+      agent: this.asSkillHandle(),
+      task,
+      input: { daysAhead: (task.input as { daysAhead?: number }).daysAhead },
+    });
+  }
 
   async sendEmail(task: AgentTask): Promise<void> {
     const { to, subject, body, threadId } = task.input as {
@@ -412,22 +176,12 @@ Only return valid JSON. No markdown fences.`;
       body: string;
       threadId?: string;
     };
-
-    // Always require approval before sending
-    const approved = await this.proposeAction(task, `Send email to ${to}: "${subject}"`, {
-      to,
-      subject,
-      body,
-      threadId,
+    return sendEmailSkill.execute({
+      agent: this.asSkillHandle(),
+      task,
+      input: { to, subject, body, threadId },
     });
-
-    if (!approved) return;
-
-    await this.useTool('gmail_send', { to, subject, body, threadId });
-    this.remember(`Sent email to ${to}: ${subject}`, ['email', 'sent']);
   }
-
-  // ─── SCHEDULE EVENT ────────────────────────────────────────────
 
   async scheduleEvent(task: AgentTask): Promise<void> {
     const { summary, start, end, attendees, description } = task.input as {
@@ -437,40 +191,18 @@ Only return valid JSON. No markdown fences.`;
       attendees?: string[];
       description?: string;
     };
-
-    const approved = await this.proposeAction(
+    return scheduleEventSkill.execute({
+      agent: this.asSkillHandle(),
       task,
-      `Create calendar event: "${summary}" on ${start}`,
-      { summary, start, end, attendees, description }
-    );
-
-    if (!approved) return;
-
-    await this.useTool('calendar_create_event', {
-      summary,
-      start,
-      end,
-      attendees,
-      description,
+      input: { summary, start, end, attendees, description },
     });
-
-    this.remember(`Scheduled: ${summary} on ${start}`, ['calendar', 'scheduled']);
   }
 
-  // ─── FREEFORM / CHAT ─────────────────────────────────────────────
-
   async handleFreeform(task: AgentTask): Promise<void> {
-    const input = task.input as { type: string; prompt?: string };
-    const prompt =
-      input.type === 'freeform' && typeof input.prompt === 'string'
-        ? input.prompt
-        : task.description;
-    const context = await this.loadContext(prompt);
-    const response = await this.runToolLoop(task, prompt, { extraContext: context });
-
-    this.events.emit('agent:freeform_response', {
-      taskId: task.id,
-      response,
+    return freeformSkill.execute({
+      agent: this.asSkillHandle(),
+      task,
+      input: task.input as { type?: string; prompt?: string },
     });
   }
 
@@ -495,7 +227,7 @@ Only return valid JSON. No markdown fences.`;
         label: describeToolCall(call),
         payload: call.input,
       };
-      const approved = await this.proposeOrAutoApprove(task, action);
+      const approved = await proposeOrAutoApprove(this.asSkillHandle(), task, action);
       if (!approved) {
         return { result: 'User declined this action.', isError: true };
       }
@@ -503,33 +235,6 @@ Only return valid JSON. No markdown fences.`;
     } catch (error) {
       return { result: error instanceof Error ? error.message : String(error), isError: true };
     }
-  }
-
-  // ─── APPROVAL GATE (with narrow auto-approval carve-out) ──────────
-
-  // Wraps proposeAction() with the auto-approval policy from
-  // auto-approve-policy.ts. Eligibility is hardcoded there (only
-  // ignore-labeling a thread, keyed by sender) — everything else always
-  // goes through the normal human approval gate.
-  private async proposeOrAutoApprove(task: AgentTask, action: ProposedAction): Promise<boolean> {
-    const from = typeof action.payload.from === 'string' ? action.payload.from : undefined;
-
-    if (from && isAutoApproveEligibleType(action) && isEligibleForAutoApproval(from)) {
-      this.remember(`Auto-approved: ${action.label}`, ['email', 'auto-approval', action.type]);
-      this.events.emit('agent:auto_approved', { agentRole: this.role, taskId: task.id, action });
-      return true;
-    }
-
-    const approved = await this.proposeAction(task, action.label, action.payload);
-    if (from && isAutoApproveEligibleType(action)) {
-      recordDecision(from, approved);
-    }
-    this.remember(approved ? `User approved: ${action.label}` : `User rejected: ${action.label}`, [
-      'email',
-      approved ? 'approval' : 'rejection',
-      action.type,
-    ]);
-    return approved;
   }
 }
 
@@ -568,64 +273,4 @@ function describeToolCall(call: ProviderToolCall): string {
     default:
       return `Run tool "${call.name}"`;
   }
-}
-
-// ─── TYPES ─────────────────────────────────────────────────────────────────
-
-export interface GmailThread {
-  id: string;
-  snippet: string;
-}
-
-export interface GmailThreadDetail {
-  id: string;
-  from: string;
-  subject: string;
-  snippet: string;
-  date: string;
-  body?: string;
-}
-
-export interface CalendarEvent {
-  id: string;
-  summary: string;
-  start: string;
-  end: string;
-  attendees?: { email: string }[];
-}
-
-export interface ProposedAction {
-  id: string;
-  // Exact MCP tool name — execution is a direct useTool(type, payload) call,
-  // so this must always match a name registered in mcp-setup.ts.
-  type: string;
-  label: string;
-  payload: Record<string, unknown>;
-}
-
-export interface EmailTriageResult {
-  taskId: string;
-  totalEmails: number;
-  categories: TriageCategories['categories'];
-  proposedActions: ProposedAction[];
-  summary: string;
-}
-
-interface TriageCategories {
-  categories: {
-    urgent: { threadId: string; from: string; subject: string; reason: string }[];
-    replyNeeded: { threadId: string; from: string; subject: string; draftReply: string }[];
-    fyi: { threadId: string; from: string; subject: string }[];
-    ignore: { threadId: string; from: string; reason: string }[];
-  };
-  summary: string;
-  urgentCount: number;
-  replyNeededCount: number;
-}
-
-interface CalendarReview {
-  conflicts: { event1: string; event2: string; overlap: string }[];
-  overloadedDays: { date: string; eventCount: number; recommendation: string }[];
-  suggestions: { type: string; description: string; action: string }[];
-  summary: string;
 }
