@@ -25,6 +25,7 @@ function makeAgentHandle(): SkillAgentHandle {
     remember: jest.fn(),
     proposeAction: jest.fn().mockResolvedValue(true),
     emit: jest.fn(),
+    runToolLoop: jest.fn().mockResolvedValue(''),
   };
 }
 

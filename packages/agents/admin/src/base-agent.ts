@@ -102,12 +102,40 @@ export abstract class BaseAgent {
     return this.config.name;
   }
 
-  // Default dispatch — resolves task.input.type against this agent's
-  // SkillRegistry. Subclasses with their own switch-based run() (the
-  // pre-skills pattern) simply override this and never call it.
+  // The single entry point for every agent: resolves task.input.type
+  // against this agent's SkillRegistry and executes the matching skill (or
+  // chain), wrapped in the standard status/lifecycle-event bookkeeping.
+  // No concrete agent overrides this anymore — a concrete agent's
+  // "personality" is entirely which skills its constructor registers.
   async run(task: AgentTask): Promise<void> {
-    const executor = new SkillExecutor(this.skills);
-    await executor.run(this.asSkillHandle(), task);
+    if (this.status === 'running') return;
+
+    this.status = 'running';
+    this.events.emit('agent:task_started', {
+      agentRole: this.role,
+      agentName: this.name,
+      taskId: task.id,
+      description: task.description,
+    });
+
+    try {
+      const executor = new SkillExecutor(this.skills);
+      await executor.run(this.asSkillHandle(), task);
+
+      this.status = 'idle';
+      this.events.emit('agent:task_complete', {
+        agentRole: this.role,
+        taskId: task.id,
+      });
+    } catch (error) {
+      this.status = 'error';
+      this.events.emit('agent:task_failed', {
+        agentRole: this.role,
+        taskId: task.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   }
 
   // Binds this agent's protected methods into the narrower handle a Skill
@@ -120,6 +148,7 @@ export abstract class BaseAgent {
       remember: (content, tags) => this.remember(content, tags),
       proposeAction: (task, action, payload) => this.proposeAction(task, action, payload),
       emit: (event, payload) => this.events.emit(event, payload),
+      runToolLoop: (task, userMessage, opts) => this.runToolLoop(task, userMessage, opts),
     };
   }
 

@@ -46,6 +46,21 @@ export const ADMIN_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
     description: 'List all Gmail labels, including custom ones.',
     inputSchema: { type: 'object', properties: {} },
   },
+  gmail_get_profile: {
+    name: 'gmail_get_profile',
+    description: "Get this account's own email address.",
+    inputSchema: { type: 'object', properties: {} },
+  },
+  gmail_thread_last_message: {
+    name: 'gmail_thread_last_message',
+    description:
+      "Get the sender and date of a thread's most recent message (for staleness checks).",
+    inputSchema: {
+      type: 'object',
+      properties: { threadId: { type: 'string' } },
+      required: ['threadId'],
+    },
+  },
   // ── Gmail (mutating — always approval-gated) ───────────────────
   gmail_create_draft: {
     name: 'gmail_create_draft',
@@ -273,6 +288,8 @@ export const READ_ONLY_ADMIN_TOOLS = new Set<string>([
   'gmail_search',
   'gmail_get_thread',
   'gmail_list_labels',
+  'gmail_get_profile',
+  'gmail_thread_last_message',
   'calendar_list_events',
   'calendar_list_calendars',
   'calendar_find_availability',

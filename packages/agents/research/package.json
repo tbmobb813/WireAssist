@@ -13,7 +13,9 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",
     "@wireassist/agent-admin": "workspace:*",
-    "@wireassist/core": "workspace:*"
+    "@wireassist/agent-content": "workspace:*",
+    "@wireassist/core": "workspace:*",
+    "@wireassist/trendpost-mcp": "workspace:*"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

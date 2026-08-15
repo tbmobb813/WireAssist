@@ -230,6 +230,34 @@ export class GmailClient {
     };
   }
 
+  async getProfile(): Promise<{ emailAddress: string }> {
+    const res = await this.gmail.users.getProfile({ userId: 'me' });
+    return { emailAddress: res.data.emailAddress ?? '' };
+  }
+
+  // Staleness detection (follow-up nudges) needs the LAST message in a
+  // thread, not the first — getThread() above only returns the first.
+  async getLastMessageInfo(threadId: string): Promise<{ from: string; date: string } | null> {
+    const res = await this.gmail.users.threads.get({
+      userId: 'me',
+      id: threadId,
+      format: 'metadata',
+      metadataHeaders: ['From', 'Date'],
+    });
+
+    const messages = res.data.messages ?? [];
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage) return null;
+
+    const headers = lastMessage.payload?.headers ?? [];
+    const from =
+      headers.find((h: gmail_v1.Schema$MessagePartHeader) => h.name === 'From')?.value ?? 'Unknown';
+    const date =
+      headers.find((h: gmail_v1.Schema$MessagePartHeader) => h.name === 'Date')?.value ?? '';
+
+    return { from, date };
+  }
+
   async createDraft(params: {
     threadId?: string;
     to?: string;
