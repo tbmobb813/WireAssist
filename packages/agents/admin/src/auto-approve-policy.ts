@@ -131,7 +131,13 @@ export function setAutoApproveOverride(sender: string, enabled: boolean | null):
 function normalizeSender(sender: string): string {
   // "From" headers are often "Name <email@x.com>" — key on the email alone,
   // case-insensitively, so approvals accrue per-address regardless of how
-  // the display name is capitalized/formatted across messages.
-  const match = sender.match(/<([^>]+)>/);
-  return (match ? match[1] : sender).trim().toLowerCase();
+  // the display name is capitalized/formatted across messages. Extracted
+  // with indexOf rather than a regex: a `<([^>]+)>`-style pattern has
+  // quadratic worst-case backtracking on attacker-controlled input like a
+  // long run of `<` characters (this is an untrusted "From" header), which
+  // indexOf can't exhibit since it never backtracks.
+  const start = sender.indexOf('<');
+  const end = start === -1 ? -1 : sender.indexOf('>', start + 1);
+  const email = start !== -1 && end !== -1 ? sender.slice(start + 1, end) : sender;
+  return email.trim().toLowerCase();
 }
