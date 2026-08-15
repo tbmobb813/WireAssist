@@ -82,6 +82,7 @@ export class CalendarClient {
     attendees?: string[];
     description?: string;
     location?: string;
+    recurrence?: string[];
     calendarId?: string;
   }): Promise<{ eventId: string; htmlLink: string }> {
     const res = await this.calendar.events.insert({
@@ -96,6 +97,7 @@ export class CalendarClient {
         },
         end: { dateTime: params.end, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
         attendees: (params.attendees ?? []).map((email) => ({ email })),
+        recurrence: params.recurrence,
       },
     });
 
@@ -103,6 +105,42 @@ export class CalendarClient {
       eventId: res.data.id!,
       htmlLink: res.data.htmlLink!,
     };
+  }
+
+  async listCalendars(): Promise<{ id: string; summary: string; primary?: boolean }[]> {
+    const res = await this.calendar.calendarList.list();
+    return (res.data.items ?? [])
+      .filter(
+        (c): c is calendar_v3.Schema$CalendarListEntry & { id: string; summary: string } =>
+          typeof c.id === 'string' && typeof c.summary === 'string'
+      )
+      .map((c) => ({ id: c.id, summary: c.summary, primary: c.primary ?? undefined }));
+  }
+
+  // Google has no direct RSVP endpoint — read the event, flip the
+  // requesting account's own attendee entry, and PATCH the full attendees
+  // array back (a partial-attendee PATCH isn't supported by the API).
+  async respondToEvent(params: {
+    eventId: string;
+    response: 'accepted' | 'declined' | 'tentative';
+    calendarId?: string;
+  }): Promise<void> {
+    const calendarId = params.calendarId ?? 'primary';
+    const event = await this.calendar.events.get({ calendarId, eventId: params.eventId });
+    const attendees = event.data.attendees ?? [];
+    const selfAttendee = attendees.find((a) => a.self);
+
+    if (!selfAttendee) {
+      throw new Error(`No self attendee found on event ${params.eventId} — nothing to RSVP as.`);
+    }
+    selfAttendee.responseStatus = params.response;
+
+    await this.calendar.events.patch({
+      calendarId,
+      eventId: params.eventId,
+      requestBody: { attendees },
+      sendUpdates: 'all',
+    });
   }
 
   async updateEvent(params: {

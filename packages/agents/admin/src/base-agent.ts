@@ -11,6 +11,9 @@ import {
   type SkillAgentHandle,
   type Provider,
   type ProviderType,
+  type ProviderMessage,
+  type ProviderToolCall,
+  type ProviderResponse,
   SkillRegistry,
   SkillExecutor,
   ProviderFactory,
@@ -126,18 +129,25 @@ export abstract class BaseAgent {
   protected async think(userMessage: string, extraContext?: string): Promise<string> {
     budgetTracker.assertWithinBudget();
 
-    const system = extraContext
-      ? `${this.config.systemPrompt}\n\n---\nCONTEXT:\n${extraContext}`
-      : this.config.systemPrompt;
-
     const model = this.resolveModel();
     const response = await this.getProvider().complete({
       prompt: userMessage,
-      systemPrompt: system,
+      systemPrompt: this.buildSystemPrompt(extraContext),
       model,
       maxTokens: this.config.maxTokens ?? 2048,
     });
 
+    this.recordUsage(model, response);
+    return response.content;
+  }
+
+  private buildSystemPrompt(extraContext?: string): string {
+    return extraContext
+      ? `${this.config.systemPrompt}\n\n---\nCONTEXT:\n${extraContext}`
+      : this.config.systemPrompt;
+  }
+
+  private recordUsage(model: string, response: ProviderResponse): void {
     if (response.promptTokens !== undefined && response.completionTokens !== undefined) {
       budgetTracker.record(this.role, model, response.promptTokens, response.completionTokens);
     } else if (response.tokensUsed !== undefined) {
@@ -146,8 +156,92 @@ export abstract class BaseAgent {
       // errs toward stopping spend too early, never too late.
       budgetTracker.record(this.role, model, 0, response.tokensUsed);
     }
+  }
 
-    return response.content;
+  // Multi-turn tool-calling loop: lets the model decide which of its
+  // authorized tools to call, executes them, and feeds results back until
+  // it returns a final text answer (or the iteration cap is hit). Falls
+  // back to a single plain-text think() when the active provider doesn't
+  // support tool-calling (only AnthropicProvider does today) or the agent
+  // has no toolSchemas configured — chat still answers, just without tools.
+  protected async runToolLoop(
+    task: AgentTask,
+    userMessage: string,
+    opts?: { extraContext?: string; maxIterations?: number }
+  ): Promise<string> {
+    const tools = this.config.toolSchemas ? Object.values(this.config.toolSchemas) : [];
+    if (this.getProvider().type !== 'anthropic' || tools.length === 0) {
+      return this.think(userMessage, opts?.extraContext);
+    }
+
+    const maxIterations = opts?.maxIterations ?? 6;
+    const model = this.resolveModel();
+    const system = this.buildSystemPrompt(opts?.extraContext);
+    const messages: ProviderMessage[] = [{ role: 'user', content: userMessage }];
+
+    for (let i = 0; i < maxIterations; i++) {
+      budgetTracker.assertWithinBudget();
+      const response = await this.getProvider().complete({
+        prompt: userMessage,
+        messages,
+        tools,
+        systemPrompt: system,
+        model,
+        maxTokens: this.config.maxTokens ?? 2048,
+      });
+      this.recordUsage(model, response);
+
+      if (!response.toolCalls?.length) {
+        return response.content;
+      }
+
+      messages.push({
+        role: 'assistant',
+        content: response.content,
+        toolCalls: response.toolCalls,
+      });
+
+      for (const call of response.toolCalls) {
+        const { result, isError } = await this.executeToolCall(task, call);
+        messages.push({
+          role: 'tool_result',
+          toolCallId: call.id,
+          content: typeof result === 'string' ? result : JSON.stringify(result),
+          isError,
+        });
+      }
+    }
+
+    return "I wasn't able to finish this within the allotted steps — here's what I found so far.";
+  }
+
+  // Executes one model-chosen tool call. Base behavior is conservative —
+  // read-only tools (per isReadOnlyTool()) run immediately, everything else
+  // goes through the human approval gate before executing. Subclasses (e.g.
+  // AdminAgent) override isReadOnlyTool()/this method to route mutating
+  // calls through their own approval policy (e.g. narrow auto-approval).
+  protected async executeToolCall(
+    task: AgentTask,
+    call: ProviderToolCall
+  ): Promise<{ result: unknown; isError: boolean }> {
+    try {
+      if (this.isReadOnlyTool(call.name)) {
+        return { result: await this.useTool(call.name, call.input), isError: false };
+      }
+
+      const approved = await this.proposeAction(task, `Call tool "${call.name}"`, call.input);
+      if (!approved) {
+        return { result: 'User declined this action.', isError: true };
+      }
+      return { result: await this.useTool(call.name, call.input), isError: false };
+    } catch (error) {
+      return { result: error instanceof Error ? error.message : String(error), isError: true };
+    }
+  }
+
+  // Conservative default: nothing is read-only unless a subclass says so.
+  protected isReadOnlyTool(_toolName: string): boolean {
+    return false;
   }
 
   // Propose an action — pauses and waits for human approval

@@ -303,6 +303,46 @@ export class GmailClient {
     });
   }
 
+  async unlabelThread(params: { threadId: string; labelName: string }): Promise<void> {
+    const labelId = await this.getOrCreateLabel(params.labelName);
+
+    await this.gmail.users.threads.modify({
+      userId: 'me',
+      id: params.threadId,
+      requestBody: { removeLabelIds: [labelId] },
+    });
+  }
+
+  async archiveThread(threadId: string): Promise<void> {
+    await this.gmail.users.threads.modify({
+      userId: 'me',
+      id: threadId,
+      requestBody: { removeLabelIds: ['INBOX'] },
+    });
+  }
+
+  async trashThread(threadId: string): Promise<void> {
+    await this.gmail.users.threads.trash({ userId: 'me', id: threadId });
+  }
+
+  async markSpam(threadId: string): Promise<void> {
+    await this.gmail.users.threads.modify({
+      userId: 'me',
+      id: threadId,
+      requestBody: { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] },
+    });
+  }
+
+  async listLabels(): Promise<{ id: string; name: string }[]> {
+    const res = await this.gmail.users.labels.list({ userId: 'me' });
+    return (res.data.labels ?? [])
+      .filter(
+        (l): l is gmail_v1.Schema$Label & { id: string; name: string } =>
+          typeof l.id === 'string' && typeof l.name === 'string'
+      )
+      .map((l) => ({ id: l.id, name: l.name }));
+  }
+
   private async getOrCreateLabel(name: string): Promise<string> {
     const res = await this.gmail.users.labels.list({ userId: 'me' });
     const existing = res.data.labels?.find((l: gmail_v1.Schema$Label) => l.name === name);

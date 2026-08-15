@@ -1,5 +1,9 @@
+import { mkdtempSync, rmSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 import type { AgentTask, IApprovalQueue, MemoryStore, MCPClient, EventBus } from '@wireassist/core';
 import { AdminAgent } from '../admin-agent';
+import * as autoApprovePolicy from '../auto-approve-policy';
 
 function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
   return {
@@ -96,6 +100,205 @@ describe('AdminAgent.triageEmail() — JSON parsing', () => {
     (agent as any).think = jest.fn().mockResolvedValue('not json at all');
 
     await expect(agent.triageEmail(makeTask())).rejects.toThrow(/invalid JSON during triage/);
+  });
+});
+
+describe('AdminAgent.triageEmail() — ignore-labeling and auto-approval', () => {
+  // Uses the real auto-approve-policy module against an isolated temp file
+  // (same approach as auto-approve-policy.test.ts) rather than mocking it,
+  // so these tests exercise the actual eligibility/threshold logic too.
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'wireassist-admin-agent-'));
+    process.env.WIREASSIST_ADMIN_AUTO_APPROVE_FILE = join(tempDir, 'admin-auto-approve.json');
+  });
+
+  afterEach(() => {
+    delete process.env.WIREASSIST_ADMIN_AUTO_APPROVE_FILE;
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  function triageResponse(ignore: { threadId: string; from: string; reason: string }[]) {
+    return JSON.stringify({
+      categories: { urgent: [], replyNeeded: [], fyi: [], ignore },
+      summary: 'Quiet inbox.',
+      urgentCount: 0,
+      replyNeededCount: 0,
+    });
+  }
+
+  it('proposes an ignore-label action and routes it through normal approval when not yet eligible', async () => {
+    const deps = makeDeps({
+      mcp: {
+        call: jest
+          .fn()
+          .mockResolvedValueOnce([{ id: 't1', snippet: 'newsletter' }])
+          .mockResolvedValueOnce(threadDetailMock()[0])
+          .mockResolvedValue({ status: 'labeled' }),
+      },
+    });
+    const agent = new AdminAgent(deps);
+    (agent as any).think = jest
+      .fn()
+      .mockResolvedValue(
+        triageResponse([{ threadId: 't1', from: 'a@example.com', reason: 'newsletter' }])
+      );
+
+    await agent.triageEmail(makeTask());
+
+    expect(deps.approval.request).toHaveBeenCalledWith(
+      expect.objectContaining({ action: expect.stringContaining('Ignore:') })
+    );
+    expect(deps.mcp.call).toHaveBeenCalledWith('gmail_label_thread', {
+      threadId: 't1',
+      labelName: 'IGNORED',
+      from: 'a@example.com',
+    });
+    // The approval just recorded counts toward the threshold.
+    expect(autoApprovePolicy.listAutoApproveRecords()['a@example.com'].consecutiveApprovals).toBe(
+      1
+    );
+  });
+
+  it('auto-approves an ignore-label action for a sender the policy already trusts, skipping the approval queue', async () => {
+    for (let i = 0; i < autoApprovePolicy.AUTO_APPROVE_THRESHOLD; i++) {
+      autoApprovePolicy.recordDecision('a@example.com', true);
+    }
+
+    const deps = makeDeps({
+      mcp: {
+        call: jest
+          .fn()
+          .mockResolvedValueOnce([{ id: 't1', snippet: 'newsletter' }])
+          .mockResolvedValueOnce(threadDetailMock()[0])
+          .mockResolvedValue({ status: 'labeled' }),
+      },
+    });
+    const agent = new AdminAgent(deps);
+    (agent as any).think = jest
+      .fn()
+      .mockResolvedValue(
+        triageResponse([{ threadId: 't1', from: 'a@example.com', reason: 'repeat newsletter' }])
+      );
+
+    await agent.triageEmail(makeTask());
+
+    expect(deps.approval.request).not.toHaveBeenCalled();
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:auto_approved',
+      expect.objectContaining({ taskId: 'task-a1' })
+    );
+    expect(deps.mcp.call).toHaveBeenCalledWith('gmail_label_thread', {
+      threadId: 't1',
+      labelName: 'IGNORED',
+      from: 'a@example.com',
+    });
+  });
+
+  it('never auto-approves a non-ignore label (e.g. URGENT), regardless of sender history', async () => {
+    for (let i = 0; i < autoApprovePolicy.AUTO_APPROVE_THRESHOLD; i++) {
+      autoApprovePolicy.recordDecision('a@example.com', true);
+    }
+
+    const deps = makeDeps({
+      mcp: {
+        call: jest
+          .fn()
+          .mockResolvedValueOnce([{ id: 't1', snippet: 'urgent thing' }])
+          .mockResolvedValueOnce(threadDetailMock()[0])
+          .mockResolvedValue({ status: 'labeled' }),
+      },
+    });
+    const agent = new AdminAgent(deps);
+    (agent as any).think = jest.fn().mockResolvedValue(
+      JSON.stringify({
+        categories: {
+          urgent: [
+            { threadId: 't1', from: 'a@example.com', subject: 'Hi', reason: 'deadline today' },
+          ],
+          replyNeeded: [],
+          fyi: [],
+          ignore: [],
+        },
+        summary: 'One urgent item.',
+        urgentCount: 1,
+        replyNeededCount: 0,
+      })
+    );
+
+    await agent.triageEmail(makeTask());
+
+    expect(deps.approval.request).toHaveBeenCalledWith(
+      expect.objectContaining({ action: expect.stringContaining('URGENT') })
+    );
+    expect(deps.events.emit).not.toHaveBeenCalledWith('agent:auto_approved', expect.anything());
+  });
+});
+
+describe('AdminAgent — chat tool-calling loop', () => {
+  it('handleFreeform() drives runToolLoop() and emits the result as agent:freeform_response', async () => {
+    const deps = makeDeps();
+    const agent = new AdminAgent(deps);
+    const runToolLoopSpy = jest
+      .spyOn(agent as any, 'runToolLoop')
+      .mockResolvedValue('Here is your answer.');
+
+    const task = makeTask({ input: { type: 'freeform', prompt: 'what is on my calendar today?' } });
+    await agent.handleFreeform(task);
+
+    expect(runToolLoopSpy).toHaveBeenCalledWith(
+      task,
+      'what is on my calendar today?',
+      expect.objectContaining({ extraContext: expect.any(String) })
+    );
+    expect(deps.events.emit).toHaveBeenCalledWith('agent:freeform_response', {
+      taskId: task.id,
+      response: 'Here is your answer.',
+    });
+  });
+
+  it('executeToolCall() runs a read-only tool immediately, with no approval', async () => {
+    const deps = makeDeps({ mcp: { call: jest.fn().mockResolvedValue([{ id: 't1' }]) } });
+    const agent = new AdminAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'gmail_list_threads',
+      input: { q: 'is:unread' },
+    });
+
+    expect(result).toEqual({ result: [{ id: 't1' }], isError: false });
+    expect(deps.approval.request).not.toHaveBeenCalled();
+    expect(deps.mcp.call).toHaveBeenCalledWith('gmail_list_threads', { q: 'is:unread' });
+  });
+
+  it('executeToolCall() gates a mutating tool behind approval and executes it once approved', async () => {
+    const deps = makeDeps({ mcp: { call: jest.fn().mockResolvedValue({ messageId: 'm1' }) } });
+    const agent = new AdminAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'gmail_send',
+      input: { to: 'a@example.com', subject: 'Hi', body: 'Hello' },
+    });
+
+    expect(deps.approval.request).toHaveBeenCalled();
+    expect(result).toEqual({ result: { messageId: 'm1' }, isError: false });
+  });
+
+  it('executeToolCall() reports a declined mutating action as an error result, without calling the tool', async () => {
+    const deps = makeDeps({ approval: { request: jest.fn().mockResolvedValue(false) } });
+    const agent = new AdminAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'gmail_send',
+      input: { to: 'a@example.com', subject: 'Hi', body: 'Hello' },
+    });
+
+    expect(result).toEqual({ result: 'User declined this action.', isError: true });
+    expect(deps.mcp.call).not.toHaveBeenCalled();
   });
 });
 

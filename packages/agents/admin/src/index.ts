@@ -5,3 +5,11 @@ export { setupAdminMCP } from './mcp-setup';
 export * from './task-factory';
 export { BaseAgent, DEFAULT_MODEL } from './base-agent';
 export { BudgetTracker, BudgetExceededError, budgetTracker, type BudgetStatus } from './budget';
+export {
+  AUTO_APPROVE_THRESHOLD,
+  isAutoApproveEligibleType,
+  isEligibleForAutoApproval,
+  recordDecision,
+  listAutoApproveRecords,
+  setAutoApproveOverride,
+} from './auto-approve-policy';

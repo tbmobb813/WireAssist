@@ -1,6 +1,34 @@
 // Anthropic/Claude implementation
-import { Provider, ProviderCompletionOptions, ProviderResponse, ProviderType } from './base';
+import {
+  Provider,
+  ProviderCompletionOptions,
+  ProviderResponse,
+  ProviderType,
+  ProviderToolCall,
+} from './base';
 import type { ProviderConfig } from '../types';
+
+// Anthropic's content-block shapes, just the parts this provider reads/writes.
+interface AnthropicTextBlock {
+  type: 'text';
+  text: string;
+}
+interface AnthropicToolUseBlock {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+interface AnthropicToolResultBlock {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: string;
+  is_error?: boolean;
+}
+type AnthropicContentBlock = AnthropicTextBlock | AnthropicToolUseBlock;
+type AnthropicMessage =
+  | { role: 'user'; content: string | AnthropicToolResultBlock[] }
+  | { role: 'assistant'; content: AnthropicContentBlock[] };
 
 export class AnthropicProvider implements Provider {
   type: ProviderType = 'anthropic';
@@ -37,6 +65,18 @@ export class AnthropicProvider implements Provider {
         ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
         system: this.buildSystemPrompt(options),
         messages: this.buildMessages(options),
+        // No tool_choice: leave it at Anthropic's default ("auto") so the
+        // model can end the loop with a plain-text answer instead of being
+        // forced to call a tool every turn.
+        ...(options.tools?.length
+          ? {
+              tools: options.tools.map((t) => ({
+                name: t.name,
+                description: t.description,
+                input_schema: t.inputSchema,
+              })),
+            }
+          : {}),
       }),
       signal: AbortSignal.timeout(this.timeout),
     });
@@ -47,16 +87,22 @@ export class AnthropicProvider implements Provider {
     }
 
     const data = (await response.json()) as {
-      content: Array<{ type: string; text?: string }>;
+      content: Array<AnthropicContentBlock>;
       usage?: { input_tokens: number; output_tokens: number };
       model: string;
       stop_reason: string;
     };
+
+    const toolCalls: ProviderToolCall[] = data.content
+      .filter((block): block is AnthropicToolUseBlock => block.type === 'tool_use')
+      .map((block) => ({ id: block.id, name: block.name, input: block.input }));
+
     return {
       content: data.content
-        .filter((block) => block.type === 'text' && block.text)
+        .filter((block): block is AnthropicTextBlock => block.type === 'text' && !!block.text)
         .map((block) => block.text)
         .join(''),
+      ...(toolCalls.length ? { toolCalls } : {}),
       tokensUsed: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
       promptTokens: data.usage?.input_tokens,
       completionTokens: data.usage?.output_tokens,
@@ -169,7 +215,49 @@ export class AnthropicProvider implements Provider {
     return systemPrompt;
   }
 
-  private buildMessages(options: ProviderCompletionOptions): any[] {
-    return [{ role: 'user', content: options.prompt }];
+  private buildMessages(options: ProviderCompletionOptions): AnthropicMessage[] {
+    if (!options.messages?.length) {
+      return [{ role: 'user', content: options.prompt }];
+    }
+
+    // Translate the provider-agnostic turn history into Anthropic's wire
+    // format: Anthropic has no native "tool" role — tool results are
+    // content blocks inside a user-turn message, keyed by tool_use_id. The
+    // API also requires strictly alternating user/assistant turns, so
+    // consecutive tool_result entries (multiple tool calls from the same
+    // assistant turn) must be coalesced into one user message, not emitted
+    // as back-to-back user turns.
+    const result: AnthropicMessage[] = [];
+    for (const message of options.messages) {
+      if (message.role === 'user') {
+        result.push({ role: 'user', content: message.content });
+        continue;
+      }
+      if (message.role === 'assistant') {
+        const blocks: AnthropicContentBlock[] = [];
+        if (message.content) blocks.push({ type: 'text', text: message.content });
+        for (const call of message.toolCalls ?? []) {
+          blocks.push({ type: 'tool_use', id: call.id, name: call.name, input: call.input });
+        }
+        result.push({ role: 'assistant', content: blocks });
+        continue;
+      }
+
+      // role === 'tool_result' — append to the trailing user message if it's
+      // already a coalesced tool_result batch, otherwise start a new one.
+      const resultBlock: AnthropicToolResultBlock = {
+        type: 'tool_result',
+        tool_use_id: message.toolCallId,
+        content: message.content,
+        is_error: message.isError,
+      };
+      const last = result[result.length - 1];
+      if (last?.role === 'user' && Array.isArray(last.content)) {
+        last.content.push(resultBlock);
+      } else {
+        result.push({ role: 'user', content: [resultBlock] });
+      }
+    }
+    return result;
   }
 }

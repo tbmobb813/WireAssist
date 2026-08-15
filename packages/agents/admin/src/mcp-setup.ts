@@ -70,13 +70,54 @@ export async function setupAdminMCP(mcp: MCPClient): Promise<void> {
     return { status: 'labeled' };
   });
 
+  mcp.register('gmail_unlabel_thread', async (params) => {
+    await gmail.unlabelThread({
+      threadId: params.threadId as string,
+      labelName: params.labelName as string,
+    });
+    return { status: 'unlabeled' };
+  });
+
+  mcp.register('gmail_archive_thread', async (params) => {
+    await gmail.archiveThread(params.threadId as string);
+    return { status: 'archived' };
+  });
+
+  mcp.register('gmail_trash_thread', async (params) => {
+    await gmail.trashThread(params.threadId as string);
+    return { status: 'trashed' };
+  });
+
+  mcp.register('gmail_mark_spam', async (params) => {
+    await gmail.markSpam(params.threadId as string);
+    return { status: 'marked_spam' };
+  });
+
+  mcp.register('gmail_list_labels', async () => {
+    return gmail.listLabels();
+  });
+
+  // Named alias of gmail_list_threads — same handler, distinct tool name so
+  // the model reliably picks "search my email" over the more generic list.
+  mcp.register('gmail_search', async (params) => {
+    return gmail.listThreads({
+      maxResults: params.maxResults as number,
+      q: params.q as string,
+    });
+  });
+
   // ── CALENDAR (now real) ────────────────────────────────────────
   mcp.register('calendar_list_events', async (params) => {
     return cal.listEvents({
       timeMin: params.timeMin as string,
       timeMax: params.timeMax as string,
       maxResults: params.maxResults as number,
+      calendarId: params.calendarId as string | undefined,
     });
+  });
+
+  mcp.register('calendar_list_calendars', async () => {
+    return cal.listCalendars();
   });
 
   mcp.register('calendar_create_event', async (params) => {
@@ -102,6 +143,8 @@ export async function setupAdminMCP(mcp: MCPClient): Promise<void> {
       attendees,
       description: params.description as string | undefined,
       location: params.location as string | undefined,
+      recurrence: params.recurrence as string[] | undefined,
+      calendarId: params.calendarId as string | undefined,
     });
   });
 
@@ -111,13 +154,26 @@ export async function setupAdminMCP(mcp: MCPClient): Promise<void> {
       summary: params.summary as string | undefined,
       start: params.start as string | undefined,
       end: params.end as string | undefined,
+      calendarId: params.calendarId as string | undefined,
     });
     return { status: 'updated' };
   });
 
   mcp.register('calendar_delete_event', async (params) => {
-    await cal.deleteEvent({ eventId: params.eventId as string });
+    await cal.deleteEvent({
+      eventId: params.eventId as string,
+      calendarId: params.calendarId as string | undefined,
+    });
     return { status: 'deleted' };
+  });
+
+  mcp.register('calendar_respond_to_event', async (params) => {
+    await cal.respondToEvent({
+      eventId: params.eventId as string,
+      response: params.response as 'accepted' | 'declined' | 'tentative',
+      calendarId: params.calendarId as string | undefined,
+    });
+    return { status: 'responded' };
   });
 
   mcp.register('calendar_find_availability', async (params) => {

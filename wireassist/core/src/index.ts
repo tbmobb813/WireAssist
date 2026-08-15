@@ -14,7 +14,14 @@ export { PrivacyController, AuditLogger, ConversationEncryption } from './privac
 
 // Provider types
 export { ProviderFactory } from './providers';
-export type { Provider, ProviderCompletionOptions, ProviderResponse } from './providers/base';
+export type {
+  Provider,
+  ProviderCompletionOptions,
+  ProviderResponse,
+  ProviderToolDefinition,
+  ProviderToolCall,
+  ProviderMessage,
+} from './providers/base';
 
 // Streaming
 export { StreamHandler, ResponseBuffer, StreamParser } from './streaming';

@@ -31,6 +31,26 @@ class TestAgent extends BaseAgent {
   testThink(userMessage: string, extraContext?: string) {
     return this.think(userMessage, extraContext);
   }
+  testRunToolLoop(
+    task: AgentTask,
+    userMessage: string,
+    opts?: { extraContext?: string; maxIterations?: number }
+  ) {
+    return this.runToolLoop(task, userMessage, opts);
+  }
+}
+
+// Marks a fixed set of tool names read-only, so tests can exercise both the
+// immediate-execution and approval-gated branches of executeToolCall().
+class ReadOnlyAwareTestAgent extends TestAgent {
+  private readOnly: Set<string>;
+  constructor(...args: ConstructorParameters<typeof TestAgent>) {
+    super(...args);
+    this.readOnly = new Set(['read_tool']);
+  }
+  protected isReadOnlyTool(toolName: string): boolean {
+    return this.readOnly.has(toolName);
+  }
 }
 
 // Doesn't override run() — exercises BaseAgent's own default skill dispatch.
@@ -418,5 +438,191 @@ describe('BaseAgent.think()', () => {
     await agent.testThink('one');
     await agent.testThink('two');
     expect(createSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('BaseAgent.runToolLoop()', () => {
+  function stubResponse(overrides: Partial<ProviderResponse> = {}): ProviderResponse {
+    return { content: '', model: 'claude-sonnet-5', ...overrides };
+  }
+
+  let completeMock: jest.Mock;
+
+  beforeEach(() => {
+    completeMock = jest.fn();
+    jest.spyOn(ProviderFactory, 'create').mockReturnValue({
+      type: 'anthropic',
+      currentModel: 'claude-sonnet-5',
+      complete: completeMock,
+      stream: jest.fn(),
+      listModels: jest.fn(),
+      validateConfig: jest.fn(),
+    });
+    jest.spyOn(budgetTracker, 'assertWithinBudget').mockImplementation(() => {});
+    jest.spyOn(budgetTracker, 'record').mockReturnValue(0);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  function makeToolAgent(deps = makeDeps()) {
+    const config: AgentConfig = {
+      role: 'admin',
+      name: 'Test Agent',
+      systemPrompt: 'You are a test agent.',
+      tools: ['read_tool', 'write_tool'],
+      toolSchemas: {
+        read_tool: { name: 'read_tool', description: 'reads', inputSchema: { type: 'object' } },
+        write_tool: { name: 'write_tool', description: 'writes', inputSchema: { type: 'object' } },
+      },
+    };
+    return { agent: new ReadOnlyAwareTestAgent(config, deps), deps };
+  }
+
+  it('falls back to think() when the provider is not anthropic', async () => {
+    jest.spyOn(ProviderFactory, 'create').mockReturnValue({
+      type: 'openrouter',
+      currentModel: 'openrouter/auto',
+      complete: completeMock,
+      stream: jest.fn(),
+      listModels: jest.fn(),
+      validateConfig: jest.fn(),
+    });
+    completeMock.mockResolvedValue(stubResponse({ content: 'plain answer' }));
+
+    const config: AgentConfig = {
+      role: 'admin',
+      name: 'Test Agent',
+      systemPrompt: 'sys',
+      tools: [],
+      provider: 'openrouter',
+      toolSchemas: { x: { name: 'x', description: 'd', inputSchema: {} } },
+    };
+    const agent = new TestAgent(config, makeDeps());
+    const result = await agent.testRunToolLoop(makeTask(), 'hello');
+
+    expect(result).toBe('plain answer');
+    expect(completeMock).toHaveBeenCalledWith(
+      expect.not.objectContaining({ tools: expect.anything() })
+    );
+  });
+
+  it('falls back to think() when the agent has no toolSchemas configured', async () => {
+    completeMock.mockResolvedValue(stubResponse({ content: 'plain answer' }));
+    const { agent } = makeAgent();
+    const result = await agent.testRunToolLoop(makeTask(), 'hello');
+    expect(result).toBe('plain answer');
+  });
+
+  it('returns the final text once the model stops calling tools', async () => {
+    completeMock.mockResolvedValueOnce(stubResponse({ content: 'the answer' }));
+    const { agent } = makeToolAgent();
+    const result = await agent.testRunToolLoop(makeTask(), 'hello');
+    expect(result).toBe('the answer');
+    expect(completeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('executes a read-only tool call immediately (no approval) and feeds the result back', async () => {
+    completeMock
+      .mockResolvedValueOnce(
+        stubResponse({
+          content: '',
+          toolCalls: [{ id: 'c1', name: 'read_tool', input: { q: 'x' } }],
+        })
+      )
+      .mockResolvedValueOnce(stubResponse({ content: 'done' }));
+    const { agent, deps } = makeToolAgent();
+    (deps.mcp.call as jest.Mock).mockResolvedValueOnce({ found: true });
+
+    const result = await agent.testRunToolLoop(makeTask(), 'hello');
+
+    expect(result).toBe('done');
+    expect(deps.mcp.call).toHaveBeenCalledWith('read_tool', { q: 'x' });
+    expect(deps.approval.request).not.toHaveBeenCalled();
+
+    const secondCallMessages = completeMock.mock.calls[1][0].messages;
+    expect(secondCallMessages).toContainEqual(
+      expect.objectContaining({ role: 'tool_result', toolCallId: 'c1', isError: false })
+    );
+  });
+
+  it('routes a mutating tool call through proposeAction and executes it when approved', async () => {
+    completeMock
+      .mockResolvedValueOnce(
+        stubResponse({
+          content: '',
+          toolCalls: [{ id: 'c1', name: 'write_tool', input: { x: 1 } }],
+        })
+      )
+      .mockResolvedValueOnce(stubResponse({ content: 'done' }));
+    const { agent, deps } = makeToolAgent();
+
+    await agent.testRunToolLoop(makeTask(), 'hello');
+
+    expect(deps.approval.request).toHaveBeenCalled();
+    expect(deps.mcp.call).toHaveBeenCalledWith('write_tool', { x: 1 });
+  });
+
+  it('does not execute a mutating tool call when approval is declined', async () => {
+    completeMock
+      .mockResolvedValueOnce(
+        stubResponse({
+          content: '',
+          toolCalls: [{ id: 'c1', name: 'write_tool', input: { x: 1 } }],
+        })
+      )
+      .mockResolvedValueOnce(stubResponse({ content: 'ok, skipped that' }));
+    const { agent, deps } = makeToolAgent(
+      makeDeps({ approval: { request: jest.fn().mockResolvedValue(false) } })
+    );
+
+    const result = await agent.testRunToolLoop(makeTask(), 'hello');
+
+    expect(result).toBe('ok, skipped that');
+    expect(deps.mcp.call).not.toHaveBeenCalled();
+    const secondCallMessages = completeMock.mock.calls[1][0].messages;
+    expect(secondCallMessages).toContainEqual(
+      expect.objectContaining({ role: 'tool_result', toolCallId: 'c1', isError: true })
+    );
+  });
+
+  it('stops after maxIterations and returns a graceful fallback instead of looping forever', async () => {
+    completeMock.mockResolvedValue(
+      stubResponse({ content: '', toolCalls: [{ id: 'c1', name: 'read_tool', input: {} }] })
+    );
+    const { agent, deps } = makeToolAgent();
+    (deps.mcp.call as jest.Mock).mockResolvedValue({ ok: true });
+
+    const result = await agent.testRunToolLoop(makeTask(), 'hello', { maxIterations: 2 });
+
+    expect(completeMock).toHaveBeenCalledTimes(2);
+    expect(result).toMatch(/wasn't able to finish/);
+  });
+
+  it('turns a thrown tool error into an isError tool_result instead of failing the loop', async () => {
+    completeMock
+      .mockResolvedValueOnce(
+        stubResponse({
+          content: '',
+          toolCalls: [{ id: 'c1', name: 'read_tool', input: {} }],
+        })
+      )
+      .mockResolvedValueOnce(stubResponse({ content: 'recovered' }));
+    const { agent, deps } = makeToolAgent();
+    (deps.mcp.call as jest.Mock).mockRejectedValueOnce(new Error('boom'));
+
+    const result = await agent.testRunToolLoop(makeTask(), 'hello');
+
+    expect(result).toBe('recovered');
+    const secondCallMessages = completeMock.mock.calls[1][0].messages;
+    expect(secondCallMessages).toContainEqual(
+      expect.objectContaining({
+        role: 'tool_result',
+        toolCallId: 'c1',
+        isError: true,
+        content: 'boom',
+      })
+    );
   });
 });
