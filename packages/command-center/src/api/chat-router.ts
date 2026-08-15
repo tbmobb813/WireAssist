@@ -11,6 +11,7 @@ export type RouteDecision =
   | { kind: 'admin_calendar'; daysAhead?: number }
   | { kind: 'content_generate'; topic: string; platform: Platform; tone?: string }
   | { kind: 'content_plan'; platforms?: Platform[]; weeksAhead?: number; postsPerWeek?: number }
+  | { kind: 'content_freeform'; prompt: string }
   | { kind: 'research_topic'; query: string; depth?: 'quick' | 'deep' }
   | { kind: 'ops_freeform'; prompt: string }
   | { kind: 'ops_workflow'; workflow: string; brief: string }
@@ -73,6 +74,16 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'content_freeform',
+    description:
+      'General question or open-ended chat about content strategy, existing posts, or ideas — not a request to generate one specific post or a full multi-post plan.',
+    input_schema: {
+      type: 'object',
+      properties: { prompt: { type: 'string' } },
+      required: ['prompt'],
+    },
+  },
+  {
     name: 'research_topic',
     description: 'User wants web research/synthesis on a topic, market, or competitor.',
     input_schema: {
@@ -125,6 +136,8 @@ Guidance:
 - Ambiguous, general-knowledge, or small-talk messages route to admin_freeform.
 - Only use ops_workflow when a specific, nameable workflow is clearly being requested;
   otherwise prefer ops_freeform.
+- Only use content_generate/content_plan when the user wants NEW content written; questions
+  about existing posts/ideas, or general content strategy chat, route to content_freeform.
 - Always call exactly one tool. Never reply with plain text.`;
 
 function isPlatform(value: unknown): value is Platform {
@@ -165,6 +178,10 @@ function buildDecision(name: string, input: unknown): RouteDecision {
         weeksAhead: typeof i.weeksAhead === 'number' ? i.weeksAhead : undefined,
         postsPerWeek: typeof i.postsPerWeek === 'number' ? i.postsPerWeek : undefined,
       };
+    }
+    case 'content_freeform': {
+      if (typeof i.prompt !== 'string') throw new RouterError('content_freeform missing prompt');
+      return { kind: 'content_freeform', prompt: i.prompt };
     }
     case 'research_topic': {
       if (typeof i.query !== 'string') throw new RouterError('research_topic missing query');

@@ -462,6 +462,11 @@ app.post('/api/tasks/freeform', async (c) => {
       queueContentTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
+    case 'content_freeform': {
+      const task = ContentTasks.freeform(decision.prompt);
+      queueContentTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
     case 'research_topic': {
       const task = ResearchTasks.researchTopic(decision.query, decision.depth ?? 'quick');
       queueResearchTask(task);

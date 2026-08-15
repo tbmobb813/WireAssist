@@ -77,4 +77,17 @@ export const ContentTasks = {
       approvalRequired: false,
     };
   },
+
+  freeform(prompt: string): AgentTask {
+    return {
+      id: randomUUID(),
+      agentRole: 'content',
+      description: prompt,
+      status: 'queued',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      input: { type: 'freeform', prompt },
+      approvalRequired: false,
+    };
+  },
 };
