@@ -418,6 +418,37 @@ Outcomes (approved, blocked, or failed) arrive the same way any other run's
 outcome does — the Telegram bot already alerts on those regardless of who
 triggered the run — so this script doesn't duplicate that notification.
 
+## 9. Proactive daily briefing
+
+`dev/daily-briefing.sh` triggers the Admin Agent's `daily_briefing` task
+(inbox triage + calendar review, combined into one digest) on a schedule.
+Unlike the heartbeat script above, there's nothing to configure or promote
+first — `email_triage`/`calendar_review` already route every proposed
+action (drafts, urgent labels, ignore labels) through the normal approval
+queue no matter who triggered the task, so there's no extra risk to running
+this unattended. Installing the cron entry below **is** the opt-in.
+
+**Cron entry** (once daily — a morning hour works well; adjust to taste):
+
+```bash
+crontab -e
+# add:
+0 7 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/daily-briefing.sh >> /var/log/wireassist-daily-briefing.log 2>&1
+```
+
+Requires `jq` (`sudo apt install -y jq`), same as the heartbeat script. Run
+it manually once first (`WIREASSIST_API_URL=http://localhost:3002
+./dev/daily-briefing.sh`) to confirm it queues successfully before trusting
+it to cron.
+
+Optionally set `DAILY_BRIEFING_MAX_EMAILS`/`DAILY_BRIEFING_DAYS_AHEAD` in
+the crontab entry to tune the digest window; both default to the API's own
+defaults (20 emails, 7 days ahead) when unset.
+
+Outcomes arrive the same way any other task's do — the Telegram bot already
+alerts on `daily_briefing_complete`/`task_failed` regardless of who
+triggered the run — so this script doesn't duplicate that notification.
+
 ## Updating after a code change
 
 ```bash
