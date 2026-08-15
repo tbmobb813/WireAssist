@@ -6,7 +6,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { ApprovalQueue, MemoryStore, MCPClient, EventBus, type AgentRole } from '@wireassist/core';
-import { AdminAgent, setupAdminMCP, AdminTasks, budgetTracker } from '@wireassist/agent-admin';
+import {
+  AdminAgent,
+  setupAdminMCP,
+  AdminTasks,
+  budgetTracker,
+  listAutoApproveRecords,
+  setAutoApproveOverride,
+} from '@wireassist/agent-admin';
 import { ContentAgent, ContentTasks } from '@wireassist/agent-content';
 import { ResearchAgent, ResearchTasks, setupResearchMCP } from '@wireassist/agent-research';
 import {
@@ -568,6 +575,21 @@ app.post('/api/ops/trust/:workflow', async (c) => {
   const workflow = c.req.param('workflow');
   const saved = setTrustStage(workflow, stage);
   return c.json({ workflow, stage: saved });
+});
+
+// Admin Agent's narrow auto-approval policy — which senders have earned
+// (or been manually granted/denied) auto-approval for ignore-labeling.
+// See packages/agents/admin/src/auto-approve-policy.ts.
+app.get('/api/admin/auto-approve', (c) => {
+  return c.json({ records: listAutoApproveRecords() });
+});
+
+app.post('/api/admin/auto-approve/:sender', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const enabled = typeof body.enabled === 'boolean' ? body.enabled : null;
+  const sender = c.req.param('sender');
+  const record = setAutoApproveOverride(sender, enabled);
+  return c.json({ sender, record });
 });
 
 app.post('/api/tasks/ops-workflow', async (c) => {

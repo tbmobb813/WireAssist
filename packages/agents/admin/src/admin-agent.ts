@@ -6,8 +6,15 @@ import {
   type MemoryStore,
   type MCPClient,
   type EventBus,
+  type ProviderToolCall,
 } from '@wireassist/core';
 import { BaseAgent } from './base-agent';
+import { ADMIN_TOOL_SCHEMAS, READ_ONLY_ADMIN_TOOLS } from './tool-schemas';
+import {
+  isAutoApproveEligibleType,
+  isEligibleForAutoApproval,
+  recordDecision,
+} from './auto-approve-policy';
 
 // Models sometimes wrap JSON in ```json fences despite being told not to —
 // strip them before parsing rather than failing the whole task.
@@ -21,8 +28,14 @@ covering business and personal life together. Your job is to filter noise, hold 
 else holds, and make sure nothing that matters gets missed — without adding noise of your own.
 
 PRINCIPLES:
-- You NEVER send emails, create events, or take any action without explicit human approval.
-  No exceptions, no matter how routine it looks — this is not negotiable.
+- You NEVER send emails, create/update/delete calendar events, create drafts, archive, trash,
+  or mark spam without explicit human approval. No exceptions, no matter how routine it looks —
+  this is not negotiable.
+- The one narrow carve-out: labeling a thread as ignored may be auto-approved, but only after
+  Jason has approved that exact action for that exact sender repeatedly. The threshold and
+  enforcement live in code, not in your judgment — you never decide in-line that something is
+  "obviously fine to skip approval for." Every auto-approved action is still logged and
+  reversible (Jason can unlabel a thread or revoke auto-approval for a sender at any time).
 - Every recommendation is specific and actionable. Never "you might want to consider..." —
   say what to do and why.
 - You are direct and concise. No fluff, no hedging, no filler.
@@ -71,6 +84,37 @@ OUTPUT FORMAT:
 Always respond in structured JSON when processing emails or calendar data.
 Use plain English for explanations and recommendations.`;
 
+// The agent's tool allowlist — the single source of truth for what's
+// callable (enforced in BaseAgent.useTool()). Every entry needs a matching
+// handler registered in mcp-setup.ts and, for chat/freeform tool-calling, a
+// matching schema in ADMIN_TOOL_SCHEMAS.
+const ADMIN_TOOLS = [
+  // Gmail
+  'gmail_list_threads',
+  'gmail_search',
+  'gmail_get_thread',
+  'gmail_list_labels',
+  'gmail_create_draft',
+  'gmail_send',
+  'gmail_label_thread',
+  'gmail_unlabel_thread',
+  'gmail_archive_thread',
+  'gmail_trash_thread',
+  'gmail_mark_spam',
+  // Calendar
+  'calendar_list_events',
+  'calendar_list_calendars',
+  'calendar_create_event',
+  'calendar_update_event',
+  'calendar_delete_event',
+  'calendar_respond_to_event',
+  'calendar_find_availability',
+  // Sheets
+  'sheets_read',
+  'sheets_append',
+  'sheets_update',
+];
+
 export class AdminAgent extends BaseAgent {
   constructor(deps: {
     approval: IApprovalQueue;
@@ -82,24 +126,13 @@ export class AdminAgent extends BaseAgent {
       role: 'admin',
       name: 'Admin Agent',
       systemPrompt: ADMIN_SYSTEM_PROMPT,
-      tools: [
-        // Gmail tools
-        'gmail_list_threads',
-        'gmail_get_thread',
-        'gmail_create_draft',
-        'gmail_send',
-        'gmail_label_thread',
-        // Calendar tools will be registered in MCP setup, but we declare them here for clarity
-        'calendar_list_events',
-        'calendar_create_event',
-        'calendar_update_event',
-        'calendar_delete_event',
-        'calendar_find_availability',
-        // Sheets tools, same deal — registered in MCP setup.
-        'sheets_read',
-        'sheets_append',
-        'sheets_update',
-      ],
+      tools: ADMIN_TOOLS,
+      toolSchemas: Object.fromEntries(
+        ADMIN_TOOLS.filter((name) => name in ADMIN_TOOL_SCHEMAS).map((name) => [
+          name,
+          ADMIN_TOOL_SCHEMAS[name],
+        ])
+      ),
       maxTokens: 4096,
     };
     super(config, deps);
@@ -205,7 +238,7 @@ Return a JSON object with this exact structure:
     "urgent": [{ "threadId": string, "from": string, "subject": string, "reason": string }],
     "replyNeeded": [{ "threadId": string, "from": string, "subject": string, "draftReply": string }],
     "fyi": [{ "threadId": string, "from": string, "subject": string }],
-    "ignore": [{ "threadId": string, "reason": string }]
+    "ignore": [{ "threadId": string, "from": string, "reason": string }]
   },
   "summary": "2-3 sentence overview of inbox state",
   "urgentCount": number,
@@ -239,7 +272,7 @@ Only return valid JSON. No markdown fences.`;
       if (!validThreadIds.has(email.threadId)) continue;
       proposedActions.push({
         id: randomUUID(),
-        type: 'create_draft',
+        type: 'gmail_create_draft',
         label: `Draft reply to: "${email.subject}" from ${email.from}`,
         payload: {
           threadId: email.threadId,
@@ -253,11 +286,28 @@ Only return valid JSON. No markdown fences.`;
       if (!validThreadIds.has(email.threadId)) continue;
       proposedActions.push({
         id: randomUUID(),
-        type: 'label_thread',
+        type: 'gmail_label_thread',
         label: `Mark as URGENT: "${email.subject}"`,
         payload: {
           threadId: email.threadId,
           labelName: 'URGENT',
+        },
+      });
+    }
+
+    // Propose ignore-labeling for the ignore category — this is what makes
+    // the ignore pile actionable (and auto-approvable, see
+    // proposeOrAutoApprove) rather than just reported.
+    for (const email of triage.categories.ignore ?? []) {
+      if (!validThreadIds.has(email.threadId)) continue;
+      proposedActions.push({
+        id: randomUUID(),
+        type: 'gmail_label_thread',
+        label: `Ignore: "${email.reason}"`,
+        payload: {
+          threadId: email.threadId,
+          labelName: 'IGNORED',
+          from: email.from,
         },
       });
     }
@@ -273,16 +323,12 @@ Only return valid JSON. No markdown fences.`;
     // 6. Emit the result — Command Center UI picks this up and renders it
     this.events.emit('agent:triage_complete', result);
 
-    // 7. For each proposed action, request approval individually
+    // 7. For each proposed action, request approval (or auto-approve, for
+    // the narrow ignore-labeling carve-out) individually.
     for (const action of proposedActions) {
-      const approved = await this.proposeAction(task, action.label, action.payload);
-
+      const approved = await this.proposeOrAutoApprove(task, action);
       if (approved) {
-        await this.executeAction(action);
-        // Remember the decision
-        this.remember(`User approved: ${action.label}`, ['email', 'approval', action.type]);
-      } else {
-        this.remember(`User rejected: ${action.label}`, ['email', 'rejection', action.type]);
+        await this.useTool(action.type, action.payload);
       }
     }
 
@@ -411,7 +457,7 @@ Only return valid JSON. No markdown fences.`;
     this.remember(`Scheduled: ${summary} on ${start}`, ['calendar', 'scheduled']);
   }
 
-  // ─── FREEFORM ──────────────────────────────────────────────────
+  // ─── FREEFORM / CHAT ─────────────────────────────────────────────
 
   async handleFreeform(task: AgentTask): Promise<void> {
     const input = task.input as { type: string; prompt?: string };
@@ -420,7 +466,7 @@ Only return valid JSON. No markdown fences.`;
         ? input.prompt
         : task.description;
     const context = await this.loadContext(prompt);
-    const response = await this.think(prompt, context);
+    const response = await this.runToolLoop(task, prompt, { extraContext: context });
 
     this.events.emit('agent:freeform_response', {
       taskId: task.id,
@@ -428,29 +474,99 @@ Only return valid JSON. No markdown fences.`;
     });
   }
 
-  // ─── ACTION EXECUTOR ───────────────────────────────────────────
+  // ─── TOOL-CALLING LOOP HOOKS (used by BaseAgent.runToolLoop) ──────
 
-  private async executeAction(action: ProposedAction): Promise<void> {
-    switch (action.type) {
-      case 'create_draft':
-        await this.useTool('gmail_create_draft', action.payload);
-        break;
-      case 'label_thread':
-        await this.useTool('gmail_label_thread', action.payload);
-        break;
-      case 'gmail_send':
-        await this.useTool('gmail_send', action.payload);
-        break;
-      case 'calendar_create_event':
-        await this.useTool('calendar_create_event', action.payload);
-        break;
-      case 'calendar_update_event':
-        await this.useTool('calendar_update_event', action.payload);
-        break;
-      case 'calendar_delete_event':
-        await this.useTool('calendar_delete_event', action.payload);
-        break;
+  protected isReadOnlyTool(toolName: string): boolean {
+    return READ_ONLY_ADMIN_TOOLS.has(toolName);
+  }
+
+  protected async executeToolCall(
+    task: AgentTask,
+    call: ProviderToolCall
+  ): Promise<{ result: unknown; isError: boolean }> {
+    try {
+      if (this.isReadOnlyTool(call.name)) {
+        return { result: await this.useTool(call.name, call.input), isError: false };
+      }
+
+      const action: ProposedAction = {
+        id: call.id,
+        type: call.name,
+        label: describeToolCall(call),
+        payload: call.input,
+      };
+      const approved = await this.proposeOrAutoApprove(task, action);
+      if (!approved) {
+        return { result: 'User declined this action.', isError: true };
+      }
+      return { result: await this.useTool(call.name, call.input), isError: false };
+    } catch (error) {
+      return { result: error instanceof Error ? error.message : String(error), isError: true };
     }
+  }
+
+  // ─── APPROVAL GATE (with narrow auto-approval carve-out) ──────────
+
+  // Wraps proposeAction() with the auto-approval policy from
+  // auto-approve-policy.ts. Eligibility is hardcoded there (only
+  // ignore-labeling a thread, keyed by sender) — everything else always
+  // goes through the normal human approval gate.
+  private async proposeOrAutoApprove(task: AgentTask, action: ProposedAction): Promise<boolean> {
+    const from = typeof action.payload.from === 'string' ? action.payload.from : undefined;
+
+    if (from && isAutoApproveEligibleType(action) && isEligibleForAutoApproval(from)) {
+      this.remember(`Auto-approved: ${action.label}`, ['email', 'auto-approval', action.type]);
+      this.events.emit('agent:auto_approved', { agentRole: this.role, taskId: task.id, action });
+      return true;
+    }
+
+    const approved = await this.proposeAction(task, action.label, action.payload);
+    if (from && isAutoApproveEligibleType(action)) {
+      recordDecision(from, approved);
+    }
+    this.remember(approved ? `User approved: ${action.label}` : `User rejected: ${action.label}`, [
+      'email',
+      approved ? 'approval' : 'rejection',
+      action.type,
+    ]);
+    return approved;
+  }
+}
+
+// Human-readable approval-prompt labels for model-initiated tool calls in
+// the chat loop (triage/calendar-review actions build their own labels
+// inline, since they already have richer context than a raw tool call).
+function describeToolCall(call: ProviderToolCall): string {
+  const input = call.input;
+  switch (call.name) {
+    case 'gmail_send':
+      return `Send email to ${input.to}: "${input.subject}"`;
+    case 'gmail_create_draft':
+      return `Draft reply${input.subject ? `: "${input.subject}"` : ''}`;
+    case 'gmail_label_thread':
+      return `Label thread as ${input.labelName}`;
+    case 'gmail_unlabel_thread':
+      return `Remove label ${input.labelName} from thread`;
+    case 'gmail_archive_thread':
+      return 'Archive email thread';
+    case 'gmail_trash_thread':
+      return 'Move email thread to trash';
+    case 'gmail_mark_spam':
+      return 'Mark email thread as spam';
+    case 'calendar_create_event':
+      return `Create calendar event: "${input.summary}" on ${input.start}`;
+    case 'calendar_update_event':
+      return `Update calendar event ${input.eventId}`;
+    case 'calendar_delete_event':
+      return `Delete calendar event ${input.eventId}`;
+    case 'calendar_respond_to_event':
+      return `RSVP ${input.response} to calendar event ${input.eventId}`;
+    case 'sheets_append':
+      return `Append rows to spreadsheet ${input.spreadsheetId}`;
+    case 'sheets_update':
+      return `Update range ${input.range} in spreadsheet ${input.spreadsheetId}`;
+    default:
+      return `Run tool "${call.name}"`;
   }
 }
 
@@ -480,13 +596,9 @@ export interface CalendarEvent {
 
 export interface ProposedAction {
   id: string;
-  type:
-    | 'create_draft'
-    | 'label_thread'
-    | 'gmail_send'
-    | 'calendar_create_event'
-    | 'calendar_update_event'
-    | 'calendar_delete_event';
+  // Exact MCP tool name — execution is a direct useTool(type, payload) call,
+  // so this must always match a name registered in mcp-setup.ts.
+  type: string;
   label: string;
   payload: Record<string, unknown>;
 }
@@ -504,7 +616,7 @@ interface TriageCategories {
     urgent: { threadId: string; from: string; subject: string; reason: string }[];
     replyNeeded: { threadId: string; from: string; subject: string; draftReply: string }[];
     fyi: { threadId: string; from: string; subject: string }[];
-    ignore: { threadId: string; reason: string }[];
+    ignore: { threadId: string; from: string; reason: string }[];
   };
   summary: string;
   urgentCount: number;

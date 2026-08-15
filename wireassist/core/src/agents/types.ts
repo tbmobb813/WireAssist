@@ -1,4 +1,5 @@
 import type { ProviderType } from '../types';
+import type { ProviderToolDefinition } from '../providers/base';
 
 export type AgentRole = 'admin' | 'content' | 'research' | 'strategy' | 'gtm';
 
@@ -15,6 +16,12 @@ export interface AgentConfig {
   // (see DEFAULT_PROVIDER in BaseAgent) — set this or WIREASSIST_PROVIDER to
   // route through OpenRouter or another provider instead.
   provider?: ProviderType;
+  // LLM-facing name/description/JSON-schema for each entry in `tools`, used
+  // by BaseAgent.runToolLoop() to let the model choose which tool to call.
+  // Only tools with both a config.tools entry AND a schema here are ever
+  // offered to the model — `tools` stays the authorization boundary
+  // (enforced in useTool()), this is purely presentation.
+  toolSchemas?: Record<string, ProviderToolDefinition>;
 }
 
 export interface AgentTask {
