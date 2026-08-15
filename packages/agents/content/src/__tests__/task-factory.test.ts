@@ -151,6 +151,25 @@ describe('ContentTasks.listScheduled()', () => {
   });
 });
 
+describe('ContentTasks.freeform()', () => {
+  it('does NOT require approval', () => {
+    const t = ContentTasks.freeform('what should I post about this week?');
+    expect(t.approvalRequired).toBe(false);
+  });
+
+  it('has input type freeform and carries the prompt', () => {
+    const t = ContentTasks.freeform('what should I post about this week?');
+    const input = t.input as { type: string; prompt: string };
+    expect(input.type).toBe('freeform');
+    expect(input.prompt).toBe('what should I post about this week?');
+  });
+
+  it('uses the prompt as the description', () => {
+    const t = ContentTasks.freeform('any scheduled posts today?');
+    expect(t.description).toBe('any scheduled posts today?');
+  });
+});
+
 describe('ContentTasks — unique ids', () => {
   it('every task gets a unique uuid id', () => {
     const ids = [

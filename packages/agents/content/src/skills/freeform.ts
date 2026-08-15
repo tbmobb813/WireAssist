@@ -1,13 +1,23 @@
 import type { Skill } from '@wireassist/core';
 
-export const freeformSkill: Skill<unknown, void> = {
+export interface FreeformInput {
+  type?: string;
+  prompt?: string;
+}
+
+export const freeformSkill: Skill<FreeformInput, void> = {
   name: 'freeform',
   role: 'content',
-  description: 'Open-ended chat about content strategy.',
+  description: 'Open-ended chat about content strategy, backed by the full tool-calling loop.',
 
-  async execute({ agent, task }) {
-    const context = await agent.loadContext(task.description);
-    const response = await agent.think(task.description, context);
+  async execute({ agent, task, input }) {
+    const prompt =
+      input.type === 'freeform' && typeof input.prompt === 'string'
+        ? input.prompt
+        : task.description;
+    const context = await agent.loadContext(prompt);
+    const response = await agent.runToolLoop(task, prompt, { extraContext: context });
+
     agent.emit('agent:freeform_response', { taskId: task.id, response });
   },
 };
