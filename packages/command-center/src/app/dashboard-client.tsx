@@ -901,10 +901,15 @@ export default function DashboardClient() {
             {budget ? (
               <div>
                 <div className="text-3xl font-semibold text-gray-100 tabular-nums">
-                  ${budget.remaining.toFixed(0)}
+                  ${budget.remaining.toFixed(2)}
                 </div>
+                {/* Whole-dollar rounding used to make small spend
+                    (e.g. $0.03 of $30) round to the same number as the cap
+                    and look like nothing was tracked — cents fix that, and
+                    spend is now shown explicitly rather than only implied
+                    by remaining vs. cap. */}
                 <div className="text-xs text-gray-600 mb-2">
-                  left of ${budget.budget.toFixed(0)}
+                  left of ${budget.budget.toFixed(0)} · ${budget.spent.toFixed(2)} spent
                 </div>
                 <div
                   className="h-1.5 rounded-full overflow-hidden"
