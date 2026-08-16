@@ -119,6 +119,8 @@ export default function GtmPage() {
   const [product, setProduct] = useState<GtmProductInput>(EMPTY_PRODUCT);
   const [draftContent, setDraftContent] = useState(false);
   const [draftPlatform, setDraftPlatform] = useState<ContentPlatform>('linkedin');
+  const [draftCalendar, setDraftCalendar] = useState(false);
+  const [calendarPlatforms, setCalendarPlatforms] = useState<ContentPlatform[]>(['linkedin']);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gtm, setGtm] = useState<GtmStrategy | null>(null);
@@ -249,6 +251,9 @@ export default function GtmPage() {
           body: JSON.stringify({
             ...product,
             ...(draftContent ? { contentDraftPlatform: draftPlatform } : {}),
+            ...(draftCalendar && calendarPlatforms.length > 0
+              ? { contentCalendarPlatforms: calendarPlatforms }
+              : {}),
           }),
         }),
         fetch('/api/tasks/gtm/psych', {
@@ -523,6 +528,37 @@ export default function GtmPage() {
                     background: draftPlatform === p ? '#ffb34720' : 'transparent',
                     border: `1px solid ${draftPlatform === p ? '#ffb347' : '#1e2040'}`,
                     color: draftPlatform === p ? '#ffb347' : '#475569',
+                  }}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          )}
+          <label className="flex items-center gap-2 mb-3 text-xs text-gray-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={draftCalendar}
+              onChange={(e) => setDraftCalendar(e.target.checked)}
+            />
+            Also generate a full content calendar from this launch timeline (asks for approval
+            separately)
+          </label>
+          {draftCalendar && (
+            <div className="flex gap-2 mb-3">
+              {CONTENT_PLATFORMS.map((p) => (
+                <button
+                  key={p}
+                  onClick={() =>
+                    setCalendarPlatforms((prev) =>
+                      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
+                    )
+                  }
+                  className="text-xs px-3 py-1 rounded transition-colors capitalize"
+                  style={{
+                    background: calendarPlatforms.includes(p) ? '#ffb34720' : 'transparent',
+                    border: `1px solid ${calendarPlatforms.includes(p) ? '#ffb347' : '#1e2040'}`,
+                    color: calendarPlatforms.includes(p) ? '#ffb347' : '#475569',
                   }}
                 >
                   {p}

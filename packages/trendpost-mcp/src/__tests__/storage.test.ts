@@ -15,14 +15,16 @@ afterEach(() => {
 // ── Posts ─────────────────────────────────────────────────────────────────
 
 describe('TrendPostStorage — createPost()', () => {
-  it('returns a post with correct fields and status=draft', () => {
+  it('returns a post with correct fields and status=scheduled', () => {
     const storage = freshStorage();
     const scheduledAt = new Date('2026-07-01T10:00:00Z');
     const post = storage.createPost({ content: 'Hello!', platform: 'twitter', scheduledAt });
     expect(post.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(post.content).toBe('Hello!');
     expect(post.platform).toBe('twitter');
-    expect(post.status).toBe('draft');
+    // createPost() is only ever reached after schedulePostSkill's approval
+    // gate passes, so a post that exists here already is scheduled.
+    expect(post.status).toBe('scheduled');
     expect(post.scheduledAt.toISOString()).toBe(scheduledAt.toISOString());
     expect(post.tags).toEqual([]);
     expect(post.campaignId).toBeUndefined();
@@ -181,6 +183,22 @@ describe('TrendPostStorage — createIdea()', () => {
     expect(idea.platform).toBe('linkedin');
     expect(idea.status).toBe('idea');
     expect(idea.createdAt).toBeInstanceOf(Date);
+    expect(idea.scheduledFor).toBeUndefined();
+    expect(idea.campaignId).toBeUndefined();
+  });
+
+  it('stores scheduledFor and campaignId when provided', () => {
+    const storage = freshStorage();
+    const scheduledFor = new Date('2026-08-01T09:00:00Z');
+    const idea = storage.createIdea({
+      topic: 'Launch week',
+      angle: 'announcement',
+      platform: 'twitter',
+      scheduledFor,
+      campaignId: 'camp-1',
+    });
+    expect(idea.scheduledFor?.toISOString()).toBe(scheduledFor.toISOString());
+    expect(idea.campaignId).toBe('camp-1');
   });
 });
 
@@ -201,5 +219,34 @@ describe('TrendPostStorage — listIdeas()', () => {
     expect(all).toHaveLength(1);
     const none = storage.listIdeas('approved');
     expect(none).toHaveLength(0);
+  });
+});
+
+// ── Campaigns ────────────────────────────────────────────────────────────
+
+describe('TrendPostStorage — createCampaign()', () => {
+  it('returns a campaign with correct fields', () => {
+    const storage = freshStorage();
+    const campaign = storage.createCampaign({ name: 'Product launch', source: 'manual' });
+    expect(campaign.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(campaign.name).toBe('Product launch');
+    expect(campaign.source).toBe('manual');
+    expect(campaign.createdAt).toBeInstanceOf(Date);
+  });
+});
+
+describe('TrendPostStorage — listCampaigns()', () => {
+  it('returns all campaigns ordered by createdAt DESC', () => {
+    const storage = freshStorage();
+    storage.createCampaign({ name: 'A', source: 'manual' });
+    storage.createCampaign({ name: 'B', source: 'gtm' });
+    const campaigns = storage.listCampaigns();
+    expect(campaigns).toHaveLength(2);
+    expect(campaigns.map((c) => c.name)).toEqual(['B', 'A']);
+  });
+
+  it('returns an empty array when none exist', () => {
+    const storage = freshStorage();
+    expect(storage.listCampaigns()).toEqual([]);
   });
 });

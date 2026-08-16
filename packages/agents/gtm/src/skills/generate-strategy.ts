@@ -8,6 +8,7 @@ import { extractJson } from './extract-json';
 export interface GenerateStrategyInput {
   product: GtmProductInput;
   offerContentDraft?: { platform: Platform; tone?: string };
+  offerContentCalendar?: { platforms: Platform[] };
 }
 
 export const generateStrategySkill: Skill<GenerateStrategyInput, void> = {
@@ -16,7 +17,7 @@ export const generateStrategySkill: Skill<GenerateStrategyInput, void> = {
   description: 'Generate a concrete go-to-market strategy for a product.',
 
   async execute({ agent, task, input }) {
-    const { product, offerContentDraft } = input;
+    const { product, offerContentDraft, offerContentCalendar } = input;
 
     const raw = await agent.think(buildGtmPrompt(product));
     const gtm = extractJson<GtmStrategy>(raw);
@@ -48,6 +49,27 @@ export const generateStrategySkill: Skill<GenerateStrategyInput, void> = {
           `Founder advantage: ${gtm.founder_advantage}`,
         ].join('\n');
         const handoffTask = ContentTasks.generatePost(topic, platform, tone, extraContext);
+        agent.emit('agent:handoff_requested', { task: handoffTask });
+      }
+    }
+
+    // A second, independent handoff option — turns the whole launch_timeline
+    // into a dated content calendar under a campaign, instead of just one
+    // announcement post. Both options can be requested together; they serve
+    // different needs and neither depends on the other's outcome.
+    if (offerContentCalendar) {
+      const { platforms } = offerContentCalendar;
+      const calendarApproved = await agent.proposeAction(
+        task,
+        `Generate a full content calendar for ${product.name} from this launch timeline?`,
+        { product: product.name, platforms }
+      );
+      if (calendarApproved) {
+        const handoffTask = ContentTasks.generatePlanFromTimeline(
+          product.name,
+          gtm.launch_timeline,
+          platforms
+        );
         agent.emit('agent:handoff_requested', { task: handoffTask });
       }
     }

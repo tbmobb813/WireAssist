@@ -2,6 +2,35 @@ import Anthropic from '@anthropic-ai/sdk';
 import { TrendPostStorage, Platform, PostStatus } from './storage';
 import type { MCPClient } from '@wireassist/core';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Spreads `count` items evenly across the [tomorrow, tomorrow + weeksAhead*7)
+// window — extracted as a pure function so the date math is unit-testable
+// without mocking the LLM client that content_generate_plan also calls.
+export function distributeDates(
+  count: number,
+  weeksAhead: number,
+  from: Date = new Date()
+): Date[] {
+  if (count <= 0) return [];
+  const totalDays = Math.max(weeksAhead, 1) * 7;
+  const start = new Date(from.getTime() + DAY_MS);
+  start.setHours(9, 0, 0, 0);
+  const step = totalDays / count;
+  return Array.from(
+    { length: count },
+    (_, i) => new Date(start.getTime() + Math.round(i * step) * DAY_MS)
+  );
+}
+
+// Parses a leading integer out of a GTM timeline week label (e.g. "Week 1",
+// "Week 2: Launch") — falls back to sequential position (1-indexed) when the
+// label doesn't start with a number, so a week is never skipped.
+export function timelineWeekNumber(label: string, fallbackIndex: number): number {
+  const match = label.match(/\d+/);
+  return match ? parseInt(match[0], 10) : fallbackIndex + 1;
+}
+
 const MODEL = process.env.WIREASSIST_MODEL ?? 'claude-sonnet-5';
 
 function parseJson<T>(raw: string, context: string): T {
@@ -78,11 +107,13 @@ Return ONLY the post content. No labels, no explanations, no quotes around it.`;
       platforms,
       weeksAhead = 1,
       postsPerWeek = 3,
+      campaignId,
     } = params as {
       businessContext: string;
       platforms: Platform[];
       weeksAhead?: number;
       postsPerWeek?: number;
+      campaignId?: string;
     };
 
     const totalPosts = weeksAhead * postsPerWeek;
@@ -127,15 +158,70 @@ Return only valid JSON array. No markdown fences.`;
       }>
     >(raw, 'content_generate_plan');
 
-    const saved = ideas.map((idea) =>
+    const dates = distributeDates(ideas.length, weeksAhead);
+    const saved = ideas.map((idea, i) =>
       storage.createIdea({
         topic: idea.topic,
         angle: idea.angle,
         platform: idea.platform,
+        scheduledFor: dates[i],
+        campaignId,
       })
     );
 
     return { ideas: saved, totalGenerated: saved.length };
+  });
+
+  // ── GENERATE CONTENT PLAN FROM A GTM LAUNCH TIMELINE ───────────
+  // Deterministic mapping, no LLM call — GTM already did the planning work;
+  // this just turns its weekly timeline into dated content ideas.
+  mcp.register('content_generate_plan_from_timeline', async (params) => {
+    const { productName, timeline, platforms, campaignName } = params as {
+      productName: string;
+      timeline: { week: string; focus: string; tasks: string[] }[];
+      platforms: Platform[];
+      campaignName?: string;
+    };
+
+    const campaign = storage.createCampaign({
+      name: campaignName ?? `${productName} launch`,
+      source: 'gtm',
+    });
+
+    const now = new Date();
+    const ideas = timeline.map((week, i) => {
+      const weekNumber = timelineWeekNumber(week.week, i);
+      const scheduledFor = new Date(now.getTime() + (weekNumber - 1) * 7 * DAY_MS);
+      scheduledFor.setHours(9, 0, 0, 0);
+      const platform = platforms[i % platforms.length];
+
+      return storage.createIdea({
+        topic: week.focus,
+        angle: week.tasks.join('; '),
+        platform,
+        scheduledFor,
+        campaignId: campaign.id,
+      });
+    });
+
+    return { ideas, totalGenerated: ideas.length, campaign };
+  });
+
+  // ── CAMPAIGNS ───────────────────────────────────────────────────
+  mcp.register('content_create_campaign', async (params) => {
+    const { name } = params as { name: string };
+    return storage.createCampaign({ name, source: 'manual' });
+  });
+
+  mcp.register('content_list_campaigns', async () => {
+    return storage.listCampaigns();
+  });
+
+  // ── MARK PUBLISHED ──────────────────────────────────────────────
+  mcp.register('content_mark_published', async (params) => {
+    const { postId } = params as { postId: string };
+    storage.updatePostStatus(postId, 'published');
+    return storage.getPost(postId);
   });
 
   // ── SCHEDULE POST ─────────────────────────────────────────────

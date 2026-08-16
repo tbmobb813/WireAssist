@@ -36,6 +36,10 @@ const CONTENT_TOOLS = [
   'content_delete_post',
   'content_list_ideas',
   'content_analyze',
+  'content_generate_plan_from_timeline',
+  'content_create_campaign',
+  'content_list_campaigns',
+  'content_mark_published',
 ];
 
 export class ContentAgent extends BaseAgent {
@@ -103,6 +107,8 @@ function describeToolCall(call: ProviderToolCall): string {
       return `Schedule ${input.platform} post for ${input.scheduledAt}`;
     case 'content_delete_post':
       return `Delete post ${input.postId}`;
+    case 'content_generate_plan_from_timeline':
+      return `Generate content calendar from launch timeline for "${input.productName}"`;
     default:
       return `Run tool "${call.name}"`;
   }

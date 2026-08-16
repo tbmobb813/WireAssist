@@ -52,6 +52,18 @@ describe('GtmTasks.generateStrategy()', () => {
       tone: 'direct',
     });
   });
+
+  it('leaves offerContentCalendar undefined when not provided', () => {
+    const t = GtmTasks.generateStrategy(product);
+    expect((t.input as { offerContentCalendar?: unknown }).offerContentCalendar).toBeUndefined();
+  });
+
+  it('carries offerContentCalendar through when provided', () => {
+    const t = GtmTasks.generateStrategy(product, undefined, { platforms: ['linkedin', 'twitter'] });
+    expect((t.input as { offerContentCalendar?: unknown }).offerContentCalendar).toEqual({
+      platforms: ['linkedin', 'twitter'],
+    });
+  });
 });
 
 describe('GtmTasks.generatePsychTactics()', () => {

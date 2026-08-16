@@ -748,7 +748,12 @@ app.post('/api/tasks/gtm/strategy', async (c) => {
         tone: typeof body.contentDraftTone === 'string' ? body.contentDraftTone : undefined,
       }
     : undefined;
-  const task = GtmTasks.generateStrategy(product, offerContentDraft);
+  const calendarPlatforms = Array.isArray(body.contentCalendarPlatforms)
+    ? body.contentCalendarPlatforms.filter(isValidPlatform)
+    : [];
+  const offerContentCalendar =
+    calendarPlatforms.length > 0 ? { platforms: calendarPlatforms } : undefined;
+  const task = GtmTasks.generateStrategy(product, offerContentDraft, offerContentCalendar);
   queueGtmTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
@@ -807,6 +812,32 @@ app.get('/api/content/posts', (c) => {
 app.get('/api/content/ideas', (c) => {
   if (!agentReady) return c.json([]);
   return c.json(trendpostStorage.listIdeas());
+});
+
+app.get('/api/content/campaigns', (c) => {
+  if (!agentReady) return c.json([]);
+  return c.json(trendpostStorage.listCampaigns());
+});
+
+app.post('/api/content/campaigns', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  const body = await c.req.json().catch(() => ({}));
+  if (typeof body.name !== 'string' || body.name.trim().length === 0) {
+    return c.json({ error: 'name required' }, 400);
+  }
+  return c.json(trendpostStorage.createCampaign({ name: body.name.trim(), source: 'manual' }), 201);
+});
+
+// Direct bookkeeping, not an agent task or approval: the user is confirming
+// something they already did outside the system (posted it manually), not
+// asking the agent to take an action.
+app.post('/api/content/posts/:id/publish', (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  const id = c.req.param('id');
+  const existing = trendpostStorage.getPost(id);
+  if (!existing) return c.json({ error: 'post not found' }, 404);
+  trendpostStorage.updatePostStatus(id, 'published');
+  return c.json(trendpostStorage.getPost(id));
 });
 
 // ── MEMORY ────────────────────────────────────────────────────────────────
