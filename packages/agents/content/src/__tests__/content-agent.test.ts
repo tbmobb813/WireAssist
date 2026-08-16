@@ -65,6 +65,10 @@ describe('ContentAgent — chat tool-calling loop', () => {
         'content_delete_post',
         'content_list_ideas',
         'content_analyze',
+        'content_generate_plan_from_timeline',
+        'content_create_campaign',
+        'content_list_campaigns',
+        'content_mark_published',
       ].sort()
     );
   });
@@ -82,6 +86,39 @@ describe('ContentAgent — chat tool-calling loop', () => {
     expect(result).toEqual({ result: [{ id: 'p1' }], isError: false });
     expect(deps.approval.request).not.toHaveBeenCalled();
     expect(deps.mcp.call).toHaveBeenCalledWith('content_list_posts', { daysAhead: 7 });
+  });
+
+  it('executeToolCall() runs content_mark_published immediately, with no approval', async () => {
+    const deps = makeDeps({
+      mcp: { call: jest.fn().mockResolvedValue({ id: 'p1', status: 'published' }) },
+    });
+    const agent = new ContentAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'content_mark_published',
+      input: { postId: 'p1' },
+    });
+
+    expect(result).toEqual({ result: { id: 'p1', status: 'published' }, isError: false });
+    expect(deps.approval.request).not.toHaveBeenCalled();
+  });
+
+  it('executeToolCall() gates content_generate_plan_from_timeline behind approval', async () => {
+    const deps = makeDeps();
+    const agent = new ContentAgent(deps);
+
+    await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'content_generate_plan_from_timeline',
+      input: { productName: 'StatusWatch', timeline: [], platforms: ['linkedin'] },
+    });
+
+    expect(deps.approval.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: expect.stringContaining('Generate content calendar from launch timeline'),
+      })
+    );
   });
 
   it('executeToolCall() gates a mutating tool behind approval and executes it once approved', async () => {

@@ -26,6 +26,17 @@ export interface ContentIdea {
   platform: Platform;
   status: 'idea' | 'approved' | 'written' | 'scheduled';
   createdAt: Date;
+  scheduledFor?: Date;
+  campaignId?: string;
+}
+
+export type CampaignSource = 'manual' | 'gtm';
+
+export interface Campaign {
+  id: string;
+  name: string;
+  source: CampaignSource;
+  createdAt: Date;
 }
 
 export class TrendPostStorage {
@@ -61,10 +72,29 @@ export class TrendPostStorage {
         created_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS campaigns (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'manual',
+        created_at TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_posts_status ON scheduled_posts(status);
       CREATE INDEX IF NOT EXISTS idx_posts_scheduled ON scheduled_posts(scheduled_at);
       CREATE INDEX IF NOT EXISTS idx_posts_platform ON scheduled_posts(platform);
     `);
+
+    // content_ideas predates scheduledFor/campaignId — retrofit existing
+    // installs with a guarded ALTER TABLE rather than a full migration
+    // framework, since these are the only two columns ever added post-launch.
+    this.addColumnIfMissing('content_ideas', 'scheduled_for', 'TEXT');
+    this.addColumnIfMissing('content_ideas', 'campaign_id', 'TEXT');
+  }
+
+  private addColumnIfMissing(table: string, column: string, type: string): void {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (columns.some((c) => c.name === column)) return;
+    this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
 
   // ─── POSTS ────────────────────────────────────────────────────
@@ -79,11 +109,14 @@ export class TrendPostStorage {
     const id = randomUUID();
     const now = new Date();
 
+    // Status starts at 'scheduled', not 'draft' — createPost() is only ever
+    // reached after schedulePostSkill's approval gate passes, so a post that
+    // exists here already is scheduled, not still awaiting that decision.
     this.db
       .prepare(
         `
       INSERT INTO scheduled_posts (id, content, platform, scheduled_at, status, created_at, tags, campaign_id)
-      VALUES (?, ?, ?, ?, 'draft', ?, ?, ?)
+      VALUES (?, ?, ?, ?, 'scheduled', ?, ?, ?)
     `
       )
       .run(
@@ -160,16 +193,30 @@ export class TrendPostStorage {
 
   // ─── IDEAS ────────────────────────────────────────────────────
 
-  createIdea(params: { topic: string; angle: string; platform: Platform }): ContentIdea {
+  createIdea(params: {
+    topic: string;
+    angle: string;
+    platform: Platform;
+    scheduledFor?: Date;
+    campaignId?: string;
+  }): ContentIdea {
     const id = randomUUID();
     this.db
       .prepare(
         `
-      INSERT INTO content_ideas (id, topic, angle, platform, status, created_at)
-      VALUES (?, ?, ?, ?, 'idea', ?)
+      INSERT INTO content_ideas (id, topic, angle, platform, status, created_at, scheduled_for, campaign_id)
+      VALUES (?, ?, ?, ?, 'idea', ?, ?, ?)
     `
       )
-      .run(id, params.topic, params.angle, params.platform, new Date().toISOString());
+      .run(
+        id,
+        params.topic,
+        params.angle,
+        params.platform,
+        new Date().toISOString(),
+        params.scheduledFor?.toISOString() ?? null,
+        params.campaignId ?? null
+      );
 
     const row = this.db.prepare('SELECT * FROM content_ideas WHERE id = ?').get(id) as Record<
       string,
@@ -184,6 +231,35 @@ export class TrendPostStorage {
       : 'SELECT * FROM content_ideas ORDER BY created_at DESC';
     const rows = this.db.prepare(sql).all(...(status ? [status] : [])) as Record<string, unknown>[];
     return rows.map((r) => this.mapIdea(r));
+  }
+
+  // ─── CAMPAIGNS ────────────────────────────────────────────────
+
+  createCampaign(params: { name: string; source: CampaignSource }): Campaign {
+    const id = randomUUID();
+    const now = new Date();
+    this.db
+      .prepare(
+        `
+      INSERT INTO campaigns (id, name, source, created_at)
+      VALUES (?, ?, ?, ?)
+    `
+      )
+      .run(id, params.name, params.source, now.toISOString());
+
+    return { id, name: params.name, source: params.source, createdAt: now };
+  }
+
+  listCampaigns(): Campaign[] {
+    const rows = this.db
+      .prepare('SELECT * FROM campaigns ORDER BY created_at DESC')
+      .all() as Record<string, unknown>[];
+    return rows.map((r) => ({
+      id: r.id as string,
+      name: r.name as string,
+      source: r.source as CampaignSource,
+      createdAt: new Date(r.created_at as string),
+    }));
   }
 
   private mapPost(r: Record<string, unknown>): ScheduledPost {
@@ -209,6 +285,8 @@ export class TrendPostStorage {
       platform: r.platform as Platform,
       status: r.status as ContentIdea['status'],
       createdAt: new Date(r.created_at as string),
+      scheduledFor: r.scheduled_for ? new Date(r.scheduled_for as string) : undefined,
+      campaignId: (r.campaign_id as string | null) ?? undefined,
     };
   }
 }

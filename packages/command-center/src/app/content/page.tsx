@@ -14,6 +14,25 @@ interface ScheduledPost {
   scheduledAt: string;
   status: string;
   tags: string[];
+  campaignId?: string;
+}
+
+interface ContentIdea {
+  id: string;
+  topic: string;
+  angle: string;
+  platform: Platform;
+  status: string;
+  createdAt: string;
+  scheduledFor?: string;
+  campaignId?: string;
+}
+
+interface Campaign {
+  id: string;
+  name: string;
+  source: 'manual' | 'gtm';
+  createdAt: string;
 }
 
 interface ContentApproval {
@@ -40,6 +59,9 @@ const platformColor: Record<string, string> = {
 
 export default function ContentPage() {
   const [posts, setPosts] = useState<ScheduledPost[]>([]);
+  const [ideas, setIdeas] = useState<ContentIdea[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
   const [pending, setPending] = useState<ContentApproval[]>([]);
   const [acting, setActing] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -72,6 +94,16 @@ export default function ContentPage() {
     if (res.ok) setPosts(await res.json());
   }, []);
 
+  const fetchIdeas = useCallback(async () => {
+    const res = await fetch('/api/content/ideas');
+    if (res.ok) setIdeas(await res.json());
+  }, []);
+
+  const fetchCampaigns = useCallback(async () => {
+    const res = await fetch('/api/content/campaigns');
+    if (res.ok) setCampaigns(await res.json());
+  }, []);
+
   const fetchPending = useCallback(async () => {
     const res = await fetch('/api/approvals');
     if (!res.ok) return;
@@ -79,16 +111,31 @@ export default function ContentPage() {
     setPending(all.filter((a) => a.agentRole === 'content'));
   }, []);
 
+  const markPublished = async (postId: string) => {
+    setActing(postId);
+    const res = await fetch(`/api/content/posts/${postId}/publish`, { method: 'POST' });
+    if (res.ok) await fetchPosts();
+    setActing(null);
+  };
+
   useEffect(() => {
     fetchPosts();
+    fetchIdeas();
+    fetchCampaigns();
     fetchPending();
-  }, [fetchPosts, fetchPending]);
+  }, [fetchPosts, fetchIdeas, fetchCampaigns, fetchPending]);
 
   useAgentEvents(
     useCallback(
       (e) => {
         if (e.event === 'content_generated' || e.event === 'content_plan_generated') {
           setGenerating(false);
+        }
+        if (e.event === 'content_plan_generated') {
+          // Covers both the weekly-plan generator and a GTM-timeline handoff —
+          // either way, new (possibly campaign-linked) ideas may now exist.
+          fetchIdeas();
+          fetchCampaigns();
         }
         if (e.event === 'waiting_approval' || e.event === 'approval_resolved') {
           fetchPending();
@@ -101,7 +148,7 @@ export default function ContentPage() {
           setError(typeof e.payload.error === 'string' ? e.payload.error : 'Task failed');
         }
       },
-      [fetchPosts, fetchPending]
+      [fetchPosts, fetchIdeas, fetchCampaigns, fetchPending]
     )
   );
 
@@ -168,19 +215,44 @@ export default function ContentPage() {
     }
   };
 
-  // Group posts by date for calendar view
-  const postsByDate = posts.reduce(
-    (acc, post) => {
-      const date = new Date(post.scheduledAt).toLocaleDateString('en-US', {
+  const campaignName = (id?: string) => campaigns.find((c) => c.id === id)?.name;
+
+  const filteredPosts = campaignFilter
+    ? posts.filter((p) => p.campaignId === campaignFilter)
+    : posts;
+  const filteredIdeas = campaignFilter
+    ? ideas.filter((i) => i.campaignId === campaignFilter)
+    : ideas;
+
+  type CalendarItem =
+    | { kind: 'post'; date: Date; post: ScheduledPost }
+    | { kind: 'idea'; date: Date; idea: ContentIdea };
+
+  const datedIdeas = filteredIdeas.filter((i) => i.scheduledFor);
+  const unscheduledIdeas = filteredIdeas.filter((i) => !i.scheduledFor);
+
+  const calendarItems: CalendarItem[] = [
+    ...filteredPosts.map(
+      (post): CalendarItem => ({ kind: 'post', date: new Date(post.scheduledAt), post })
+    ),
+    ...datedIdeas.map(
+      (idea): CalendarItem => ({ kind: 'idea', date: new Date(idea.scheduledFor!), idea })
+    ),
+  ].sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  // Group calendar items by real date for a date-headered list view.
+  const itemsByDate = calendarItems.reduce(
+    (acc, item) => {
+      const date = item.date.toLocaleDateString('en-US', {
         weekday: 'short',
         month: 'short',
         day: 'numeric',
       });
       if (!acc[date]) acc[date] = [];
-      acc[date].push(post);
+      acc[date].push(item);
       return acc;
     },
-    {} as Record<string, ScheduledPost[]>
+    {} as Record<string, CalendarItem[]>
   );
 
   return (
@@ -437,22 +509,40 @@ export default function ContentPage() {
           )}
 
           <div>
-            <div className="text-xs tracking-widest text-gray-500 mb-4">
-              CONTENT CALENDAR — NEXT 14 DAYS
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-xs tracking-widest text-gray-500">CONTENT CALENDAR</div>
+              {campaigns.length > 0 && (
+                <div className="flex gap-2 flex-wrap">
+                  {campaigns.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => setCampaignFilter((prev) => (prev === c.id ? null : c.id))}
+                      className="text-xs px-3 py-1 rounded transition-colors"
+                      style={{
+                        background: campaignFilter === c.id ? '#ffb34720' : 'transparent',
+                        border: `1px solid ${campaignFilter === c.id ? '#ffb347' : '#1e2040'}`,
+                        color: campaignFilter === c.id ? '#ffb347' : '#475569',
+                      }}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {Object.keys(postsByDate).length === 0 ? (
+            {Object.keys(itemsByDate).length === 0 ? (
               <div
                 className="rounded-lg border p-12 text-center"
                 style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
               >
                 <div className="text-gray-600 text-sm">
-                  No scheduled posts. Approve generated content above to populate the calendar.
+                  Nothing scheduled yet. Approve generated content above to populate the calendar.
                 </div>
               </div>
             ) : (
               <div className="space-y-3">
-                {Object.entries(postsByDate).map(([date, datePosts]) => (
+                {Object.entries(itemsByDate).map(([date, dateItems]) => (
                   <div
                     key={date}
                     className="rounded-lg border overflow-hidden"
@@ -464,43 +554,109 @@ export default function ContentPage() {
                     >
                       {date}
                     </div>
-                    {datePosts.map((post) => (
-                      <div
-                        key={post.id}
-                        className="px-4 py-3 flex items-start gap-3"
-                        style={{ borderBottom: '1px solid #0d0d1a' }}
-                      >
-                        <span
-                          className="text-xs px-2 py-0.5 rounded mt-0.5 flex-shrink-0"
-                          style={{
-                            color: platformColor[post.platform],
-                            background: `${platformColor[post.platform]}20`,
-                            border: `1px solid ${platformColor[post.platform]}40`,
-                          }}
+                    {dateItems.map((item) => {
+                      const platform =
+                        item.kind === 'post' ? item.post.platform : item.idea.platform;
+                      const campaignId =
+                        item.kind === 'post' ? item.post.campaignId : item.idea.campaignId;
+                      const key = item.kind === 'post' ? item.post.id : item.idea.id;
+                      return (
+                        <div
+                          key={key}
+                          className="px-4 py-3 flex items-start gap-3"
+                          style={{ borderBottom: '1px solid #0d0d1a' }}
                         >
-                          {post.platform}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-300 truncate">{post.content}</p>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-xs text-gray-600">
-                              {new Date(post.scheduledAt).toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </span>
-                            <span
-                              className="text-xs tracking-widest"
-                              style={{ color: post.status === 'published' ? '#00ff9d' : '#4fc3f7' }}
-                            >
-                              {post.status.toUpperCase()}
-                            </span>
+                          <span
+                            className="text-xs px-2 py-0.5 rounded mt-0.5 flex-shrink-0"
+                            style={{
+                              color: platformColor[platform],
+                              background: `${platformColor[platform]}20`,
+                              border: `1px solid ${platformColor[platform]}40`,
+                            }}
+                          >
+                            {platform}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-300 truncate">
+                              {item.kind === 'post' ? item.post.content : item.idea.topic}
+                            </p>
+                            <div className="flex items-center gap-3 mt-1 flex-wrap">
+                              <span className="text-xs text-gray-600">
+                                {item.date.toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                              <span
+                                className="text-xs tracking-widest"
+                                style={{
+                                  color:
+                                    item.kind === 'post' && item.post.status === 'published'
+                                      ? '#00ff9d'
+                                      : '#4fc3f7',
+                                }}
+                              >
+                                {item.kind === 'post' ? item.post.status.toUpperCase() : 'IDEA'}
+                              </span>
+                              {campaignName(campaignId) && (
+                                <span className="text-xs text-gray-600">
+                                  · {campaignName(campaignId)}
+                                </span>
+                              )}
+                            </div>
                           </div>
+                          {item.kind === 'post' && item.post.status !== 'published' && (
+                            <button
+                              onClick={() => markPublished(item.post.id)}
+                              disabled={acting === item.post.id}
+                              className="text-xs px-3 py-1 rounded flex-shrink-0 transition-colors"
+                              style={{
+                                background: '#00ff9d20',
+                                border: '1px solid #00ff9d40',
+                                color: '#00ff9d',
+                              }}
+                            >
+                              {acting === item.post.id ? '...' : 'Mark as posted'}
+                            </button>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {unscheduledIdeas.length > 0 && (
+              <div className="mt-6">
+                <div className="text-xs tracking-widest text-gray-500 mb-4">UNSCHEDULED IDEAS</div>
+                <div
+                  className="rounded-lg border overflow-hidden"
+                  style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
+                >
+                  {unscheduledIdeas.map((idea) => (
+                    <div
+                      key={idea.id}
+                      className="px-4 py-3 flex items-start gap-3"
+                      style={{ borderBottom: '1px solid #0d0d1a' }}
+                    >
+                      <span
+                        className="text-xs px-2 py-0.5 rounded mt-0.5 flex-shrink-0"
+                        style={{
+                          color: platformColor[idea.platform],
+                          background: `${platformColor[idea.platform]}20`,
+                          border: `1px solid ${platformColor[idea.platform]}40`,
+                        }}
+                      >
+                        {idea.platform}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-300 truncate">{idea.topic}</p>
+                        <p className="text-xs text-gray-600 mt-1">{idea.angle}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

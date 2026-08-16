@@ -96,15 +96,74 @@ export const CONTENT_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
       required: ['postId'],
     },
   },
+  content_generate_plan_from_timeline: {
+    name: 'content_generate_plan_from_timeline',
+    description:
+      'Turn a GTM launch timeline into a dated content calendar under a new campaign — one idea per timeline week. Requires human approval.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        productName: { type: 'string' },
+        timeline: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              week: { type: 'string' },
+              focus: { type: 'string' },
+              tasks: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        },
+        platforms: { type: 'array', items: { type: 'string', enum: PLATFORM_ENUM } },
+        campaignName: { type: 'string' },
+      },
+      required: ['productName', 'timeline', 'platforms'],
+    },
+  },
+  // ── Bookkeeping — no persisted side effect beyond local status ──
+  content_create_campaign: {
+    name: 'content_create_campaign',
+    description: 'Create a campaign to group related content ideas and posts under.',
+    inputSchema: {
+      type: 'object',
+      properties: { name: { type: 'string' } },
+      required: ['name'],
+    },
+  },
+  content_list_campaigns: {
+    name: 'content_list_campaigns',
+    description: 'List all campaigns.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  content_mark_published: {
+    name: 'content_mark_published',
+    description:
+      'Mark a scheduled post as published — for self-reporting a post you already published manually, not for triggering an actual publish action.',
+    inputSchema: {
+      type: 'object',
+      properties: { postId: { type: 'string' } },
+      required: ['postId'],
+    },
+  },
 };
 
-// Tool names that only ever read data or produce ephemeral (non-persisted)
-// output — safe to execute immediately in the chat tool loop without going
-// through the approval queue. Everything else in CONTENT_TOOL_SCHEMAS
-// persists or deletes state and must be proposed for approval first.
+// Tool names safe to execute immediately in the chat tool loop without going
+// through the approval queue — either because they only read data / produce
+// ephemeral (non-persisted) output, or because they're low-risk bookkeeping
+// where the user is self-reporting something they already did (creating a
+// grouping label, confirming a manual post) rather than asking the agent to
+// take an external action. Everything else in CONTENT_TOOL_SCHEMAS proposes
+// or schedules real content and must be approved first.
 export const READ_ONLY_CONTENT_TOOLS = new Set<string>([
   'content_generate',
   'content_list_posts',
   'content_list_ideas',
   'content_analyze',
+  'content_list_campaigns',
+  // Bookkeeping only — the user is self-reporting something they already
+  // did (created a grouping label, published a post themselves), not asking
+  // the agent to take an external action.
+  'content_create_campaign',
+  'content_mark_published',
 ]);

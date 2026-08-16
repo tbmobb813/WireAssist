@@ -176,6 +176,34 @@ describe('ContentTasks.freeform()', () => {
   });
 });
 
+describe('ContentTasks.generatePlanFromTimeline()', () => {
+  const timeline = [
+    { week: 'Week 1', focus: 'Teaser', tasks: ['Post teaser'] },
+    { week: 'Week 2', focus: 'Launch', tasks: ['Announce'] },
+  ];
+
+  it('produces correct task shape', () => {
+    const t = ContentTasks.generatePlanFromTimeline('StatusWatch', timeline, ['linkedin']);
+    expect(t.agentRole).toBe('content');
+    expect(t.approvalRequired).toBe(true);
+    const input = t.input as {
+      type: string;
+      productName: string;
+      timeline: unknown;
+      platforms: unknown;
+    };
+    expect(input.type).toBe('generate_plan_from_timeline');
+    expect(input.productName).toBe('StatusWatch');
+    expect(input.timeline).toEqual(timeline);
+    expect(input.platforms).toEqual(['linkedin']);
+  });
+
+  it('description references the product name', () => {
+    const t = ContentTasks.generatePlanFromTimeline('StatusWatch', timeline, ['linkedin']);
+    expect(t.description).toContain('StatusWatch');
+  });
+});
+
 describe('ContentTasks — unique ids', () => {
   it('every task gets a unique uuid id', () => {
     const ids = [

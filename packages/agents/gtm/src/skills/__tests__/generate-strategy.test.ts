@@ -30,7 +30,10 @@ const GTM_JSON = JSON.stringify({
   },
   organic_channels: [],
   paid_channels: [],
-  launch_timeline: [],
+  launch_timeline: [
+    { week: 'Week 1', focus: 'Pre-launch teaser', tasks: ['Post teaser'] },
+    { week: 'Week 2', focus: 'Launch day', tasks: ['Announce'] },
+  ],
   kpis: [],
   north_star: '10 paying customers in 30 days',
   founder_advantage: 'Deep DevOps background',
@@ -147,5 +150,106 @@ describe('generateStrategySkill — GTM -> Content handoff', () => {
     });
 
     expect(agent.emit).not.toHaveBeenCalledWith('agent:handoff_requested', expect.anything());
+  });
+});
+
+describe('generateStrategySkill — GTM -> Content calendar handoff', () => {
+  it('does not propose a calendar handoff when offerContentCalendar is not set', async () => {
+    const agent = makeAgentHandle();
+
+    await generateStrategySkill.execute({ agent, task: makeTask(), input: { product } });
+
+    expect(agent.proposeAction).not.toHaveBeenCalled();
+  });
+
+  it('proposes an independent approval for the content calendar when offerContentCalendar is set', async () => {
+    const proposeAction = jest.fn().mockResolvedValue(true);
+    const agent = makeAgentHandle({ proposeAction });
+
+    await generateStrategySkill.execute({
+      agent,
+      task: makeTask(),
+      input: { product, offerContentCalendar: { platforms: ['linkedin', 'twitter'] } },
+    });
+
+    expect(proposeAction).toHaveBeenCalledTimes(1);
+    expect(proposeAction).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining('full content calendar for StatusWatch'),
+      expect.objectContaining({ platforms: ['linkedin', 'twitter'] })
+    );
+  });
+
+  it('emits agent:handoff_requested with a well-formed generate_plan_from_timeline Content task once approved', async () => {
+    const agent = makeAgentHandle();
+
+    await generateStrategySkill.execute({
+      agent,
+      task: makeTask(),
+      input: { product, offerContentCalendar: { platforms: ['linkedin', 'twitter'] } },
+    });
+
+    expect(agent.emit).toHaveBeenCalledWith(
+      'agent:handoff_requested',
+      expect.objectContaining({
+        task: expect.objectContaining({
+          agentRole: 'content',
+          input: expect.objectContaining({
+            type: 'generate_plan_from_timeline',
+            productName: 'StatusWatch',
+            platforms: ['linkedin', 'twitter'],
+            timeline: expect.arrayContaining([
+              expect.objectContaining({ week: 'Week 1', focus: 'Pre-launch teaser' }),
+            ]),
+          }),
+        }),
+      })
+    );
+  });
+
+  it('does not emit a handoff when the calendar approval is declined', async () => {
+    const proposeAction = jest.fn().mockResolvedValue(false);
+    const agent = makeAgentHandle({ proposeAction });
+
+    await generateStrategySkill.execute({
+      agent,
+      task: makeTask(),
+      input: { product, offerContentCalendar: { platforms: ['linkedin'] } },
+    });
+
+    expect(agent.emit).not.toHaveBeenCalledWith('agent:handoff_requested', expect.anything());
+  });
+
+  it('both handoffs can be requested together, independently', async () => {
+    const proposeAction = jest.fn().mockResolvedValue(true);
+    const agent = makeAgentHandle({ proposeAction });
+
+    await generateStrategySkill.execute({
+      agent,
+      task: makeTask(),
+      input: {
+        product,
+        offerContentDraft: { platform: 'linkedin' },
+        offerContentCalendar: { platforms: ['twitter'] },
+      },
+    });
+
+    expect(proposeAction).toHaveBeenCalledTimes(2);
+    expect(agent.emit).toHaveBeenCalledWith(
+      'agent:handoff_requested',
+      expect.objectContaining({
+        task: expect.objectContaining({
+          input: expect.objectContaining({ type: 'generate_post' }),
+        }),
+      })
+    );
+    expect(agent.emit).toHaveBeenCalledWith(
+      'agent:handoff_requested',
+      expect.objectContaining({
+        task: expect.objectContaining({
+          input: expect.objectContaining({ type: 'generate_plan_from_timeline' }),
+        }),
+      })
+    );
   });
 });

@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { AgentTask, ProviderMessage } from '@wireassist/core';
 import type { Platform } from '@wireassist/trendpost-mcp';
+import type { TimelineWeekInput } from './skills/generate-plan-from-timeline';
 
 export const ContentTasks = {
   generatePost(topic: string, platform: Platform, tone?: string, extraContext?: string): AgentTask {
@@ -75,6 +76,23 @@ export const ContentTasks = {
       updatedAt: new Date(),
       input: { type: 'list_scheduled', daysAhead },
       approvalRequired: false,
+    };
+  },
+
+  generatePlanFromTimeline(
+    productName: string,
+    timeline: TimelineWeekInput[],
+    platforms: Platform[]
+  ): AgentTask {
+    return {
+      id: randomUUID(),
+      agentRole: 'content',
+      description: `Generate content calendar from launch timeline for ${productName}`,
+      status: 'queued',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      input: { type: 'generate_plan_from_timeline', productName, timeline, platforms },
+      approvalRequired: true,
     };
   },
 

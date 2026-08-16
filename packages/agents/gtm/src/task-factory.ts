@@ -6,7 +6,8 @@ import type { GtmProductInput } from './types';
 export const GtmTasks = {
   generateStrategy(
     product: GtmProductInput,
-    offerContentDraft?: { platform: Platform; tone?: string }
+    offerContentDraft?: { platform: Platform; tone?: string },
+    offerContentCalendar?: { platforms: Platform[] }
   ): AgentTask {
     return {
       id: randomUUID(),
@@ -15,7 +16,7 @@ export const GtmTasks = {
       status: 'queued',
       createdAt: new Date(),
       updatedAt: new Date(),
-      input: { type: 'generate_gtm', product, offerContentDraft },
+      input: { type: 'generate_gtm', product, offerContentDraft, offerContentCalendar },
       approvalRequired: false,
     };
   },
