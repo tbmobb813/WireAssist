@@ -1,8 +1,9 @@
-import type { Skill } from '@wireassist/core';
+import type { ProviderMessage, Skill } from '@wireassist/core';
 
 export interface FreeformInput {
   type?: string;
   prompt?: string;
+  history?: ProviderMessage[];
 }
 
 export const freeformSkill: Skill<FreeformInput, void> = {
@@ -16,7 +17,10 @@ export const freeformSkill: Skill<FreeformInput, void> = {
         ? input.prompt
         : task.description;
     const context = await agent.loadContext(prompt);
-    const response = await agent.runToolLoop(task, prompt, { extraContext: context });
+    const response = await agent.runToolLoop(task, prompt, {
+      extraContext: context,
+      priorMessages: input.history,
+    });
 
     agent.emit('agent:freeform_response', {
       taskId: task.id,

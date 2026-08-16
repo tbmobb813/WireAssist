@@ -4,6 +4,7 @@ import {
   type MemoryStore,
   type MCPClient,
   type EventBus,
+  type ProviderMessage,
 } from '@wireassist/core';
 import { BaseAgent } from '@wireassist/agent-admin';
 import { loadOpsContext, listWorkflows } from './context-loader';
@@ -19,6 +20,7 @@ export interface RunWorkflowInput {
 export interface OpsFreeformInput {
   type: 'freeform';
   prompt: string;
+  history?: ProviderMessage[];
 }
 
 export type OpsTaskInput = RunWorkflowInput | OpsFreeformInput;

@@ -57,4 +57,10 @@ describe('task-factory', () => {
     const task = createOpsFreeformTask({ prompt: 'status?' });
     expect(task.input).toMatchObject({ type: 'freeform', prompt: 'status?' });
   });
+
+  it('carries history through on a freeform task when provided', () => {
+    const history = [{ role: 'user' as const, content: 'earlier question' }];
+    const task = createOpsFreeformTask({ prompt: 'status?', history });
+    expect(task.input).toMatchObject({ type: 'freeform', prompt: 'status?', history });
+  });
 });

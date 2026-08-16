@@ -7,6 +7,7 @@ import type {
   AgentConfig,
   Skill,
   ProviderResponse,
+  ProviderMessage,
 } from '@wireassist/core';
 import { ProviderFactory } from '@wireassist/core';
 import { BaseAgent } from '../base-agent';
@@ -34,7 +35,7 @@ class TestAgent extends BaseAgent {
   testRunToolLoop(
     task: AgentTask,
     userMessage: string,
-    opts?: { extraContext?: string; maxIterations?: number }
+    opts?: { extraContext?: string; maxIterations?: number; priorMessages?: ProviderMessage[] }
   ) {
     return this.runToolLoop(task, userMessage, opts);
   }
@@ -605,6 +606,49 @@ describe('BaseAgent.runToolLoop()', () => {
     const result = await agent.testRunToolLoop(makeTask(), 'hello');
     expect(result).toBe('the answer');
     expect(completeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('seeds the messages array with priorMessages before the new user turn', async () => {
+    completeMock.mockResolvedValueOnce(stubResponse({ content: 'the answer' }));
+    const { agent } = makeToolAgent();
+    const priorMessages: ProviderMessage[] = [
+      { role: 'user', content: 'earlier question' },
+      { role: 'assistant', content: 'earlier answer' },
+    ];
+
+    await agent.testRunToolLoop(makeTask(), 'follow-up question', { priorMessages });
+
+    expect(completeMock.mock.calls[0][0].messages).toEqual([
+      ...priorMessages,
+      { role: 'user', content: 'follow-up question' },
+    ]);
+  });
+
+  it('folds priorMessages into extraContext when falling back to think() (non-Anthropic provider)', async () => {
+    jest.spyOn(ProviderFactory, 'create').mockReturnValue({
+      type: 'openrouter',
+      currentModel: 'openrouter/auto',
+      complete: completeMock,
+      stream: jest.fn(),
+      listModels: jest.fn(),
+      validateConfig: jest.fn(),
+    });
+    completeMock.mockResolvedValue(stubResponse({ content: 'plain answer' }));
+
+    const config: AgentConfig = {
+      role: 'admin',
+      name: 'Test Agent',
+      systemPrompt: 'sys',
+      tools: [],
+      provider: 'openrouter',
+      toolSchemas: { x: { name: 'x', description: 'd', inputSchema: {} } },
+    };
+    const agent = new TestAgent(config, makeDeps());
+    const priorMessages: ProviderMessage[] = [{ role: 'user', content: 'earlier question' }];
+
+    await agent.testRunToolLoop(makeTask(), 'follow-up', { priorMessages });
+
+    expect(completeMock.mock.calls[0][0].systemPrompt).toContain('User: earlier question');
   });
 
   it('executes a read-only tool call immediately (no approval) and feeds the result back', async () => {

@@ -97,4 +97,22 @@ describe('NixOpsAgent — chat tool-calling loop', () => {
       expect.objectContaining({ taskId: task.id, response: 'Spend is on track.' })
     );
   });
+
+  it('passes input.history through to runToolLoop as priorMessages', async () => {
+    const deps = makeDeps();
+    const agent = new NixOpsAgent(deps);
+    const runToolLoopSpy = jest.spyOn(agent as any, 'runToolLoop').mockResolvedValue('answer');
+    const history = [{ role: 'user' as const, content: 'earlier question' }];
+
+    const task = makeTask({
+      input: { type: 'freeform', prompt: 'follow-up', history },
+    });
+    await agent.run(task);
+
+    expect(runToolLoopSpy).toHaveBeenCalledWith(
+      task,
+      'follow-up',
+      expect.objectContaining({ priorMessages: history })
+    );
+  });
 });
