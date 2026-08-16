@@ -19,6 +19,29 @@ export type RouteDecision =
 
 export class RouterError extends Error {}
 
+export interface ChatHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+// Caps prior turns fed into any single classification/answer call — bounds
+// token cost and defends against an oversized/tampered client payload.
+const MAX_HISTORY_MESSAGES = 20;
+
+// Extracted as a pure function so history-threading is unit-testable
+// without mocking the Anthropic SDK client routeChatMessage() constructs
+// inline.
+export function buildRouterMessages(
+  history: ChatHistoryMessage[] | undefined,
+  instruction: string
+): Anthropic.MessageParam[] {
+  const trimmed = (history ?? []).slice(-MAX_HISTORY_MESSAGES);
+  return [
+    ...trimmed.map((m) => ({ role: m.role, content: m.content })),
+    { role: 'user' as const, content: instruction },
+  ];
+}
+
 const PLATFORM_ENUM = ['twitter', 'linkedin', 'instagram', 'threads'];
 
 const TOOLS: Anthropic.Tool[] = [
@@ -205,7 +228,10 @@ function buildDecision(name: string, input: unknown): RouteDecision {
   }
 }
 
-export async function routeChatMessage(instruction: string): Promise<RouteDecision> {
+export async function routeChatMessage(
+  instruction: string,
+  history?: ChatHistoryMessage[]
+): Promise<RouteDecision> {
   budgetTracker.assertWithinBudget();
 
   const client = new Anthropic();
@@ -215,7 +241,7 @@ export async function routeChatMessage(instruction: string): Promise<RouteDecisi
     system: SYSTEM_PROMPT,
     tools: TOOLS,
     tool_choice: { type: 'any' },
-    messages: [{ role: 'user', content: instruction }],
+    messages: buildRouterMessages(history, instruction),
   });
 
   if (response.usage) {

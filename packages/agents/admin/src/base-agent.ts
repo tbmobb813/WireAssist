@@ -198,17 +198,26 @@ export abstract class BaseAgent {
   protected async runToolLoop(
     task: AgentTask,
     userMessage: string,
-    opts?: { extraContext?: string; maxIterations?: number }
+    opts?: { extraContext?: string; maxIterations?: number; priorMessages?: ProviderMessage[] }
   ): Promise<string> {
     const tools = this.config.toolSchemas ? Object.values(this.config.toolSchemas) : [];
     if (this.getProvider().type !== 'anthropic' || tools.length === 0) {
-      return this.think(userMessage, opts?.extraContext);
+      // think() has no messages-array support — fold prior turns into the
+      // context string instead, so conversational memory still survives on
+      // non-Anthropic providers rather than silently vanishing.
+      return this.think(
+        userMessage,
+        foldPriorMessagesIntoContext(opts?.priorMessages, opts?.extraContext)
+      );
     }
 
     const maxIterations = opts?.maxIterations ?? 6;
     const model = this.resolveModel();
     const system = this.buildSystemPrompt(opts?.extraContext);
-    const messages: ProviderMessage[] = [{ role: 'user', content: userMessage }];
+    const messages: ProviderMessage[] = [
+      ...(opts?.priorMessages ?? []),
+      { role: 'user', content: userMessage },
+    ];
 
     for (let i = 0; i < maxIterations; i++) {
       budgetTracker.assertWithinBudget();
@@ -353,4 +362,23 @@ export abstract class BaseAgent {
   protected listDecisions(params?: { agentRole?: AgentRole; limit?: number }): ApprovalRequest[] {
     return this.approval.getResolved(params);
   }
+}
+
+// Renders prior conversation turns as a plain-text transcript prefixed onto
+// extraContext, for providers/paths that don't support a real messages
+// array (the runToolLoop -> think() fallback).
+function foldPriorMessagesIntoContext(
+  priorMessages: ProviderMessage[] | undefined,
+  extraContext?: string
+): string | undefined {
+  if (!priorMessages?.length) return extraContext;
+  const transcript = priorMessages
+    .filter(
+      (m): m is Extract<ProviderMessage, { role: 'user' | 'assistant' }> =>
+        m.role === 'user' || m.role === 'assistant'
+    )
+    .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+    .join('\n');
+  const header = `Recent conversation:\n${transcript}`;
+  return extraContext ? `${header}\n\n${extraContext}` : header;
 }

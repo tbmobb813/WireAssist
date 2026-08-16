@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { AgentTask } from '@wireassist/core';
+import type { AgentTask, ProviderMessage } from '@wireassist/core';
 import type { OpsTaskInput } from './nixops-agent';
 
 function baseTask(description: string, input: OpsTaskInput): AgentTask {
@@ -28,9 +28,14 @@ export function createWorkflowRunTask(params: {
   });
 }
 
-export function createOpsFreeformTask(params: { prompt: string; description?: string }): AgentTask {
+export function createOpsFreeformTask(params: {
+  prompt: string;
+  description?: string;
+  history?: ProviderMessage[];
+}): AgentTask {
   return baseTask(params.description ?? params.prompt, {
     type: 'freeform',
     prompt: params.prompt,
+    history: params.history,
   });
 }

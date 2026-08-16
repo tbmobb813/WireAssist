@@ -168,6 +168,12 @@ describe('ContentTasks.freeform()', () => {
     const t = ContentTasks.freeform('any scheduled posts today?');
     expect(t.description).toBe('any scheduled posts today?');
   });
+
+  it('carries history through when provided', () => {
+    const history = [{ role: 'user' as const, content: 'earlier question' }];
+    const t = ContentTasks.freeform('any scheduled posts today?', history);
+    expect((t.input as { history?: unknown }).history).toEqual(history);
+  });
 });
 
 describe('ContentTasks — unique ids', () => {

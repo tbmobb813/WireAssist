@@ -258,6 +258,24 @@ describe('AdminAgent — chat tool-calling loop', () => {
     });
   });
 
+  it('passes task.input.history through to runToolLoop as priorMessages', async () => {
+    const deps = makeDeps();
+    const agent = new AdminAgent(deps);
+    const runToolLoopSpy = jest.spyOn(agent as any, 'runToolLoop').mockResolvedValue('answer');
+    const history = [{ role: 'user' as const, content: 'earlier question' }];
+
+    const task = makeTask({
+      input: { type: 'freeform', prompt: 'follow-up', history },
+    });
+    await agent.handleFreeform(task);
+
+    expect(runToolLoopSpy).toHaveBeenCalledWith(
+      task,
+      'follow-up',
+      expect.objectContaining({ priorMessages: history })
+    );
+  });
+
   it('executeToolCall() runs a read-only tool immediately, with no approval', async () => {
     const deps = makeDeps({ mcp: { call: jest.fn().mockResolvedValue([{ id: 't1' }]) } });
     const agent = new AdminAgent(deps);

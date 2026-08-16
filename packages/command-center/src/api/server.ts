@@ -40,7 +40,7 @@ import {
 } from '@wireassist/agent-gtm';
 import { registerTrendPostTools, TrendPostStorage } from '@wireassist/trendpost-mcp';
 import { registerPortfolioRoutes } from './portfolio-routes';
-import { routeChatMessage, type RouteDecision } from './chat-router';
+import { routeChatMessage, type RouteDecision, type ChatHistoryMessage } from './chat-router';
 import { getLocation, setLocation, listNotes, addNote, deleteNote } from './dashboard-widgets';
 import { routeHandoffTask } from '../lib/route-handoff';
 
@@ -431,15 +431,32 @@ app.delete('/api/notes/:id', (c) => {
   return c.json({ ok: true });
 });
 
+// Caps and validates the client-supplied conversation transcript before it
+// ever reaches an LLM call — defends against a tampered/oversized payload
+// even though chat-router applies its own cap too.
+const MAX_HISTORY_MESSAGES = 20;
+function sanitizeHistory(raw: unknown): ChatHistoryMessage[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const messages = raw.filter(
+    (m): m is ChatHistoryMessage =>
+      !!m &&
+      typeof m === 'object' &&
+      (m.role === 'user' || m.role === 'assistant') &&
+      typeof m.content === 'string'
+  );
+  return messages.length > 0 ? messages.slice(-MAX_HISTORY_MESSAGES) : undefined;
+}
+
 app.post('/api/tasks/freeform', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const { instruction } = await c.req.json();
+  const { instruction, history: rawHistory } = await c.req.json();
   if (!instruction) return c.json({ error: 'instruction required' }, 400);
+  const history = sanitizeHistory(rawHistory);
 
   let decision: RouteDecision;
   try {
-    decision = await routeChatMessage(instruction);
+    decision = await routeChatMessage(instruction, history);
   } catch {
     decision = { kind: 'admin_freeform', prompt: instruction };
   }
@@ -472,7 +489,7 @@ app.post('/api/tasks/freeform', async (c) => {
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'content_freeform': {
-      const task = ContentTasks.freeform(decision.prompt);
+      const task = ContentTasks.freeform(decision.prompt, history);
       queueContentTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
@@ -482,7 +499,7 @@ app.post('/api/tasks/freeform', async (c) => {
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'ops_freeform': {
-      const task = OpsTasks.createOpsFreeformTask({ prompt: decision.prompt });
+      const task = OpsTasks.createOpsFreeformTask({ prompt: decision.prompt, history });
       queueOpsTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
@@ -503,7 +520,8 @@ app.post('/api/tasks/freeform', async (c) => {
     case 'admin_freeform':
     default: {
       const task = AdminTasks.freeform(
-        decision.kind === 'admin_freeform' ? decision.prompt : instruction
+        decision.kind === 'admin_freeform' ? decision.prompt : instruction,
+        history
       );
       queueAgentTask(task);
       return c.json({ taskId: task.id, status: 'queued' });

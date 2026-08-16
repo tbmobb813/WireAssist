@@ -48,5 +48,11 @@ describe('AdminTasks', () => {
       const t = AdminTasks.freeform('Draft email');
       expect(t.description).toBe('Draft email');
     });
+
+    it('carries history through when provided', () => {
+      const history = [{ role: 'user' as const, content: 'earlier question' }];
+      const t = AdminTasks.freeform('Draft email', history);
+      expect((t.input as { history?: unknown }).history).toEqual(history);
+    });
   });
 });

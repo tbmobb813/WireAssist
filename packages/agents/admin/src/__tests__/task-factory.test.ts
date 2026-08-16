@@ -51,7 +51,13 @@ describe('createSendEmailTask', () => {
     const t = createSendEmailTask(base);
     expect(t.agentRole).toBe('admin');
     expect(t.approvalRequired).toBe(true);
-    const input = t.input as { type: string; to: string; subject: string; body: string; threadId?: string };
+    const input = t.input as {
+      type: string;
+      to: string;
+      subject: string;
+      body: string;
+      threadId?: string;
+    };
     expect(input.type).toBe('send_email');
     expect(input.to).toBe('a@b.com');
     expect(input.subject).toBe('Hello');
@@ -107,5 +113,16 @@ describe('createFreeformTask', () => {
   it('uses custom description when provided', () => {
     const t = createFreeformTask({ prompt: 'p', description: 'Custom' });
     expect(t.description).toBe('Custom');
+  });
+
+  it('leaves history undefined when not provided', () => {
+    const t = createFreeformTask({ prompt: 'p' });
+    expect((t.input as { history?: unknown }).history).toBeUndefined();
+  });
+
+  it('carries history through when provided', () => {
+    const history = [{ role: 'user' as const, content: 'earlier question' }];
+    const t = createFreeformTask({ prompt: 'p', history });
+    expect((t.input as { history?: unknown }).history).toEqual(history);
   });
 });

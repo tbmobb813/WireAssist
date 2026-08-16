@@ -1,5 +1,6 @@
 import type { AgentRole, AgentTask } from '../agents/types';
 import type { ApprovalRequest } from '../approval/types';
+import type { ProviderMessage } from '../providers/base';
 
 // Narrower than BaseAgent itself — a Skill can reach these, but never
 // `config`, `client`, or `status` directly.
@@ -20,7 +21,7 @@ export interface SkillAgentHandle {
   runToolLoop(
     task: AgentTask,
     userMessage: string,
-    opts?: { extraContext?: string; maxIterations?: number }
+    opts?: { extraContext?: string; maxIterations?: number; priorMessages?: ProviderMessage[] }
   ): Promise<string>;
   // Approved/rejected decision history — for skills that reflect on
   // patterns in what's been approved vs. rejected over time. Omitting

@@ -24,6 +24,10 @@ function payloadTaskId(payload: unknown): string | undefined {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Kept in sync with the server's own cap (packages/command-center/src/api/server.ts) —
+// trimming client-side too avoids sending a payload that's just discarded anyway.
+const MAX_HISTORY_MESSAGES = 20;
+
 export default function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -243,6 +247,12 @@ export default function ChatClient() {
   const send = async () => {
     if (!input.trim() || sending) return;
     const text = input.trim();
+    // Captured before this turn's messages are appended — the transcript
+    // so far is exactly the "prior turns" the backend should see for
+    // conversational continuity.
+    const history = messages
+      .slice(-MAX_HISTORY_MESSAGES)
+      .map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }));
     setInput('');
     setSending(true);
     pendingTaskId.current = null;
@@ -261,7 +271,7 @@ export default function ChatClient() {
       const res = await fetch('/api/tasks/freeform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instruction: text }),
+        body: JSON.stringify({ instruction: text, history }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {

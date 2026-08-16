@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { AgentTask, AgentRole } from '@wireassist/core';
+import type { AgentTask, AgentRole, ProviderMessage } from '@wireassist/core';
 
 type SupportedTaskInput =
   | { type: 'email_triage'; maxEmails?: number }
@@ -19,7 +19,7 @@ type SupportedTaskInput =
       attendees?: string[];
       description?: string;
     }
-  | { type: 'freeform'; prompt: string }
+  | { type: 'freeform'; prompt: string; history?: ProviderMessage[] }
   | { type: 'daily_briefing'; maxEmails?: number; daysAhead?: number }
   | { type: 'follow_up_nudges'; daysStale?: number }
   | { type: 'proactive_insights' };
@@ -99,10 +99,15 @@ export function createScheduleEventTask(params: {
   });
 }
 
-export function createFreeformTask(params: { prompt: string; description?: string }): AgentTask {
+export function createFreeformTask(params: {
+  prompt: string;
+  description?: string;
+  history?: ProviderMessage[];
+}): AgentTask {
   return baseTask('admin', params.description ?? params.prompt, {
     type: 'freeform',
     prompt: params.prompt,
+    history: params.history,
   });
 }
 
