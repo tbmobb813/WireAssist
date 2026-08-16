@@ -724,7 +724,13 @@ app.post('/api/tasks/gtm/strategy', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const product = normalizeGtmProduct(body);
   if (!product) return c.json({ error: 'product name required' }, 400);
-  const task = GtmTasks.generateStrategy(product);
+  const offerContentDraft = isValidPlatform(body.contentDraftPlatform)
+    ? {
+        platform: body.contentDraftPlatform,
+        tone: typeof body.contentDraftTone === 'string' ? body.contentDraftTone : undefined,
+      }
+    : undefined;
+  const task = GtmTasks.generateStrategy(product, offerContentDraft);
   queueGtmTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });

@@ -39,6 +39,19 @@ describe('GtmTasks.generateStrategy()', () => {
     const t = GtmTasks.generateStrategy(product);
     expect(t.description).toContain('StatusWatch');
   });
+
+  it('leaves offerContentDraft undefined when not provided', () => {
+    const t = GtmTasks.generateStrategy(product);
+    expect((t.input as { offerContentDraft?: unknown }).offerContentDraft).toBeUndefined();
+  });
+
+  it('carries offerContentDraft through when provided', () => {
+    const t = GtmTasks.generateStrategy(product, { platform: 'linkedin', tone: 'direct' });
+    expect((t.input as { offerContentDraft?: unknown }).offerContentDraft).toEqual({
+      platform: 'linkedin',
+      tone: 'direct',
+    });
+  });
 });
 
 describe('GtmTasks.generatePsychTactics()', () => {
