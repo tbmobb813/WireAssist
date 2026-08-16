@@ -62,3 +62,33 @@ describe('ResearchTasks — unique ids', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
+
+describe('ResearchTasks.freeform()', () => {
+  it('produces a valid task shape', () => {
+    const t = ResearchTasks.freeform('what have we found on competitor pricing?');
+    expect(t.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(t.agentRole).toBe('research');
+    expect(t.status).toBe('queued');
+    expect(t.approvalRequired).toBe(false);
+    expect((t.input as { type: string }).type).toBe('freeform');
+  });
+
+  it('carries the prompt in both description and input', () => {
+    const t = ResearchTasks.freeform('look up X and synthesize with prior findings');
+    expect(t.description).toBe('look up X and synthesize with prior findings');
+    expect((t.input as { prompt: string }).prompt).toBe(
+      'look up X and synthesize with prior findings'
+    );
+  });
+
+  it('leaves history undefined when not provided', () => {
+    const t = ResearchTasks.freeform('a question');
+    expect((t.input as { history?: unknown }).history).toBeUndefined();
+  });
+
+  it('carries history through when provided', () => {
+    const history = [{ role: 'user' as const, content: 'earlier question' }];
+    const t = ResearchTasks.freeform('follow-up', history);
+    expect((t.input as { history?: unknown }).history).toEqual(history);
+  });
+});

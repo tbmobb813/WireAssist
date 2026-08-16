@@ -13,6 +13,7 @@ export type RouteDecision =
   | { kind: 'content_plan'; platforms?: Platform[]; weeksAhead?: number; postsPerWeek?: number }
   | { kind: 'content_freeform'; prompt: string }
   | { kind: 'research_topic'; query: string; depth?: 'quick' | 'deep' }
+  | { kind: 'research_freeform'; prompt: string }
   | { kind: 'ops_freeform'; prompt: string }
   | { kind: 'ops_workflow'; workflow: string; brief: string }
   | { kind: 'gtm_redirect' };
@@ -119,6 +120,16 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'research_freeform',
+    description:
+      'Open-ended or multi-part research chat — a compound request combining a search with synthesis of prior findings, a follow-up question about earlier research, or anything not cleanly a single "research X" ask.',
+    input_schema: {
+      type: 'object',
+      properties: { prompt: { type: 'string' } },
+      required: ['prompt'],
+    },
+  },
+  {
     name: 'ops_freeform',
     description:
       'A general question about the business/ops workflows that is not a request to run a named workflow.',
@@ -161,13 +172,20 @@ Guidance:
   otherwise prefer ops_freeform.
 - Only use content_generate/content_plan when the user wants NEW content written; questions
   about existing posts/ideas, or general content strategy chat, route to content_freeform.
+- Compound or multi-part requests — multiple distinct asks joined by "and"/"then"/"also", or a
+  request with a conditional follow-up ("check X, and if Y then do Z") — should NOT be forced
+  into a single narrow tool. Route Admin-shaped compound requests (mixing inbox/calendar/general
+  asks) to admin_freeform, and research-shaped compound requests (mixing search with synthesis,
+  or a follow-up on earlier findings) to research_freeform, instead of arbitrarily picking just
+  one of the specific asks. Only use admin_triage/admin_calendar/research_topic for a single,
+  cleanly-scoped request.
 - Always call exactly one tool. Never reply with plain text.`;
 
 function isPlatform(value: unknown): value is Platform {
   return typeof value === 'string' && PLATFORM_ENUM.includes(value);
 }
 
-function buildDecision(name: string, input: unknown): RouteDecision {
+export function buildDecision(name: string, input: unknown): RouteDecision {
   const i = (input ?? {}) as Record<string, unknown>;
 
   switch (name) {
@@ -210,6 +228,10 @@ function buildDecision(name: string, input: unknown): RouteDecision {
       if (typeof i.query !== 'string') throw new RouterError('research_topic missing query');
       const depth = i.depth === 'deep' ? 'deep' : i.depth === 'quick' ? 'quick' : undefined;
       return { kind: 'research_topic', query: i.query, depth };
+    }
+    case 'research_freeform': {
+      if (typeof i.prompt !== 'string') throw new RouterError('research_freeform missing prompt');
+      return { kind: 'research_freeform', prompt: i.prompt };
     }
     case 'ops_freeform': {
       if (typeof i.prompt !== 'string') throw new RouterError('ops_freeform missing prompt');

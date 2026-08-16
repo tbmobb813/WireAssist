@@ -278,7 +278,41 @@ export const ADMIN_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
       required: ['spreadsheetId', 'range', 'values'],
     },
   },
+  // ── Skills, exposed as composable tools (dispatched via invokeSkill(),
+  // not useTool() — see AdminAgent.executeToolCall()). These run genuine
+  // multi-step work internally (list -> analyze -> categorize -> propose)
+  // and self-gate any mutation with their own proposeAction() calls, so
+  // they execute immediately at this outer level rather than being
+  // approval-gated a second time. Named with a `_skill` suffix to stay
+  // visually distinct from raw MCP tool names above.
+  email_triage_skill: {
+    name: 'email_triage_skill',
+    description:
+      'Run the full email triage skill: fetch unread inbox threads, categorize them (urgent/reply-needed/fyi/ignore), draft replies, and propose actions for approval. Use this instead of gmail_list_threads when the user wants their inbox triaged, not just listed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        maxEmails: { type: 'number', description: 'Max unread threads to triage, default 20.' },
+      },
+    },
+  },
+  calendar_review_skill: {
+    name: 'calendar_review_skill',
+    description:
+      'Run the full calendar review skill: list upcoming events and identify conflicts, overloaded days, and missing prep time, proposing any suggested changes for approval. Use this instead of calendar_list_events when the user wants their calendar reviewed, not just listed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        daysAhead: { type: 'number', description: 'How many days ahead to review, default 7.' },
+      },
+    },
+  },
 };
+
+// Skill-tool names dispatched via invokeSkill() rather than useTool() — see
+// AdminAgent.executeToolCall(). Kept separate from READ_ONLY_ADMIN_TOOLS
+// since these are never valid useTool()/MCP calls.
+export const ADMIN_SKILL_TOOLS = new Set<string>(['email_triage_skill', 'calendar_review_skill']);
 
 // Tool names that only ever read data — safe to execute immediately in the
 // chat tool loop without going through the approval queue. Everything else

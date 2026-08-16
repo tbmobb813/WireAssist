@@ -284,6 +284,44 @@ export abstract class BaseAgent {
     return false;
   }
 
+  // Invokes one of this agent's own registered Skills as a step inside a
+  // tool-calling loop (see AdminAgent/ResearchAgent's executeToolCall()
+  // overrides) — the mechanism that lets a multi-step plan compose an
+  // agent's higher-level capabilities (e.g. email_triage, research_topic)
+  // alongside raw MCP tool calls, not just one or the other.
+  //
+  // Every candidate skill communicates its real result via agent.emit()
+  // rather than a return value, so this wraps emit() to capture the last
+  // payload while still forwarding to the real event bus — dashboard/SSE/
+  // Telegram listeners see the same events they always did.
+  //
+  // Deliberately NOT exposed on SkillAgentHandle: a skill must never be
+  // able to invoke another skill (recursion risk). Only BaseAgent's own
+  // executeToolCall() overrides may call this.
+  protected async invokeSkill(
+    parentTask: AgentTask,
+    skillName: string,
+    input: Record<string, unknown>
+  ): Promise<unknown> {
+    const skill = this.skills.getSkill(this.role, skillName);
+    if (!skill) {
+      throw new Error(`Unknown skill: ${skillName}`);
+    }
+
+    const subTask: AgentTask = { ...parentTask, input };
+    let captured: unknown;
+    const handle: SkillAgentHandle = {
+      ...this.asSkillHandle(),
+      emit: (event, payload) => {
+        captured = payload;
+        this.events.emit(event, payload);
+      },
+    };
+
+    await skill.execute({ agent: handle, task: subTask, input });
+    return captured;
+  }
+
   // Propose an action — pauses and waits for human approval
   protected async proposeAction(
     task: AgentTask,
