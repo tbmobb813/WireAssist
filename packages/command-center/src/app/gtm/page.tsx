@@ -27,6 +27,9 @@ const EMPTY_PRODUCT: GtmProductInput = {
 
 const STEPS = ['Product', 'Market', 'Business', 'GTM Strategy', 'Psych Tactics'] as const;
 
+const CONTENT_PLATFORMS = ['twitter', 'linkedin', 'instagram', 'threads'] as const;
+type ContentPlatform = (typeof CONTENT_PLATFORMS)[number];
+
 interface PastGtmEntry {
   id: string;
   content: string;
@@ -114,6 +117,8 @@ export default function GtmPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [product, setProduct] = useState<GtmProductInput>(EMPTY_PRODUCT);
+  const [draftContent, setDraftContent] = useState(false);
+  const [draftPlatform, setDraftPlatform] = useState<ContentPlatform>('linkedin');
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gtm, setGtm] = useState<GtmStrategy | null>(null);
@@ -241,7 +246,10 @@ export default function GtmPage() {
         fetch('/api/tasks/gtm/strategy', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(product),
+          body: JSON.stringify({
+            ...product,
+            ...(draftContent ? { contentDraftPlatform: draftPlatform } : {}),
+          }),
         }),
         fetch('/api/tasks/gtm/psych', {
           method: 'POST',
@@ -496,6 +504,32 @@ export default function GtmPage() {
               placeholder="e.g. $0 for now"
             />
           </div>
+          <label className="flex items-center gap-2 mt-6 mb-3 text-xs text-gray-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={draftContent}
+              onChange={(e) => setDraftContent(e.target.checked)}
+            />
+            Also draft content from this GTM strategy (asks for approval separately)
+          </label>
+          {draftContent && (
+            <div className="flex gap-2 mb-3">
+              {CONTENT_PLATFORMS.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setDraftPlatform(p)}
+                  className="text-xs px-3 py-1 rounded transition-colors capitalize"
+                  style={{
+                    background: draftPlatform === p ? '#ffb34720' : 'transparent',
+                    border: `1px solid ${draftPlatform === p ? '#ffb347' : '#1e2040'}`,
+                    color: draftPlatform === p ? '#ffb347' : '#475569',
+                  }}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex gap-3 mt-6">
             <button
               onClick={() => setStep(1)}

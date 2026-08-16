@@ -106,9 +106,15 @@ importers:
       '@wireassist/agent-admin':
         specifier: workspace:*
         version: link:../admin
+      '@wireassist/agent-content':
+        specifier: workspace:*
+        version: link:../content
       '@wireassist/core':
         specifier: workspace:*
         version: link:../../../wireassist/core
+      '@wireassist/trendpost-mcp':
+        specifier: workspace:*
+        version: link:../../trendpost-mcp
     devDependencies:
       '@swc/core':
         specifier: ^1.15.47
