@@ -9,7 +9,7 @@ import {
 } from '@wireassist/core';
 import { BaseAgent } from '@wireassist/agent-admin';
 import { CONTENT_SKILLS } from './skills';
-import { CONTENT_TOOL_SCHEMAS, READ_ONLY_CONTENT_TOOLS } from './tool-schemas';
+import { CONTENT_TOOL_SCHEMAS, READ_ONLY_CONTENT_TOOLS, CONTENT_SKILL_TOOLS } from './tool-schemas';
 
 const CONTENT_SYSTEM_PROMPT = `You are the Content Agent for WireAssist.
 You help solo operators build a consistent, authentic content presence.
@@ -54,11 +54,14 @@ export class ContentAgent extends BaseAgent {
       name: 'Content Agent',
       systemPrompt: CONTENT_SYSTEM_PROMPT,
       tools: CONTENT_TOOLS,
+      // Skill-tools (generate_post_skill, etc.) are added to the model-facing
+      // schema list here but deliberately NOT to `tools` above — they're
+      // dispatched via invokeSkill(), never useTool()/MCP, so they have no
+      // business in the MCP authorization list.
       toolSchemas: Object.fromEntries(
-        CONTENT_TOOLS.filter((name) => name in CONTENT_TOOL_SCHEMAS).map((name) => [
-          name,
-          CONTENT_TOOL_SCHEMAS[name],
-        ])
+        [...CONTENT_TOOLS, ...CONTENT_SKILL_TOOLS]
+          .filter((name) => name in CONTENT_TOOL_SCHEMAS)
+          .map((name) => [name, CONTENT_TOOL_SCHEMAS[name]])
       ),
       maxTokens: 4096,
     };
@@ -81,6 +84,14 @@ export class ContentAgent extends BaseAgent {
     call: ProviderToolCall
   ): Promise<{ result: unknown; isError: boolean }> {
     try {
+      if (CONTENT_SKILL_TOOLS.has(call.name)) {
+        // Skill-tools self-gate their own mutations via internal
+        // proposeAction() calls — dispatch immediately rather than
+        // approval-gating a second time.
+        const skillName = call.name.replace(/_skill$/, '');
+        return { result: await this.invokeSkill(task, skillName, call.input), isError: false };
+      }
+
       if (this.isReadOnlyTool(call.name)) {
         return { result: await this.useTool(call.name, call.input), isError: false };
       }

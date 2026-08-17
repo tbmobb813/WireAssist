@@ -53,7 +53,7 @@ function makeDeps(
 }
 
 describe('ContentAgent — chat tool-calling loop', () => {
-  it('config.toolSchemas is populated for every tool in the allowlist', () => {
+  it('config.toolSchemas is populated for every raw tool and every skill-tool', () => {
     const agent = new ContentAgent(makeDeps());
     const toolSchemas = (agent as any).config.toolSchemas;
     expect(Object.keys(toolSchemas).sort()).toEqual(
@@ -69,8 +69,21 @@ describe('ContentAgent — chat tool-calling loop', () => {
         'content_create_campaign',
         'content_list_campaigns',
         'content_mark_published',
+        'generate_post_skill',
+        'generate_plan_skill',
+        'generate_plan_from_timeline_skill',
+        'schedule_post_skill',
+        'analyze_post_skill',
+        'list_scheduled_skill',
       ].sort()
     );
+  });
+
+  it('config.tools (the MCP authorization list) never includes a skill-tool name', () => {
+    const agent = new ContentAgent(makeDeps());
+    const tools = (agent as any).config.tools as string[];
+    expect(tools).not.toContain('generate_post_skill');
+    expect(tools).toContain('content_generate');
   });
 
   it('executeToolCall() runs a read-only tool immediately, with no approval', async () => {
@@ -189,6 +202,64 @@ describe('ContentAgent — chat tool-calling loop', () => {
       task,
       'follow-up',
       expect.objectContaining({ priorMessages: history })
+    );
+  });
+});
+
+describe('ContentAgent — composable skill-tools in the chat loop', () => {
+  it('executeToolCall() dispatches generate_post_skill via invokeSkill(), letting the skill self-gate its own approval rather than gating the outer call a second time', async () => {
+    const mcpCall = jest.fn().mockImplementation((tool: string) => {
+      if (tool === 'content_generate') {
+        return Promise.resolve({ content: 'Post text', platform: 'linkedin', topic: 'Q3 launch' });
+      }
+      if (tool === 'content_analyze') {
+        return Promise.resolve({
+          score: 8,
+          estimatedEngagement: 'high',
+          suggestion: 'tighten CTA',
+        });
+      }
+      throw new Error(`unexpected tool: ${tool}`);
+    });
+    const deps = makeDeps({
+      mcp: { call: mcpCall },
+      approval: { request: jest.fn().mockResolvedValue(true) },
+    });
+    const agent = new ContentAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'generate_post_skill',
+      input: { topic: 'Q3 launch', platform: 'linkedin' },
+    });
+
+    expect(result.isError).toBe(false);
+    expect(deps.approval.request).toHaveBeenCalledTimes(1);
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:content_generated',
+      expect.objectContaining({ content: 'Post text' })
+    );
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:content_approved',
+      expect.objectContaining({ content: 'Post text', platform: 'linkedin' })
+    );
+  });
+
+  it('executeToolCall() dispatches list_scheduled_skill via invokeSkill(), which needs no approval', async () => {
+    const deps = makeDeps({ mcp: { call: jest.fn().mockResolvedValue([{ id: 'p1' }]) } });
+    const agent = new ContentAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'list_scheduled_skill',
+      input: { daysAhead: 7 },
+    });
+
+    expect(result.isError).toBe(false);
+    expect(deps.approval.request).not.toHaveBeenCalled();
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:scheduled_posts',
+      expect.objectContaining({ posts: [{ id: 'p1' }] })
     );
   });
 });
