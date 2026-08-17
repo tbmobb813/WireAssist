@@ -244,6 +244,13 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
         `⏳ *Approval needed*\nAgent: ${p.agentName ?? p.agentRole}\nAction: ${p.action}\n\nUse /approvals to review.`
       );
       break;
+    case 'auto_approved': {
+      const action = p.action as { label?: string } | undefined;
+      await send(
+        `🤖 *Auto-approved* (${p.agentRole}): ${action?.label ?? 'an action'} — already trusted, no approval needed.`
+      );
+      break;
+    }
     case 'ops_blocked':
       await send(`🛑 *NixOps blocked*\n${String(p.diagnosis ?? '').slice(0, 800)}`);
       break;
@@ -264,12 +271,35 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
         `✍️ Content plan generated: ${p.totalGenerated} posts. Check the Content tab for details.`
       );
       break;
+    case 'content_approved':
+      await send(`✅ *Approved ${p.platform} post:*\n\n${String(p.content ?? '').slice(0, 3500)}`);
+      break;
+    case 'post_scheduled': {
+      const post = p.post as { platform?: string; scheduledAt?: string } | undefined;
+      const when = post?.scheduledAt ? new Date(post.scheduledAt).toLocaleString() : 'soon';
+      await send(`📅 *Scheduled ${post?.platform ?? 'a'} post* for ${when}.`);
+      break;
+    }
     case 'research_complete': {
       const sources =
         Array.isArray(p.sources) && p.sources.length > 0
           ? `\n\nSources:\n${(p.sources as string[]).join('\n')}`
           : '';
       await send(`🔍 ${String(p.summary ?? '').slice(0, 3000)}${sources}`);
+      break;
+    }
+    case 'gtm_generated': {
+      const gtm = p.gtm as { positioning?: { headline?: string } } | undefined;
+      await send(
+        `🚀 *GTM strategy generated:* ${gtm?.positioning?.headline ?? 'ready to review'}. Check the GTM tab for the full plan.`
+      );
+      break;
+    }
+    case 'gtm_psych_generated': {
+      const psych = Array.isArray(p.psych) ? p.psych : [];
+      await send(
+        `🧠 *GTM psych tactics generated:* ${psych.length} principle(s) ready. Check the GTM tab for details.`
+      );
       break;
     }
     case 'task_failed':
