@@ -151,6 +151,7 @@ export abstract class BaseAgent {
       emit: (event, payload) => this.events.emit(event, payload),
       runToolLoop: (task, userMessage, opts) => this.runToolLoop(task, userMessage, opts),
       listDecisions: (params) => this.listDecisions(params),
+      listPending: () => this.listPending(),
     };
   }
 
@@ -406,6 +407,12 @@ export abstract class BaseAgent {
   // one, since approval_queue is one shared table.
   protected listDecisions(params?: { agentRole?: AgentRole; limit?: number }): ApprovalRequest[] {
     return this.approval.getResolved(params);
+  }
+
+  // Still-unresolved approval requests, across every agent — same
+  // shared-table reasoning as listDecisions() above.
+  protected listPending(): ApprovalRequest[] {
+    return this.approval.getPending();
   }
 }
 

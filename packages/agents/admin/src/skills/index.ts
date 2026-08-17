@@ -7,6 +7,7 @@ import { freeformSkill } from './freeform';
 import { dailyBriefingSkill } from './daily-briefing';
 import { followUpNudgesSkill } from './follow-up-nudges';
 import { proactiveInsightsSkill } from './proactive-insights';
+import { staleApprovalsSkill } from './stale-approvals';
 
 export const ADMIN_SKILLS: Skill[] = [
   emailTriageSkill,
@@ -17,6 +18,7 @@ export const ADMIN_SKILLS: Skill[] = [
   dailyBriefingSkill,
   followUpNudgesSkill,
   proactiveInsightsSkill,
+  staleApprovalsSkill,
 ];
 
 export {
@@ -28,5 +30,6 @@ export {
   dailyBriefingSkill,
   followUpNudgesSkill,
   proactiveInsightsSkill,
+  staleApprovalsSkill,
 };
 export { proposeOrAutoApprove } from './propose-or-auto-approve';
