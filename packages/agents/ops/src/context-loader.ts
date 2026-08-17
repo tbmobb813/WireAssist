@@ -35,7 +35,11 @@ export function listWorkflows(dir: string = CONTEXT_DIR): string[] {
 
 export function loadWorkflow(name: string, dir: string = CONTEXT_DIR): string {
   // Reject path separators so task input can't escape the workflows directory.
-  if (!/^[a-z0-9-]+$/i.test(name)) {
+  // The explicit typeof check matters: RegExp#test() coerces a non-string
+  // argument to a string first, so a missing `name` (undefined, from a
+  // malformed tool call) would otherwise stringify to "undefined" — which
+  // itself matches the regex — and silently pass this guard.
+  if (typeof name !== 'string' || !/^[a-z0-9-]+$/i.test(name)) {
     throw new Error(`Invalid workflow name: ${name}`);
   }
   const path = join(dir, 'workflows', `${name}.md`);

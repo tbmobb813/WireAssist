@@ -26,6 +26,13 @@ describe('context-loader', () => {
   it('throws a helpful error for unknown workflows', () => {
     expect(() => loadWorkflow('nope')).toThrow(/Unknown workflow/);
   });
+
+  it('rejects a missing workflow name rather than stringifying it into a valid-looking one', () => {
+    // RegExp#test() coerces its argument to a string first — without an
+    // explicit typeof guard, `undefined` becomes the string "undefined",
+    // which itself matches /^[a-z0-9-]+$/i and would incorrectly pass.
+    expect(() => loadWorkflow(undefined as unknown as string)).toThrow(/Invalid workflow name/);
+  });
 });
 
 describe('parseSheetRef', () => {
