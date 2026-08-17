@@ -48,7 +48,13 @@ export const generateStrategySkill: Skill<GenerateStrategyInput, void> = {
           `North star: ${gtm.north_star}`,
           `Founder advantage: ${gtm.founder_advantage}`,
         ].join('\n');
-        const handoffTask = ContentTasks.generatePost(topic, platform, tone, extraContext);
+        const handoffTask = ContentTasks.generatePost(
+          topic,
+          platform,
+          tone,
+          extraContext,
+          task.objectiveId
+        );
         agent.emit('agent:handoff_requested', { task: handoffTask });
       }
     }
@@ -68,7 +74,8 @@ export const generateStrategySkill: Skill<GenerateStrategyInput, void> = {
         const handoffTask = ContentTasks.generatePlanFromTimeline(
           product.name,
           gtm.launch_timeline,
-          platforms
+          platforms,
+          task.objectiveId
         );
         agent.emit('agent:handoff_requested', { task: handoffTask });
       }

@@ -82,4 +82,17 @@ describe('task-factory', () => {
     expect(task.agentRole).toBe('strategy');
     expect(task.input).toMatchObject({ type: 'trust_graduation_nudges' });
   });
+
+  it('passes objectiveId through when provided, and leaves it undefined otherwise', () => {
+    expect(
+      createWorkflowRunTask({ workflow: 'w', brief: 'b', objectiveId: 'obj-1' }).objectiveId
+    ).toBe('obj-1');
+    expect(createWorkflowRunTask({ workflow: 'w', brief: 'b' }).objectiveId).toBeUndefined();
+
+    expect(createOpsFreeformTask({ prompt: 'p', objectiveId: 'obj-1' }).objectiveId).toBe('obj-1');
+    expect(createOpsFreeformTask({ prompt: 'p' }).objectiveId).toBeUndefined();
+
+    expect(createTrustGraduationNudgesTask({ objectiveId: 'obj-1' }).objectiveId).toBe('obj-1');
+    expect(createTrustGraduationNudgesTask().objectiveId).toBeUndefined();
+  });
 });

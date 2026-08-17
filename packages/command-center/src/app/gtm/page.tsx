@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
 import { setContentHandoff } from '@/lib/content-handoff';
+import { ObjectivePicker, useActiveObjectives } from '../objective-picker';
 import type { GtmProductInput, GtmStrategy, GtmPsychPrinciple } from '@wireassist/agent-gtm';
 
 const EMPTY_PRODUCT: GtmProductInput = {
@@ -128,6 +129,8 @@ export default function GtmPage() {
   const [openPsychCard, setOpenPsychCard] = useState<number | null>(0);
   const [prefilledFrom, setPrefilledFrom] = useState<string | null>(null);
   const [pastGtm, setPastGtm] = useState<PastGtmEntry[]>([]);
+  const [objectiveId, setObjectiveId] = useState('');
+  const activeObjectives = useActiveObjectives();
 
   const pendingTaskIds = useRef<Set<string>>(new Set());
 
@@ -254,12 +257,13 @@ export default function GtmPage() {
             ...(draftCalendar && calendarPlatforms.length > 0
               ? { contentCalendarPlatforms: calendarPlatforms }
               : {}),
+            objectiveId: objectiveId || undefined,
           }),
         }),
         fetch('/api/tasks/gtm/psych', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(product),
+          body: JSON.stringify({ ...product, objectiveId: objectiveId || undefined }),
         }),
       ]);
 
@@ -509,7 +513,14 @@ export default function GtmPage() {
               placeholder="e.g. $0 for now"
             />
           </div>
-          <label className="flex items-center gap-2 mt-6 mb-3 text-xs text-gray-400 cursor-pointer">
+          <div className="mt-6">
+            <ObjectivePicker
+              objectives={activeObjectives}
+              value={objectiveId}
+              onChange={setObjectiveId}
+            />
+          </div>
+          <label className="flex items-center gap-2 mb-3 text-xs text-gray-400 cursor-pointer">
             <input
               type="checkbox"
               checked={draftContent}

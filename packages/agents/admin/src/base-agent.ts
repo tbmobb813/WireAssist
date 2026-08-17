@@ -117,6 +117,7 @@ export abstract class BaseAgent {
       agentName: this.name,
       taskId: task.id,
       description: task.description,
+      objectiveId: task.objectiveId,
     });
 
     try {
@@ -127,6 +128,7 @@ export abstract class BaseAgent {
       this.events.emit('agent:task_complete', {
         agentRole: this.role,
         taskId: task.id,
+        objectiveId: task.objectiveId,
       });
     } catch (error) {
       this.status = 'error';
@@ -134,6 +136,7 @@ export abstract class BaseAgent {
         agentRole: this.role,
         taskId: task.id,
         error: error instanceof Error ? error.message : String(error),
+        objectiveId: task.objectiveId,
       });
       throw error;
     }
@@ -344,6 +347,7 @@ export abstract class BaseAgent {
       taskId: task.id,
       action,
       payload,
+      objectiveId: task.objectiveId,
     });
 
     const approved = await this.approval.request({
@@ -359,6 +363,7 @@ export abstract class BaseAgent {
       agentRole: this.role,
       taskId: task.id,
       approved,
+      objectiveId: task.objectiveId,
     });
 
     this.remember(`task=${task.id} action=${action} -> ${approved ? 'APPROVED' : 'REJECTED'}`, [

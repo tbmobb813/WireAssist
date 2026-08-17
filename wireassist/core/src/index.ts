@@ -55,3 +55,6 @@ export * from './skills';
 
 // Command Center portfolio (Zone 1/2 data layer)
 export * from './portfolio/store';
+
+// Cross-agent Objective data layer — tasks from any agent can tag into one
+export * from './objectives/store';

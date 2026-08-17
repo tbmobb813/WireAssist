@@ -12,35 +12,35 @@ import {
 
 /** Convenience factories used by Command Center API routes and demos. */
 export const AdminTasks = {
-  triageEmail(maxEmails = 20) {
-    return createEmailTriageTask({ maxEmails });
+  triageEmail(maxEmails = 20, objectiveId?: string) {
+    return createEmailTriageTask({ maxEmails, objectiveId });
   },
 
-  reviewCalendar(daysAhead = 7) {
-    return createCalendarReviewTask({ daysAhead });
+  reviewCalendar(daysAhead = 7, objectiveId?: string) {
+    return createCalendarReviewTask({ daysAhead, objectiveId });
   },
 
-  freeform(instruction: string, history?: ProviderMessage[]) {
-    return createFreeformTask({ prompt: instruction, history });
+  freeform(instruction: string, history?: ProviderMessage[], objectiveId?: string) {
+    return createFreeformTask({ prompt: instruction, history, objectiveId });
   },
 
-  dailyBriefing(maxEmails = 20, daysAhead = 7) {
-    return createDailyBriefingTask({ maxEmails, daysAhead });
+  dailyBriefing(maxEmails = 20, daysAhead = 7, objectiveId?: string) {
+    return createDailyBriefingTask({ maxEmails, daysAhead, objectiveId });
   },
 
-  followUpNudges(daysStale = 3) {
-    return createFollowUpNudgesTask({ daysStale });
+  followUpNudges(daysStale = 3, objectiveId?: string) {
+    return createFollowUpNudgesTask({ daysStale, objectiveId });
   },
 
-  proactiveInsights() {
-    return createProactiveInsightsTask();
+  proactiveInsights(objectiveId?: string) {
+    return createProactiveInsightsTask({ objectiveId });
   },
 
-  budgetWarning(thresholdPercent = 80) {
-    return createBudgetWarningTask({ thresholdPercent });
+  budgetWarning(thresholdPercent = 80, objectiveId?: string) {
+    return createBudgetWarningTask({ thresholdPercent, objectiveId });
   },
 
-  staleApprovals(daysStale = 3) {
-    return createStaleApprovalsTask({ daysStale });
+  staleApprovals(daysStale = 3, objectiveId?: string) {
+    return createStaleApprovalsTask({ daysStale, objectiveId });
   },
 };

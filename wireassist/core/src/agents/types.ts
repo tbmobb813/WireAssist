@@ -42,4 +42,8 @@ export interface AgentTask {
   output?: Record<string, unknown>;
   approvalRequired: boolean;
   approvalAction?: string;
+  // Optional tag linking this task to a cross-agent Objective (see
+  // wireassist/core/src/objectives/store.ts). Purely a coordination/tracking
+  // tag — never required, never enforced.
+  objectiveId?: string;
 }

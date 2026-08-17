@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
 import { consumeContentHandoff } from '@/lib/content-handoff';
+import { ObjectivePicker, useActiveObjectives } from '../objective-picker';
 import Link from 'next/link';
 
 const PLATFORMS = ['twitter', 'linkedin', 'instagram', 'threads'] as const;
@@ -78,6 +79,8 @@ export default function ContentPage() {
   const [freeformPrompt, setFreeformPrompt] = useState('');
   const [freeformResponse, setFreeformResponse] = useState<string | null>(null);
   const freeformTaskId = useRef<string | null>(null);
+  const [objectiveId, setObjectiveId] = useState('');
+  const activeObjectives = useActiveObjectives();
 
   useEffect(() => {
     const handoff = consumeContentHandoff();
@@ -185,6 +188,7 @@ export default function ContentPage() {
           platform,
           tone: tone.trim() || undefined,
           context: extraContext.trim() || undefined,
+          objectiveId: objectiveId || undefined,
         }),
       });
       if (!res.ok) {
@@ -364,6 +368,11 @@ export default function ContentPage() {
               rows={2}
               className="w-full rounded px-3 py-2 text-sm mb-3 outline-none resize-none"
               style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
+            />
+            <ObjectivePicker
+              objectives={activeObjectives}
+              value={objectiveId}
+              onChange={setObjectiveId}
             />
             <div className="flex gap-2 mb-3 flex-wrap">
               {PLATFORMS.map((p) => (

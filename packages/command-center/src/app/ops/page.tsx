@@ -3,6 +3,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
 import { consumeOpsHandoff } from '@/lib/ops-handoff';
+import { ObjectivePicker, useActiveObjectives } from '../objective-picker';
 
 const STAGE_LABEL: Record<string, string> = {
   diagnose: 'Diagnose',
@@ -84,6 +85,8 @@ export default function OpsPage() {
   const [nudgeSummary, setNudgeSummary] = useState<string | null>(null);
   const [checkingNudges, setCheckingNudges] = useState(false);
   const [nudgeCheckQueued, setNudgeCheckQueued] = useState(false);
+  const [objectiveId, setObjectiveId] = useState('');
+  const activeObjectives = useActiveObjectives();
 
   const pendingTaskId = useRef<string | null>(null);
 
@@ -287,11 +290,19 @@ export default function OpsPage() {
               ...filledTodos.map((t) => `- ${t.label}: ${t.value}`),
             ].join('\n'),
           ].join('\n\n');
-    fire('/api/tasks/ops-workflow', { workflow: selectedWorkflow, brief: fullBrief });
+    fire('/api/tasks/ops-workflow', {
+      workflow: selectedWorkflow,
+      brief: fullBrief,
+      objectiveId: objectiveId || undefined,
+    });
   };
 
   const runFreeform = () =>
-    freeformPrompt.trim() && fire('/api/tasks/ops-freeform', { prompt: freeformPrompt.trim() });
+    freeformPrompt.trim() &&
+    fire('/api/tasks/ops-freeform', {
+      prompt: freeformPrompt.trim(),
+      objectiveId: objectiveId || undefined,
+    });
 
   return (
     <div className="min-h-screen p-8 max-w-3xl mx-auto">
@@ -432,6 +443,11 @@ export default function OpsPage() {
             </select>
           </div>
         )}
+        <ObjectivePicker
+          objectives={activeObjectives}
+          value={objectiveId}
+          onChange={setObjectiveId}
+        />
         <textarea
           value={brief}
           onChange={(e) => setBrief(e.target.value)}

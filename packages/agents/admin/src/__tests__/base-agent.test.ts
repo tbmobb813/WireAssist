@@ -249,6 +249,32 @@ describe('BaseAgent.proposeAction()', () => {
     );
   });
 
+  it("carries the task's objectiveId on both waiting_approval and approval_resolved", async () => {
+    const { agent, deps } = makeAgent();
+    await agent.testProposeAction(makeTask({ objectiveId: 'obj-1' }), 'action', {});
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:waiting_approval',
+      expect.objectContaining({ objectiveId: 'obj-1' })
+    );
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:approval_resolved',
+      expect.objectContaining({ objectiveId: 'obj-1' })
+    );
+  });
+
+  it('leaves objectiveId undefined on both events when the task has none', async () => {
+    const { agent, deps } = makeAgent();
+    await agent.testProposeAction(makeTask(), 'action', {});
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:waiting_approval',
+      expect.objectContaining({ objectiveId: undefined })
+    );
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:approval_resolved',
+      expect.objectContaining({ objectiveId: undefined })
+    );
+  });
+
   it('records a trace memory tagged "approved" when approval.request resolves true', async () => {
     const { agent, deps } = makeAgent();
     await agent.testProposeAction(makeTask(), 'Send email', {});
@@ -341,6 +367,24 @@ describe('BaseAgent.run() — default skill dispatch', () => {
     );
   });
 
+  it("carries the task's objectiveId on task_started and task_complete", async () => {
+    const { agent, deps } = makeDefaultRunAgent();
+    const execute = jest.fn().mockResolvedValue(undefined);
+    agent.testRegisterSkill({ name: 'do_thing', role: 'admin', description: 'x', execute });
+
+    const task = makeTask({ input: { type: 'do_thing' }, objectiveId: 'obj-1' });
+    await agent.run(task);
+
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:task_started',
+      expect.objectContaining({ objectiveId: 'obj-1' })
+    );
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:task_complete',
+      expect.objectContaining({ objectiveId: 'obj-1' })
+    );
+  });
+
   it('sets status to error and emits agent:task_failed with the error message on throw', async () => {
     const { agent, deps } = makeDefaultRunAgent();
     const execute = jest.fn().mockRejectedValue(new Error('boom'));
@@ -353,6 +397,20 @@ describe('BaseAgent.run() — default skill dispatch', () => {
     expect(deps.events.emit).toHaveBeenCalledWith(
       'agent:task_failed',
       expect.objectContaining({ agentRole: 'admin', taskId: 'task-1', error: 'boom' })
+    );
+  });
+
+  it("carries the task's objectiveId on agent:task_failed", async () => {
+    const { agent, deps } = makeDefaultRunAgent();
+    const execute = jest.fn().mockRejectedValue(new Error('boom'));
+    agent.testRegisterSkill({ name: 'do_thing', role: 'admin', description: 'x', execute });
+
+    const task = makeTask({ input: { type: 'do_thing' }, objectiveId: 'obj-1' });
+    await expect(agent.run(task)).rejects.toThrow('boom');
+
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:task_failed',
+      expect.objectContaining({ objectiveId: 'obj-1' })
     );
   });
 

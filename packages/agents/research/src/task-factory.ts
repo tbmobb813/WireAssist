@@ -6,7 +6,8 @@ export const ResearchTasks = {
   researchTopic(
     query: string,
     depth: 'quick' | 'deep' = 'quick',
-    offerContentDraft?: { platform: Platform; tone?: string }
+    offerContentDraft?: { platform: Platform; tone?: string },
+    objectiveId?: string
   ): AgentTask {
     return {
       id: randomUUID(),
@@ -23,10 +24,11 @@ export const ResearchTasks = {
         offerContentDraft,
       },
       approvalRequired: true,
+      objectiveId,
     };
   },
 
-  synthesizeFindings(topic: string): AgentTask {
+  synthesizeFindings(topic: string, objectiveId?: string): AgentTask {
     return {
       id: randomUUID(),
       agentRole: 'research',
@@ -36,12 +38,17 @@ export const ResearchTasks = {
       updatedAt: new Date(),
       input: { type: 'synthesize_findings', topic },
       approvalRequired: true,
+      objectiveId,
     };
   },
 
   // Chains research_topic -> synthesize_findings via the research_and_synthesize
   // SkillChain (see skills/index.ts) — a same-agent chain demonstration.
-  researchAndSynthesize(query: string, depth: 'quick' | 'deep' = 'quick'): AgentTask {
+  researchAndSynthesize(
+    query: string,
+    depth: 'quick' | 'deep' = 'quick',
+    objectiveId?: string
+  ): AgentTask {
     return {
       id: randomUUID(),
       agentRole: 'research',
@@ -51,10 +58,11 @@ export const ResearchTasks = {
       updatedAt: new Date(),
       input: { type: 'research_and_synthesize', query, resultCount: depth === 'deep' ? 10 : 5 },
       approvalRequired: true,
+      objectiveId,
     };
   },
 
-  freeform(prompt: string, history?: ProviderMessage[]): AgentTask {
+  freeform(prompt: string, history?: ProviderMessage[], objectiveId?: string): AgentTask {
     return {
       id: randomUUID(),
       agentRole: 'research',
@@ -64,6 +72,7 @@ export const ResearchTasks = {
       updatedAt: new Date(),
       input: { type: 'freeform', prompt, history },
       approvalRequired: false,
+      objectiveId,
     };
   },
 };

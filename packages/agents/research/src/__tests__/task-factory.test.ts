@@ -92,3 +92,19 @@ describe('ResearchTasks.freeform()', () => {
     expect((t.input as { history?: unknown }).history).toEqual(history);
   });
 });
+
+describe('ResearchTasks — objectiveId passthrough', () => {
+  it('passes objectiveId through when provided, and leaves it undefined otherwise', () => {
+    expect(ResearchTasks.researchTopic('q', 'quick', undefined, 'obj-1').objectiveId).toBe('obj-1');
+    expect(ResearchTasks.researchTopic('q').objectiveId).toBeUndefined();
+
+    expect(ResearchTasks.synthesizeFindings('t', 'obj-1').objectiveId).toBe('obj-1');
+    expect(ResearchTasks.synthesizeFindings('t').objectiveId).toBeUndefined();
+
+    expect(ResearchTasks.researchAndSynthesize('q', 'quick', 'obj-1').objectiveId).toBe('obj-1');
+    expect(ResearchTasks.researchAndSynthesize('q').objectiveId).toBeUndefined();
+
+    expect(ResearchTasks.freeform('p', undefined, 'obj-1').objectiveId).toBe('obj-1');
+    expect(ResearchTasks.freeform('p').objectiveId).toBeUndefined();
+  });
+});
