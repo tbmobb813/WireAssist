@@ -521,6 +521,31 @@ No `jq` needed (no request body). Run it manually once first
 (`WIREASSIST_API_URL=http://localhost:3002 ./dev/budget-warning.sh`) to
 confirm it queues successfully before trusting it to cron.
 
+## 13. Stale-approval nudges
+
+`dev/stale-approvals.sh` triggers the Admin Agent's `stale_approvals_nudge`
+task — it scans every still-pending approval request across every agent
+(not just Admin's own) and flags any that have been sitting unresolved for
+3+ days without a decision. Unlike proactive insights (which reflects on
+already-_resolved_ history), this looks at what's still stuck in the queue
+right now. It only reads and reports — it never resolves anything itself,
+so there's nothing extra to gate. If nothing is stale, it says so and skips
+pinging Telegram.
+
+**Cron entry** (daily makes more sense here than the weekly cadence above —
+an approval blocking a real action is more time-sensitive than a decision
+streak):
+
+```bash
+crontab -e
+# add:
+0 9 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/stale-approvals.sh >> /var/log/wireassist-stale-approvals.log 2>&1
+```
+
+No `jq` needed (no request body). Run it manually once first
+(`WIREASSIST_API_URL=http://localhost:3002 ./dev/stale-approvals.sh`) to
+confirm it queues successfully before trusting it to cron.
+
 ## Updating after a code change
 
 ```bash

@@ -27,6 +27,9 @@ export interface SkillAgentHandle {
   // patterns in what's been approved vs. rejected over time. Omitting
   // agentRole returns history across every agent, not just this one.
   listDecisions(params?: { agentRole?: AgentRole; limit?: number }): ApprovalRequest[];
+  // Still-unresolved approval requests, across every agent — for skills
+  // that flag approvals sitting too long without a decision.
+  listPending(): ApprovalRequest[];
 }
 
 export interface SkillExecutionContext<TInput = unknown> {

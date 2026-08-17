@@ -23,7 +23,8 @@ type SupportedTaskInput =
   | { type: 'daily_briefing'; maxEmails?: number; daysAhead?: number }
   | { type: 'follow_up_nudges'; daysStale?: number }
   | { type: 'proactive_insights' }
-  | { type: 'budget_warning_nudge'; thresholdPercent?: number };
+  | { type: 'budget_warning_nudge'; thresholdPercent?: number }
+  | { type: 'stale_approvals_nudge'; daysStale?: number };
 
 function baseTask(role: AgentRole, description: string, input: SupportedTaskInput): AgentTask {
   const now = new Date();
@@ -151,5 +152,16 @@ export function createBudgetWarningTask(options?: {
     'admin',
     options?.description ?? 'Check month-to-date spend against the budget warning threshold.',
     { type: 'budget_warning_nudge', thresholdPercent: options?.thresholdPercent }
+  );
+}
+
+export function createStaleApprovalsTask(options?: {
+  description?: string;
+  daysStale?: number;
+}): AgentTask {
+  return baseTask(
+    'admin',
+    options?.description ?? 'Flag approval requests that have been sitting pending too long.',
+    { type: 'stale_approvals_nudge', daysStale: options?.daysStale }
   );
 }

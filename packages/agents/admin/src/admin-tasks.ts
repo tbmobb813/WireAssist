@@ -7,6 +7,7 @@ import {
   createFollowUpNudgesTask,
   createProactiveInsightsTask,
   createBudgetWarningTask,
+  createStaleApprovalsTask,
 } from './task-factory';
 
 /** Convenience factories used by Command Center API routes and demos. */
@@ -37,5 +38,9 @@ export const AdminTasks = {
 
   budgetWarning(thresholdPercent = 80) {
     return createBudgetWarningTask({ thresholdPercent });
+  },
+
+  staleApprovals(daysStale = 3) {
+    return createStaleApprovalsTask({ daysStale });
   },
 };

@@ -25,6 +25,7 @@ function makeAgentHandle(overrides: Partial<SkillAgentHandle> = {}): SkillAgentH
     emit: jest.fn(),
     runToolLoop: jest.fn().mockResolvedValue(''),
     listDecisions: jest.fn().mockReturnValue([]),
+    listPending: jest.fn().mockReturnValue([]),
     ...overrides,
   };
 }
