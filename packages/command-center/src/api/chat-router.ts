@@ -16,6 +16,7 @@ export type RouteDecision =
   | { kind: 'research_freeform'; prompt: string }
   | { kind: 'ops_freeform'; prompt: string }
   | { kind: 'ops_workflow'; workflow: string; brief: string }
+  | { kind: 'gtm_freeform'; prompt: string }
   | { kind: 'gtm_redirect' };
 
 export class RouterError extends Error {}
@@ -153,9 +154,19 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'gtm_freeform',
+    description:
+      'General go-to-market question or discussion — positioning angles, pricing models, launch tactics, messaging — that is not a request to generate a full strategy for a specific product.',
+    input_schema: {
+      type: 'object',
+      properties: { prompt: { type: 'string' } },
+      required: ['prompt'],
+    },
+  },
+  {
     name: 'gtm_redirect',
     description:
-      'User wants a go-to-market strategy, positioning, pricing strategy, or launch plan for a product. Always use this for GTM-shaped requests — never try to answer them directly, the full strategy needs a 16-field product form the chat cannot capture.',
+      'User wants a full go-to-market strategy, launch plan, or psych-tactics set actually generated/built for a specific product. Use this only for a generate/build request — the full strategy needs a 16-field product form the chat cannot capture, so redirect to the wizard instead of trying to answer directly.',
     input_schema: { type: 'object', properties: {} },
   },
 ];
@@ -165,8 +176,10 @@ message, decide which single tool best handles it and call exactly that tool wit
 appropriate arguments extracted from the message.
 
 Guidance:
-- GTM strategy / positioning / pricing strategy / go-to-market / launch plan requests
-  always route to gtm_redirect, never admin_freeform or anything else.
+- A request to actually generate/build a full GTM strategy, launch plan, or psych-tactics set for
+  a specific product routes to gtm_redirect — never admin_freeform or anything else. A general
+  GTM question or discussion (pricing models, positioning angles, launch tactics) that isn't asking
+  to generate one for a specific product routes to gtm_freeform instead.
 - Ambiguous, general-knowledge, or small-talk messages route to admin_freeform.
 - Only use ops_workflow when a specific, nameable workflow is clearly being requested;
   otherwise prefer ops_freeform.
@@ -242,6 +255,10 @@ export function buildDecision(name: string, input: unknown): RouteDecision {
         throw new RouterError('ops_workflow missing workflow/brief');
       }
       return { kind: 'ops_workflow', workflow: i.workflow, brief: i.brief };
+    }
+    case 'gtm_freeform': {
+      if (typeof i.prompt !== 'string') throw new RouterError('gtm_freeform missing prompt');
+      return { kind: 'gtm_freeform', prompt: i.prompt };
     }
     case 'gtm_redirect':
       return { kind: 'gtm_redirect' };

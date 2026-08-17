@@ -49,6 +49,8 @@ export default function ResearchPage() {
   const [draftContent, setDraftContent] = useState(false);
   const [draftPlatform, setDraftPlatform] = useState<ContentPlatform>('linkedin');
   const [synthesizeTopic, setSynthesizeTopic] = useState('');
+  const [freeformPrompt, setFreeformPrompt] = useState('');
+  const [freeformResponse, setFreeformResponse] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<ResearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +89,12 @@ export default function ResearchPage() {
           setGenerating(false);
           pendingTaskId.current = null;
         }
+        if (e.event === 'freeform_response') {
+          if (e.payload.taskId !== pendingTaskId.current) return;
+          setFreeformResponse(e.payload.response);
+          setGenerating(false);
+          pendingTaskId.current = null;
+        }
         if (e.event === 'task_failed' && e.payload.agentRole === 'research') {
           if (e.payload.taskId !== pendingTaskId.current) return;
           setError(e.payload.error);
@@ -109,6 +117,7 @@ export default function ResearchPage() {
   async function fire(path: string, body: Record<string, unknown>) {
     setError(null);
     setResult(null);
+    setFreeformResponse(null);
     setGenerating(true);
     try {
       const res = await fetch(path, {
@@ -138,6 +147,9 @@ export default function ResearchPage() {
     });
   const runSynthesize = () =>
     synthesizeTopic.trim() && fire('/api/tasks/synthesize', { topic: synthesizeTopic.trim() });
+  const runFreeform = () =>
+    freeformPrompt.trim() &&
+    fire('/api/tasks/research-freeform', { prompt: freeformPrompt.trim() });
 
   const resolveApproval = async (id: string, approved: boolean) => {
     setActing(id);
@@ -267,6 +279,35 @@ export default function ResearchPage() {
         </button>
       </div>
 
+      <div
+        className="rounded-lg border p-5 mb-5"
+        style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
+      >
+        <div className="text-xs tracking-widest text-gray-500 mb-3">ASK A QUESTION</div>
+        <input
+          type="text"
+          value={freeformPrompt}
+          onChange={(e) => setFreeformPrompt(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && runFreeform()}
+          placeholder="e.g. what did we find about competitor pricing last time?"
+          className="w-full rounded px-3 py-2 text-sm mb-3 outline-none"
+          style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
+        />
+        <button
+          onClick={runFreeform}
+          disabled={generating || !freeformPrompt.trim()}
+          className="w-full py-2 rounded text-xs font-bold tracking-widest transition-colors"
+          style={{
+            background: generating || !freeformPrompt.trim() ? '#1e2040' : '#ffb34720',
+            border: `1px solid ${generating || !freeformPrompt.trim() ? '#1e2040' : '#ffb34740'}`,
+            color: generating || !freeformPrompt.trim() ? '#475569' : '#ffb347',
+            cursor: generating || !freeformPrompt.trim() ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {generating ? 'ASKING...' : '→ ASK'}
+        </button>
+      </div>
+
       {error && (
         <div
           className="rounded-lg border p-4 mb-5 text-sm"
@@ -305,6 +346,20 @@ export default function ResearchPage() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {freeformResponse && (
+        <div
+          className="rounded-lg border p-5 mb-5"
+          style={{ background: '#0d0d1a', borderColor: '#00ff9d30' }}
+        >
+          <div className="text-xs tracking-widest mb-3" style={{ color: '#00ff9d' }}>
+            RESPONSE
+          </div>
+          <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+            {freeformResponse}
+          </p>
         </div>
       )}
 
