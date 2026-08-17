@@ -46,6 +46,9 @@ interface OpsApproval {
     workflow?: string;
     brief?: string;
     assessment?: string;
+    currentStage?: number;
+    targetStage?: number;
+    streak?: number;
   };
   status: string;
   createdAt: string;
@@ -78,6 +81,9 @@ export default function OpsPage() {
   const [pending, setPending] = useState<OpsApproval[]>([]);
   const [acting, setActing] = useState<string | null>(null);
   const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
+  const [nudgeSummary, setNudgeSummary] = useState<string | null>(null);
+  const [checkingNudges, setCheckingNudges] = useState(false);
+  const [nudgeCheckQueued, setNudgeCheckQueued] = useState(false);
 
   const pendingTaskId = useRef<string | null>(null);
 
@@ -196,6 +202,14 @@ export default function OpsPage() {
         if (e.event === 'waiting_approval' || e.event === 'approval_resolved') {
           fetchPending();
         }
+        if (e.event === 'trust_graduation_nudges_complete') {
+          // Not gated on pendingTaskId — this can be cron-triggered
+          // (dev/trust-graduation-nudges.sh) as well as fired manually from
+          // the button below, so show it whenever it arrives either way.
+          setNudgeSummary(e.payload.summary);
+          setNudgeCheckQueued(false);
+          fetchPending();
+        }
       },
       [loadPastRuns, fetchPending]
     )
@@ -206,6 +220,29 @@ export default function OpsPage() {
     await fetch(`/api/approvals/${id}/${approved ? 'approve' : 'reject'}`, { method: 'POST' });
     setPending((prev) => prev.filter((a) => a.id !== id));
     setActing(null);
+  };
+
+  // Manual trigger for the same check dev/trust-graduation-nudges.sh runs
+  // weekly from cron — lets JNix ask "is anything ready to graduate?" on
+  // demand instead of waiting for the next scheduled run. Queuing returns
+  // immediately; the actual streak check + any proposals happen async, so
+  // this only tracks the POST itself, not the full run.
+  const checkTrustNudges = async () => {
+    setCheckingNudges(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/tasks/ops-trust-nudges', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? `Request failed (${res.status})`);
+        return;
+      }
+      setNudgeCheckQueued(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reach the API');
+    } finally {
+      setCheckingNudges(false);
+    }
   };
 
   async function fire(path: string, body: Record<string, unknown>) {
@@ -460,8 +497,21 @@ export default function OpsPage() {
         className="rounded-lg border p-5 mb-5"
         style={{ background: '#0d0d1a', borderColor: '#ffb34740' }}
       >
-        <div className="text-xs tracking-widest mb-3" style={{ color: '#ffb347' }}>
-          PENDING REVIEW {pending.length > 0 ? `— ${pending.length}` : ''}
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="text-xs tracking-widest" style={{ color: '#ffb347' }}>
+            PENDING REVIEW {pending.length > 0 ? `— ${pending.length}` : ''}
+          </div>
+          <button
+            onClick={checkTrustNudges}
+            disabled={checkingNudges}
+            className="text-xs text-gray-500 hover:text-accent flex-shrink-0"
+          >
+            {checkingNudges
+              ? 'checking...'
+              : nudgeCheckQueued
+                ? 'queued — check back shortly'
+                : '↻ check trust-graduation candidates'}
+          </button>
         </div>
         {pending.length === 0 ? (
           <p className="text-xs text-gray-600">
@@ -477,15 +527,27 @@ export default function OpsPage() {
                 className="rounded p-4"
                 style={{ background: '#080810', border: '1px solid #1e2040' }}
               >
-                <div className="text-xs text-gray-500 mb-2">
-                  Workflow &quot;{p.payload.workflow}&quot;
-                </div>
-                {p.payload.brief && (
-                  <div className="text-xs text-gray-600 mb-2">Brief: {p.payload.brief}</div>
+                {p.action === 'deliver_workflow_output' ? (
+                  <>
+                    <div className="text-xs text-gray-500 mb-2">
+                      Workflow &quot;{p.payload.workflow}&quot;
+                    </div>
+                    {p.payload.brief && (
+                      <div className="text-xs text-gray-600 mb-2">Brief: {p.payload.brief}</div>
+                    )}
+                    <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed mb-3 max-h-64 overflow-y-auto">
+                      {p.payload.assessment}
+                    </p>
+                  </>
+                ) : (
+                  // Every other 'strategy'-role approval (e.g. the
+                  // trust-graduation-nudge proposal) writes its own full,
+                  // human-readable question as `action` — no per-shape
+                  // payload fields to reconstruct here.
+                  <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed mb-3">
+                    {p.action}
+                  </p>
                 )}
-                <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed mb-3 max-h-64 overflow-y-auto">
-                  {p.payload.assessment}
-                </p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => resolveApproval(p.id, true)}
@@ -517,6 +579,20 @@ export default function OpsPage() {
           </div>
         )}
       </div>
+
+      {nudgeSummary && (
+        <div
+          className="rounded-lg border p-5 mb-5"
+          style={{ background: '#0d0d1a', borderColor: '#ffb34730' }}
+        >
+          <div className="text-xs tracking-widest mb-3" style={{ color: '#ffb347' }}>
+            TRUST GRADUATION NUDGES
+          </div>
+          <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+            {nudgeSummary}
+          </p>
+        </div>
+      )}
 
       {stages.length > 0 && (
         <div
