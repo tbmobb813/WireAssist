@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
 import { consumeContentHandoff } from '@/lib/content-handoff';
 import Link from 'next/link';
@@ -75,6 +75,9 @@ export default function ContentPage() {
   const [businessContext, setBusinessContext] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
+  const [freeformPrompt, setFreeformPrompt] = useState('');
+  const [freeformResponse, setFreeformResponse] = useState<string | null>(null);
+  const freeformTaskId = useRef<string | null>(null);
 
   useEffect(() => {
     const handoff = consumeContentHandoff();
@@ -147,6 +150,12 @@ export default function ContentPage() {
           setGenerating(false);
           setError(typeof e.payload.error === 'string' ? e.payload.error : 'Task failed');
         }
+        if (e.event === 'freeform_response') {
+          if (e.payload.taskId !== freeformTaskId.current) return;
+          setFreeformResponse(e.payload.response);
+          setGenerating(false);
+          freeformTaskId.current = null;
+        }
       },
       [fetchPosts, fetchIdeas, fetchCampaigns, fetchPending]
     )
@@ -209,6 +218,30 @@ export default function ContentPage() {
         setError(body.error ?? `Request failed (${res.status})`);
         setGenerating(false);
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reach the API');
+      setGenerating(false);
+    }
+  };
+
+  const runFreeform = async () => {
+    if (!freeformPrompt.trim() || generating) return;
+    setError(null);
+    setFreeformResponse(null);
+    setGenerating(true);
+    try {
+      const res = await fetch('/api/tasks/content-freeform', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: freeformPrompt.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? `Request failed (${res.status})`);
+        setGenerating(false);
+        return;
+      }
+      freeformTaskId.current = data.taskId;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not reach the API');
       setGenerating(false);
@@ -433,10 +466,53 @@ export default function ContentPage() {
               {generating ? 'GENERATING...' : '→ GENERATE PLAN'}
             </button>
           </div>
+
+          {/* Freeform */}
+          <div
+            className="rounded-lg border p-4"
+            style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
+          >
+            <div className="text-xs tracking-widest text-gray-500 mb-3">ASK A QUESTION</div>
+            <input
+              type="text"
+              value={freeformPrompt}
+              onChange={(e) => setFreeformPrompt(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && runFreeform()}
+              placeholder="e.g. what's performed best on LinkedIn so far?"
+              className="w-full rounded px-3 py-2 text-sm mb-3 outline-none"
+              style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
+            />
+            <button
+              onClick={runFreeform}
+              disabled={generating || !freeformPrompt.trim()}
+              className="w-full py-2 rounded text-xs font-bold tracking-widest transition-colors"
+              style={{
+                background: generating || !freeformPrompt.trim() ? '#1e2040' : '#4fc3f720',
+                border: `1px solid ${generating || !freeformPrompt.trim() ? '#1e2040' : '#4fc3f740'}`,
+                color: generating || !freeformPrompt.trim() ? '#475569' : '#4fc3f7',
+                cursor: generating || !freeformPrompt.trim() ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {generating ? 'ASKING...' : '→ ASK'}
+            </button>
+          </div>
         </div>
 
         {/* Middle — Pending review + Calendar */}
         <div className="col-span-2 space-y-6">
+          {freeformResponse && (
+            <div
+              className="rounded-lg border p-5"
+              style={{ background: '#0d0d1a', borderColor: '#00ff9d30' }}
+            >
+              <div className="text-xs tracking-widest mb-3" style={{ color: '#00ff9d' }}>
+                RESPONSE
+              </div>
+              <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+                {freeformResponse}
+              </p>
+            </div>
+          )}
           {pending.length > 0 && (
             <div>
               <div className="text-xs tracking-widest text-gray-500 mb-4">
