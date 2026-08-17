@@ -40,6 +40,10 @@ const CONTENT_TOOLS = [
   'content_create_campaign',
   'content_list_campaigns',
   'content_mark_published',
+  // No schema entry in CONTENT_TOOL_SCHEMAS for this one — deliberately
+  // invisible to the chat tool loop. Publishing is cron-only, driven by
+  // publishDuePostsSkill; scheduling stays the single approval gate.
+  'content_publish_post',
 ];
 
 export class ContentAgent extends BaseAgent {

@@ -360,6 +360,9 @@ importers:
       better-sqlite3:
         specifier: ^12.11.1
         version: 12.11.1
+      twitter-api-v2:
+        specifier: ^1.29.1
+        version: 1.29.1
     devDependencies:
       '@swc/core':
         specifier: ^1.15.47
@@ -5120,6 +5123,9 @@ packages:
 
   tunnel-agent@0.6.0:
     resolution: {integrity: sha512-McnNiV1l8RYeY8tBgEpuodCC1mLUdbSN+CYBL7kJsJNInOP8UjDDEwdk6Mw60vdLLrr5NHKZhMAOSrR2NZuQ+w==}
+
+  twitter-api-v2@1.29.1:
+    resolution: {integrity: sha512-l5U8aP6woe+gv0RViz/YA0YEG/NRtqkO1iXWqxNfrn3MSc2V85u6w44oNDBWhy8zVV9r36SJv/uXNmnfni8Uxw==}
 
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
@@ -10623,6 +10629,8 @@ snapshots:
   tunnel-agent@0.6.0:
     dependencies:
       safe-buffer: 5.2.1
+
+  twitter-api-v2@1.29.1: {}
 
   type-check@0.4.0:
     dependencies:

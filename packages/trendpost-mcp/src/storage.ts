@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 
 export type PostStatus = 'draft' | 'scheduled' | 'published' | 'failed';
-export type Platform = 'twitter' | 'linkedin' | 'instagram' | 'threads';
+export type Platform = 'twitter' | 'linkedin' | 'instagram' | 'threads' | 'facebook';
 
 export interface ScheduledPost {
   id: string;
@@ -17,6 +17,7 @@ export interface ScheduledPost {
   errorMessage?: string;
   tags: string[];
   campaignId?: string;
+  platformPostId?: string;
 }
 
 export interface ContentIdea {
@@ -89,6 +90,7 @@ export class TrendPostStorage {
     // framework, since these are the only two columns ever added post-launch.
     this.addColumnIfMissing('content_ideas', 'scheduled_for', 'TEXT');
     this.addColumnIfMissing('content_ideas', 'campaign_id', 'TEXT');
+    this.addColumnIfMissing('scheduled_posts', 'platform_post_id', 'TEXT');
   }
 
   private addColumnIfMissing(table: string, column: string, type: string): void {
@@ -170,12 +172,20 @@ export class TrendPostStorage {
     return rows.map((r) => this.mapPost(r));
   }
 
-  updatePostStatus(id: string, status: PostStatus, errorMessage?: string): void {
+  updatePostStatus(
+    id: string,
+    status: PostStatus,
+    errorMessage?: string,
+    platformPostId?: string
+  ): void {
+    // platform_post_id uses COALESCE so a plain status-only call (e.g. the
+    // self-report path used by content_mark_published, which never passes
+    // this arg) never clobbers an ID recorded by an earlier call.
     this.db
       .prepare(
         `
       UPDATE scheduled_posts
-      SET status = ?, published_at = ?, error_message = ?
+      SET status = ?, published_at = ?, error_message = ?, platform_post_id = COALESCE(?, platform_post_id)
       WHERE id = ?
     `
       )
@@ -183,6 +193,7 @@ export class TrendPostStorage {
         status,
         status === 'published' ? new Date().toISOString() : null,
         errorMessage ?? null,
+        platformPostId ?? null,
         id
       );
   }
@@ -274,6 +285,7 @@ export class TrendPostStorage {
       errorMessage: (r.error_message as string | null) ?? undefined,
       tags: JSON.parse(r.tags as string),
       campaignId: (r.campaign_id as string | null) ?? undefined,
+      platformPostId: (r.platform_post_id as string | null) ?? undefined,
     };
   }
 

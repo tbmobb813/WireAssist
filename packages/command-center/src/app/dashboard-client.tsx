@@ -263,6 +263,14 @@ function describeEvent(event: string, payload: unknown): { description: string; 
       const status = p.autoApproved ? 'auto-delivered' : p.approved ? 'delivered' : 'not delivered';
       return { description: `Ops workflow "${workflow}" ${status}`, role: 'strategy' };
     }
+    case 'publish_due_posts_complete': {
+      const publishedCount = Array.isArray(p.published) ? p.published.length : 0;
+      const failedCount = Array.isArray(p.failed) ? p.failed.length : 0;
+      return {
+        description: `Auto-publish: ${publishedCount} published${failedCount ? `, ${failedCount} failed` : ''}`,
+        role: 'content',
+      };
+    }
     case 'auto_approved':
       return {
         description: typeof p.action === 'string' ? `Auto-approved: ${p.action}` : 'Auto-approved',
@@ -754,6 +762,7 @@ export default function DashboardClient() {
         case 'ops_stage_complete':
         case 'ops_blocked':
         case 'ops_run_complete':
+        case 'publish_due_posts_complete':
         case 'auto_approved':
         case 'handoff_queued':
           addActivity(e.event, e.payload);

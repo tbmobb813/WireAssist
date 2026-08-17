@@ -113,6 +113,15 @@ export type AgentEvent =
         stale: { id: string; agentRole: string; action: string; daysPending: number }[];
       };
     }
+  | {
+      event: 'publish_due_posts_complete';
+      payload: {
+        taskId: string;
+        summary: string;
+        published: { id: string; platform: string; platformPostId?: string }[];
+        failed: { id: string; platform: string; errorMessage?: string }[];
+      };
+    }
   | { event: 'auto_approved'; payload: { agentRole: string; taskId: string; action: string } }
   | {
       event: 'handoff_queued';

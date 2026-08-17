@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { TrendPostStorage, Platform, PostStatus } from './storage';
+import { publishToPlatform } from './publishers';
 import type { MCPClient } from '@wireassist/core';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -218,9 +219,35 @@ Return only valid JSON array. No markdown fences.`;
   });
 
   // ── MARK PUBLISHED ──────────────────────────────────────────────
+  // Self-report only — for confirming a post published manually outside
+  // this system. Does not touch any real platform. See content_publish_post
+  // below for the tool that actually publishes.
   mcp.register('content_mark_published', async (params) => {
     const { postId } = params as { postId: string };
     storage.updatePostStatus(postId, 'published');
+    return storage.getPost(postId);
+  });
+
+  // ── PUBLISH POST ─────────────────────────────────────────────────
+  // Actually publishes to the post's real platform (Twitter, LinkedIn,
+  // Facebook, or Instagram) via the publishers/ clients. Cron-only by
+  // design — never exposed to the chat tool loop (no schema entry in
+  // tool-schemas.ts) — scheduling is the single approval gate; this just
+  // executes an already-approved decision once it's due. Swallows the
+  // publisher's error into the post's errorMessage rather than rethrowing,
+  // so one failed post in a sweep doesn't abort the rest of the batch.
+  mcp.register('content_publish_post', async (params) => {
+    const { postId } = params as { postId: string };
+    const post = storage.getPost(postId);
+    if (!post) throw new Error(`No post found with id ${postId}`);
+
+    try {
+      const result = await publishToPlatform(post.platform, post.content);
+      storage.updatePostStatus(postId, 'published', undefined, result.platformPostId);
+    } catch (err) {
+      storage.updatePostStatus(postId, 'failed', err instanceof Error ? err.message : String(err));
+    }
+
     return storage.getPost(postId);
   });
 
@@ -245,13 +272,21 @@ Return only valid JSON array. No markdown fences.`;
 
   // ── LIST SCHEDULED POSTS ──────────────────────────────────────
   mcp.register('content_list_posts', async (params) => {
-    const { status, platform, daysAhead } = params as {
+    const { status, platform, daysAhead, dueOnly } = params as {
       status?: string;
       platform?: Platform;
       daysAhead?: number;
+      dueOnly?: boolean;
     };
 
     const now = new Date();
+    // dueOnly asks for "scheduled at or before now" — that means omitting
+    // the `from` bound entirely, not passing `from: now, to: now` (which
+    // storage.listPosts() would treat as an empty from-now-to-now window).
+    if (dueOnly) {
+      return storage.listPosts({ status: status as PostStatus | undefined, platform, to: now });
+    }
+
     const to = daysAhead ? new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000) : undefined;
 
     return storage.listPosts({ status: status as PostStatus | undefined, platform, from: now, to });

@@ -9,3 +9,5 @@ export type {
   Campaign,
   CampaignSource,
 } from './storage';
+export { publishToPlatform } from './publishers';
+export type { PublishResult } from './publishers';
