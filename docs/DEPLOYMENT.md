@@ -473,6 +473,30 @@ No `jq` needed (no request body). Run it manually once first
 (`WIREASSIST_API_URL=http://localhost:3002 ./dev/proactive-insights.sh`) to
 confirm it queues successfully before trusting it to cron.
 
+## 11. Trust-graduation nudges
+
+`dev/trust-graduation-nudges.sh` triggers NixOps's `trust_graduation_nudges`
+task — it looks for any workflow that's been approved 3 times in a row at
+trust stage 2 (the default — every run needs a human approval) and, for
+each one found, proposes graduating it to stage 3 (pre-approved — runs
+deliver without asking) through the normal approval queue. Approving that
+proposal advances the stage immediately; rejecting it leaves the workflow
+at stage 2 and it won't be re-proposed until the streak grows further. If
+nothing qualifies, it says so and skips pinging Telegram.
+
+**Cron entry** (weekly, same reasoning as proactive insights above —
+approval streaks need time to accumulate):
+
+```bash
+crontab -e
+# add:
+0 8 * * 1 cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/trust-graduation-nudges.sh >> /var/log/wireassist-trust-graduation-nudges.log 2>&1
+```
+
+No `jq` needed (no request body). Run it manually once first
+(`WIREASSIST_API_URL=http://localhost:3002 ./dev/trust-graduation-nudges.sh`)
+to confirm it queues successfully before trusting it to cron.
+
 ## Updating after a code change
 
 ```bash

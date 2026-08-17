@@ -186,6 +186,9 @@ events.on('agent:ops_stage_complete', (p) => broadcast('ops_stage_complete', p))
 events.on('agent:ops_blocked', (p) => broadcast('ops_blocked', p));
 events.on('agent:ops_run_complete', (p) => broadcast('ops_run_complete', p));
 events.on('agent:ops_freeform_response', (p) => broadcast('ops_freeform_response', p));
+events.on('agent:trust_graduation_nudges_complete', (p) =>
+  broadcast('trust_graduation_nudges_complete', p)
+);
 events.on('agent:gtm_generated', (p) => broadcast('gtm_generated', p));
 events.on('agent:gtm_psych_generated', (p) => broadcast('gtm_psych_generated', p));
 events.on('agent:auto_approved', (p) => broadcast('auto_approved', p));
@@ -704,6 +707,14 @@ app.post('/api/tasks/ops-freeform', async (c) => {
   const { prompt } = await c.req.json();
   if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
   const task = OpsTasks.createOpsFreeformTask({ prompt });
+  queueOpsTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/ops-trust-nudges', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const task = OpsTasks.createTrustGraduationNudgesTask();
   queueOpsTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });

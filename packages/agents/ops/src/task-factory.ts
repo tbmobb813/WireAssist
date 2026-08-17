@@ -39,3 +39,10 @@ export function createOpsFreeformTask(params: {
     history: params.history,
   });
 }
+
+export function createTrustGraduationNudgesTask(options?: { description?: string }): AgentTask {
+  return baseTask(
+    options?.description ?? "Nudge JNix to graduate any workflow's trust stage after a streak.",
+    { type: 'trust_graduation_nudges' }
+  );
+}
