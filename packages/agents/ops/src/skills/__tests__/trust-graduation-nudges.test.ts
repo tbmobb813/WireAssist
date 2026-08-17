@@ -4,6 +4,14 @@ import { tmpdir } from 'os';
 import type { AgentTask, SkillAgentHandle } from '@wireassist/core';
 import { findGraduationCandidates, trustGraduationNudgesSkill } from '../trust-graduation-nudges';
 import { getTrustStage, setTrustStage } from '../../trust-stage';
+import { listWorkflows } from '../../context-loader';
+
+// Mocked so execute()'s tests can use fake workflow names without touching
+// real files under context/workflows/ — setTrustStage() writes to the real
+// file when a candidate is approved, so a real name here would mutate repo
+// state as a side effect of running the test suite.
+jest.mock('../../context-loader');
+const mockedListWorkflows = listWorkflows as jest.MockedFunction<typeof listWorkflows>;
 
 function decision(overrides: {
   action?: string;
@@ -117,11 +125,20 @@ describe('trustGraduationNudgesSkill.execute()', () => {
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'wireassist-ops-trust-'));
     process.env.WIREASSIST_OPS_TRUST_FILE = join(tempDir, 'ops-trust.json');
+    // Covers every fake workflow name used by the tests below by default —
+    // individual tests override this when they need to test the "workflow
+    // no longer exists" filter specifically.
+    mockedListWorkflows.mockReturnValue([
+      'test-workflow-alpha',
+      'test-workflow-beta',
+      'test-workflow-already-graduated',
+    ]);
   });
 
   afterEach(() => {
     delete process.env.WIREASSIST_OPS_TRUST_FILE;
     rmSync(tempDir, { recursive: true, force: true });
+    jest.resetAllMocks();
   });
 
   const streakFor = (workflow: string) => [
@@ -199,6 +216,23 @@ describe('trustGraduationNudgesSkill.execute()', () => {
     const proposeAction = jest.fn().mockResolvedValue(true);
     const agent = makeAgentHandle({
       listDecisions: jest.fn().mockReturnValue(streakFor('test-workflow-already-graduated')),
+      proposeAction,
+    });
+
+    await trustGraduationNudgesSkill.execute({ agent, task: makeTask(), input: {} });
+
+    expect(proposeAction).not.toHaveBeenCalled();
+    expect(agent.emit).toHaveBeenCalledWith(
+      'agent:trust_graduation_nudges_complete',
+      expect.objectContaining({ candidates: [] })
+    );
+  });
+
+  it('never proposes graduation for a workflow that no longer exists (renamed/deleted since its approval history)', async () => {
+    mockedListWorkflows.mockReturnValue(['some-other-workflow']);
+    const proposeAction = jest.fn().mockResolvedValue(true);
+    const agent = makeAgentHandle({
+      listDecisions: jest.fn().mockReturnValue(streakFor('test-workflow-deleted')),
       proposeAction,
     });
 

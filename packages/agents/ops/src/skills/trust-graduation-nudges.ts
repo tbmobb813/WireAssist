@@ -1,5 +1,6 @@
 import type { ApprovalRequest, Skill } from '@wireassist/core';
 import { getTrustStage, setTrustStage } from '../trust-stage';
+import { listWorkflows } from '../context-loader';
 
 // Same bar as AUTO_APPROVE_THRESHOLD (admin/auto-approve-policy.ts) and
 // STREAK_LENGTH (admin/skills/proactive-insights.ts) — 3 in a row is the
@@ -52,11 +53,15 @@ export const trustGraduationNudgesSkill: Skill<unknown, void> = {
 
   async execute({ agent, task }) {
     const decisions = agent.listDecisions({ agentRole: 'strategy', limit: 200 });
+    const existingWorkflows = new Set(listWorkflows());
     // Already-graduated workflows have nothing left to nudge — and this is
     // also what keeps the signal clean, since stage 3+ runs skip
     // proposeAction() entirely and never reach the approval queue at all.
+    // A workflow renamed/deleted since its approval history was recorded
+    // has nothing to graduate either — its trust-stage entry would just
+    // dangle since syncWorkflowFile() no-ops on a missing file.
     const candidates = findGraduationCandidates(decisions).filter(
-      (c) => getTrustStage(c.workflow) === 2
+      (c) => getTrustStage(c.workflow) === 2 && existingWorkflows.has(c.workflow)
     );
 
     if (candidates.length === 0) {
