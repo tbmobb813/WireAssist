@@ -3,27 +3,18 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAgentEvents, type AgentEvent } from '@/hooks/useAgentEvents';
-
-type ObjectiveStatus = 'active' | 'paused' | 'completed';
-type AgentRole = 'admin' | 'content' | 'research' | 'strategy' | 'gtm';
-type RosterStatus = 'idle' | 'running' | 'waiting_approval' | 'error';
-
-interface Objective {
-  id: string;
-  title: string;
-  description: string | null;
-  status: ObjectiveStatus;
-  createdAt: number;
-  updatedAt: number;
-}
-
-interface ObjectiveEvent {
-  id: string;
-  objectiveId: string;
-  type: string;
-  payload: Record<string, unknown> | null;
-  createdAt: number;
-}
+import {
+  foldRoster,
+  foldTasks,
+  describeEvent,
+  type ObjectiveStatus,
+  type AgentRole,
+  type RosterStatus,
+  type Objective,
+  type ObjectiveEvent,
+  type KanbanColumn,
+  type KanbanCard,
+} from '@/lib/objective-events';
 
 const STATUS_COLOR: Record<ObjectiveStatus, string> = {
   active: '#00ff9d',
@@ -55,90 +46,15 @@ const rosterStatusLabel = (s: RosterStatus) =>
     error: 'ERROR',
   })[s];
 
-interface RosterEntry {
-  status: RosterStatus;
-  lastDescription: string | null;
-  lastAt: number | null;
-}
+const roleName = (role: AgentRole) => ROSTER.find((r) => r.role === role)?.name ?? role;
 
-function emptyRoster(): Record<AgentRole, RosterEntry> {
-  return {
-    admin: { status: 'idle', lastDescription: null, lastAt: null },
-    content: { status: 'idle', lastDescription: null, lastAt: null },
-    research: { status: 'idle', lastDescription: null, lastAt: null },
-    strategy: { status: 'idle', lastDescription: null, lastAt: null },
-    gtm: { status: 'idle', lastDescription: null, lastAt: null },
-  };
-}
-
-// Folds a chronological (oldest-first) list of agent.* events into a
-// per-role current status — same status transitions dashboard-client.tsx's
-// Workforce panel uses (task_started -> running, task_complete -> idle,
-// task_failed -> error, waiting_approval -> waiting_approval), just scoped
-// to one objective instead of global.
-function foldRoster(events: ObjectiveEvent[]): Record<AgentRole, RosterEntry> {
-  const roster = emptyRoster();
-  for (const e of events) {
-    const type = e.type.startsWith('agent.') ? e.type.slice('agent.'.length) : e.type;
-    const payload = e.payload as {
-      agentRole?: AgentRole;
-      description?: string;
-      error?: string;
-    } | null;
-    const role = payload?.agentRole;
-    if (!role || !(role in roster)) continue;
-
-    if (type === 'task_started') {
-      roster[role] = {
-        status: 'running',
-        lastDescription: payload?.description ?? roster[role].lastDescription,
-        lastAt: e.createdAt,
-      };
-    } else if (type === 'task_complete') {
-      roster[role] = { ...roster[role], status: 'idle', lastAt: e.createdAt };
-    } else if (type === 'task_failed') {
-      roster[role] = {
-        status: 'error',
-        lastDescription: payload?.error ?? roster[role].lastDescription,
-        lastAt: e.createdAt,
-      };
-    } else if (type === 'waiting_approval') {
-      roster[role] = { ...roster[role], status: 'waiting_approval', lastAt: e.createdAt };
-    }
-  }
-  return roster;
-}
-
-function describeEvent(e: ObjectiveEvent): string {
-  const type = e.type.startsWith('agent.') ? e.type.slice('agent.'.length) : e.type;
-  const payload = e.payload as {
-    agentRole?: string;
-    description?: string;
-    error?: string;
-    action?: string;
-    to?: string;
-  } | null;
-  switch (e.type) {
-    case 'objective.created':
-      return 'Objective created';
-    case 'objective.transitioned':
-      return `Status changed to ${payload?.to ?? 'unknown'}`;
-  }
-  switch (type) {
-    case 'task_started':
-      return `${payload?.agentRole ?? 'agent'} started: ${payload?.description ?? ''}`;
-    case 'task_complete':
-      return `${payload?.agentRole ?? 'agent'} completed a task`;
-    case 'task_failed':
-      return `${payload?.agentRole ?? 'agent'} failed: ${payload?.error ?? ''}`;
-    case 'waiting_approval':
-      return `${payload?.agentRole ?? 'agent'} waiting on approval: ${payload?.action ?? ''}`;
-    case 'approval_resolved':
-      return `${payload?.agentRole ?? 'agent'} approval resolved`;
-    default:
-      return type;
-  }
-}
+const COLUMNS: KanbanColumn[] = ['todo', 'in_progress', 'review', 'done'];
+const COLUMN_LABEL: Record<KanbanColumn, string> = {
+  todo: 'TODO',
+  in_progress: 'IN PROGRESS',
+  review: 'REVIEW',
+  done: 'DONE',
+};
 
 export default function ObjectiveDetailPage() {
   const params = useParams<{ id: string }>();
@@ -149,6 +65,9 @@ export default function ObjectiveDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
+  const [newCardText, setNewCardText] = useState('');
+  const [addingCard, setAddingCard] = useState(false);
+  const [movingCardId, setMovingCardId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -174,11 +93,20 @@ export default function ObjectiveDetailPage() {
       if (e.event === 'connected') return;
       const payload = e.payload as { objectiveId?: string };
       if (payload?.objectiveId !== id) return;
+      // manual_card_* events are objective-native (written directly via
+      // recordAgentEvent with an objective. prefix), not agent-bus-sourced
+      // — everything else keeps the agent. prefix broadcast() applies.
+      const type =
+        e.event === 'manual_card_created'
+          ? 'objective.manual_task_created'
+          : e.event === 'manual_card_moved'
+            ? 'objective.manual_task_moved'
+            : `agent.${e.event}`;
       setEvents((prev) => [
         {
           id: `live:${Date.now()}:${Math.random()}`,
           objectiveId: id,
-          type: `agent.${e.event}`,
+          type,
           payload: payload as Record<string, unknown>,
           createdAt: Date.now(),
         },
@@ -190,6 +118,7 @@ export default function ObjectiveDetailPage() {
   useAgentEvents(handleLiveEvent);
 
   const roster = useMemo(() => foldRoster([...events].reverse()), [events]);
+  const cards = useMemo(() => foldTasks([...events].reverse()), [events]);
   const sortedEvents = useMemo(
     () => [...events].sort((a, b) => b.createdAt - a.createdAt),
     [events]
@@ -217,6 +146,35 @@ export default function ObjectiveDetailPage() {
     }
   };
 
+  const addCard = async () => {
+    if (!id || !newCardText.trim() || addingCard) return;
+    setAddingCard(true);
+    try {
+      const res = await fetch(`/api/objectives/${id}/cards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: newCardText.trim() }),
+      });
+      if (res.ok) setNewCardText('');
+    } finally {
+      setAddingCard(false);
+    }
+  };
+
+  const moveCard = async (cardId: string, to: KanbanColumn) => {
+    if (!id || movingCardId) return;
+    setMovingCardId(cardId);
+    try {
+      await fetch(`/api/objectives/${id}/cards/${cardId}/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to }),
+      });
+    } finally {
+      setMovingCardId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen p-8 max-w-3xl mx-auto">
@@ -240,7 +198,7 @@ export default function ObjectiveDetailPage() {
   }
 
   return (
-    <div className="min-h-screen p-8 max-w-3xl mx-auto">
+    <div className="min-h-screen p-8 max-w-5xl mx-auto">
       <div className="mb-6">
         <Link
           href="/objectives"
@@ -286,6 +244,69 @@ export default function ObjectiveDetailPage() {
             {s.toUpperCase()}
           </button>
         ))}
+      </div>
+
+      <div
+        className="rounded-lg border p-5 mb-5"
+        style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
+      >
+        <div className="text-xs tracking-widest text-gray-500 mb-3">BOARD</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {COLUMNS.map((column) => {
+            const columnCards = cards.filter((card) => card.column === column);
+            return (
+              <div
+                key={column}
+                className="rounded p-3"
+                style={{ background: '#080810', border: '1px solid #1e2040' }}
+              >
+                <div className="text-xs tracking-widest text-gray-500 mb-3">
+                  {COLUMN_LABEL[column]} {columnCards.length > 0 ? `— ${columnCards.length}` : ''}
+                </div>
+                <div className="space-y-2">
+                  {columnCards.map((card) => (
+                    <KanbanCardView
+                      key={card.kind === 'agent' ? card.taskId : card.cardId}
+                      card={card}
+                      moving={movingCardId === (card.kind === 'manual' ? card.cardId : null)}
+                      onMove={moveCard}
+                    />
+                  ))}
+                </div>
+                {column === 'todo' && (
+                  <div className="mt-3 space-y-2">
+                    <input
+                      type="text"
+                      value={newCardText}
+                      onChange={(e) => setNewCardText(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addCard()}
+                      placeholder="+ Add card"
+                      className="w-full rounded px-2 py-1.5 text-xs outline-none"
+                      style={{
+                        background: '#0d0d1a',
+                        border: '1px solid #1e2040',
+                        color: '#e2e8f0',
+                      }}
+                    />
+                    <button
+                      onClick={addCard}
+                      disabled={addingCard || !newCardText.trim()}
+                      className="w-full py-1.5 rounded text-xs font-bold tracking-widest transition-colors"
+                      style={{
+                        background: addingCard || !newCardText.trim() ? '#1e2040' : '#4fc3f720',
+                        border: `1px solid ${addingCard || !newCardText.trim() ? '#1e2040' : '#4fc3f740'}`,
+                        color: addingCard || !newCardText.trim() ? '#475569' : '#4fc3f7',
+                        cursor: addingCard || !newCardText.trim() ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {addingCard ? 'ADDING...' : '+ ADD CARD'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div
@@ -351,6 +372,63 @@ export default function ObjectiveDetailPage() {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function KanbanCardView({
+  card,
+  moving,
+  onMove,
+}: {
+  card: KanbanCard;
+  moving: boolean;
+  onMove: (cardId: string, to: KanbanColumn) => void;
+}) {
+  if (card.kind === 'agent') {
+    return (
+      <div
+        className="rounded p-2.5"
+        style={
+          card.errored
+            ? { background: '#2a0f0f', border: '1px solid #ef444440' }
+            : { background: '#0d0d1a', border: '1px solid #1e2040' }
+        }
+      >
+        <div className="text-[10px] tracking-widest text-gray-600 mb-1">
+          {roleName(card.agentRole)}
+        </div>
+        <div className="text-xs text-gray-300">{card.description || '(no description)'}</div>
+        {card.errored && card.error && (
+          <div className="text-[11px] mt-1" style={{ color: '#f87171' }}>
+            {card.error}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded p-2.5" style={{ background: '#0d0d1a', border: '1px solid #1e2040' }}>
+      <div className="text-xs text-gray-300 mb-2">{card.text}</div>
+      <div className="flex gap-1 flex-wrap">
+        {COLUMNS.map((c) => (
+          <button
+            key={c}
+            onClick={() => onMove(card.cardId, c)}
+            disabled={moving || card.column === c}
+            className="text-[10px] px-1.5 py-0.5 rounded tracking-wide transition-colors"
+            style={{
+              background: card.column === c ? '#4fc3f720' : 'transparent',
+              border: `1px solid ${card.column === c ? '#4fc3f740' : '#1e2040'}`,
+              color: card.column === c ? '#4fc3f7' : '#64748b',
+              cursor: moving || card.column === c ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {COLUMN_LABEL[c]}
+          </button>
+        ))}
       </div>
     </div>
   );

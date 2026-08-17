@@ -4,6 +4,10 @@ import { useEffect, useCallback, useRef } from 'react';
 export type AgentEvent =
   | { event: 'connected' }
   | {
+      event: 'task_queued';
+      payload: { agentRole: string; taskId: string; description: string; objectiveId?: string };
+    }
+  | {
       event: 'task_started';
       payload: { agentRole: string; taskId: string; description: string; objectiveId?: string };
     }
@@ -138,6 +142,14 @@ export type AgentEvent =
   | {
       event: 'handoff_queued';
       payload: { task: { id: string; agentRole: string; description: string } };
+    }
+  | {
+      event: 'manual_card_created';
+      payload: { objectiveId: string; cardId: string; text: string; column: string };
+    }
+  | {
+      event: 'manual_card_moved';
+      payload: { objectiveId: string; cardId: string; to: string };
     };
 
 export function useAgentEvents(onEvent: (e: AgentEvent) => void) {

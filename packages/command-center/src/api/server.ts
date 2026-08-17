@@ -89,7 +89,22 @@ function logAgentTaskError(err: unknown) {
 /** Run one admin task at a time so events and status stay coherent. */
 let adminTaskChain: Promise<void> = Promise.resolve();
 
+// Emitted before a task is handed to its agent's serialized queue — the
+// only signal a task exists prior to actually starting (there's no other
+// "queued" event anywhere in the codebase). Unconditional, same as
+// BaseAgent.run()'s own emits; broadcast() is what gates the ledger write
+// on objectiveId presence, not the emit itself.
+function emitTaskQueued(task: AgentTask) {
+  events.emit('agent:task_queued', {
+    agentRole: task.agentRole,
+    taskId: task.id,
+    description: task.description,
+    objectiveId: task.objectiveId,
+  });
+}
+
 function queueAgentTask(task: Parameters<AdminAgent['run']>[0]) {
+  emitTaskQueued(task);
   adminTaskChain = adminTaskChain.then(() => agent.run(task)).catch(logAgentTaskError);
   return task;
 }
@@ -101,6 +116,7 @@ let contentTaskChain: Promise<void> = Promise.resolve();
 let researchTaskChain: Promise<void> = Promise.resolve();
 
 function queueResearchTask(task: Parameters<ResearchAgent['run']>[0]) {
+  emitTaskQueued(task);
   researchTaskChain = researchTaskChain
     .then(() => researchAgent.run(task))
     .catch(logAgentTaskError);
@@ -108,6 +124,7 @@ function queueResearchTask(task: Parameters<ResearchAgent['run']>[0]) {
 }
 
 function queueContentTask(task: Parameters<ContentAgent['run']>[0]) {
+  emitTaskQueued(task);
   contentTaskChain = contentTaskChain.then(() => contentAgent.run(task)).catch(logAgentTaskError);
   return task;
 }
@@ -116,6 +133,7 @@ function queueContentTask(task: Parameters<ContentAgent['run']>[0]) {
 let opsTaskChain: Promise<void> = Promise.resolve();
 
 function queueOpsTask(task: Parameters<NixOpsAgent['run']>[0]) {
+  emitTaskQueued(task);
   opsTaskChain = opsTaskChain.then(() => opsAgent.run(task)).catch(logAgentTaskError);
   return task;
 }
@@ -124,6 +142,7 @@ function queueOpsTask(task: Parameters<NixOpsAgent['run']>[0]) {
 let gtmTaskChain: Promise<void> = Promise.resolve();
 
 function queueGtmTask(task: Parameters<GtmAgent['run']>[0]) {
+  emitTaskQueued(task);
   gtmTaskChain = gtmTaskChain.then(() => gtmAgent.run(task)).catch(logAgentTaskError);
   return task;
 }
@@ -160,6 +179,11 @@ interface ActivityRecord {
 const recentActivity: ActivityRecord[] = [];
 const MAX_ACTIVITY = 100;
 
+function pushSSE(event: string, payload: unknown) {
+  const data = `data: ${JSON.stringify({ event, payload })}\n\n`;
+  sseClients.forEach((send) => send(data));
+}
+
 function broadcast(event: string, payload: unknown) {
   recentActivity.unshift({ event, payload, at: new Date().toISOString() });
   if (recentActivity.length > MAX_ACTIVITY) recentActivity.pop();
@@ -171,11 +195,11 @@ function broadcast(event: string, payload: unknown) {
       .catch(console.error);
   }
 
-  const data = `data: ${JSON.stringify({ event, payload })}\n\n`;
-  sseClients.forEach((send) => send(data));
+  pushSSE(event, payload);
 }
 
 // Wire EventBus → SSE broadcasts
+events.on('agent:task_queued', (p) => broadcast('task_queued', p));
 events.on('agent:task_started', (p) => broadcast('task_started', p));
 events.on('agent:task_complete', (p) => broadcast('task_complete', p));
 events.on('agent:task_failed', (p) => broadcast('task_failed', p));
@@ -272,7 +296,7 @@ const app = new Hono();
 
 app.use('*', cors({ origin: 'http://localhost:3001' }));
 const portfolioStore = registerPortfolioRoutes(app, DB_PATH);
-const objectiveStore = registerObjectiveRoutes(app, DB_PATH);
+const objectiveStore = registerObjectiveRoutes(app, DB_PATH, pushSSE);
 
 // Health check
 app.get('/health', (c) =>
