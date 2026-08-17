@@ -22,7 +22,8 @@ type SupportedTaskInput =
   | { type: 'freeform'; prompt: string; history?: ProviderMessage[] }
   | { type: 'daily_briefing'; maxEmails?: number; daysAhead?: number }
   | { type: 'follow_up_nudges'; daysStale?: number }
-  | { type: 'proactive_insights' };
+  | { type: 'proactive_insights' }
+  | { type: 'stale_approvals_nudge'; daysStale?: number };
 
 function baseTask(role: AgentRole, description: string, input: SupportedTaskInput): AgentTask {
   const now = new Date();
@@ -139,5 +140,16 @@ export function createProactiveInsightsTask(options?: { description?: string }):
     'admin',
     options?.description ?? 'Reflect on approval/rejection patterns across every agent.',
     { type: 'proactive_insights' }
+  );
+}
+
+export function createStaleApprovalsTask(options?: {
+  description?: string;
+  daysStale?: number;
+}): AgentTask {
+  return baseTask(
+    'admin',
+    options?.description ?? 'Flag approval requests that have been sitting pending too long.',
+    { type: 'stale_approvals_nudge', daysStale: options?.daysStale }
   );
 }

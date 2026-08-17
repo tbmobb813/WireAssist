@@ -55,4 +55,18 @@ describe('AdminTasks', () => {
       expect((t.input as { history?: unknown }).history).toEqual(history);
     });
   });
+
+  describe('staleApprovals', () => {
+    it('defaults to daysStale=3', () => {
+      const t = AdminTasks.staleApprovals();
+      expect((t.input as { type: string; daysStale?: number }).type).toBe('stale_approvals_nudge');
+      expect((t.input as { daysStale?: number }).daysStale).toBe(3);
+      expect(t.agentRole).toBe('admin');
+    });
+
+    it('passes custom daysStale through', () => {
+      const t = AdminTasks.staleApprovals(1);
+      expect((t.input as { daysStale?: number }).daysStale).toBe(1);
+    });
+  });
 });

@@ -6,6 +6,7 @@ import {
   createDailyBriefingTask,
   createFollowUpNudgesTask,
   createProactiveInsightsTask,
+  createStaleApprovalsTask,
 } from './task-factory';
 
 /** Convenience factories used by Command Center API routes and demos. */
@@ -32,5 +33,9 @@ export const AdminTasks = {
 
   proactiveInsights() {
     return createProactiveInsightsTask();
+  },
+
+  staleApprovals(daysStale = 3) {
+    return createStaleApprovalsTask({ daysStale });
   },
 };
