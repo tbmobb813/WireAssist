@@ -55,4 +55,20 @@ describe('AdminTasks', () => {
       expect((t.input as { history?: unknown }).history).toEqual(history);
     });
   });
+
+  describe('budgetWarning', () => {
+    it('defaults to thresholdPercent=80', () => {
+      const t = AdminTasks.budgetWarning();
+      expect((t.input as { type: string; thresholdPercent?: number }).type).toBe(
+        'budget_warning_nudge'
+      );
+      expect((t.input as { thresholdPercent?: number }).thresholdPercent).toBe(80);
+      expect(t.agentRole).toBe('admin');
+    });
+
+    it('passes custom thresholdPercent through', () => {
+      const t = AdminTasks.budgetWarning(90);
+      expect((t.input as { thresholdPercent?: number }).thresholdPercent).toBe(90);
+    });
+  });
 });
