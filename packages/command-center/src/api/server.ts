@@ -31,6 +31,7 @@ import {
   setTrustStage,
   MIN_TRUST_STAGE,
   MAX_TRUST_STAGE,
+  setupOpsMCP,
 } from '@wireassist/agent-ops';
 import {
   GtmAgent,
@@ -226,6 +227,7 @@ async function bootstrap() {
   researchAgent = new ResearchAgent({ approval, memory, mcp, events });
 
   // NixOps Agent — business workflow runner (context files ship with the package)
+  setupOpsMCP(mcp);
   opsAgent = new NixOpsAgent({ approval, memory, mcp, events });
 
   // GTM Agent — go-to-market strategy and psych tactics generation

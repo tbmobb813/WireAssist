@@ -17,8 +17,40 @@ export const OPS_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
       required: ['spreadsheetId', 'range'],
     },
   },
+  // ── Local, read-only (no external API) ──────────────────────────
+  list_workflows: {
+    name: 'list_workflows',
+    description:
+      'List the names of every registered NixOps workflow. Call this before run_workflow_skill if you are not certain of the exact workflow name — never guess one.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  // ── Skill, exposed as a composable tool (dispatched via invokeSkill(),
+  // not useTool() — see NixOpsAgent.executeToolCall()). Runs the full DATA
+  // loop (diagnose -> assemble -> take_action -> assess) behind one call
+  // and self-gates its own delivery with an internal proposeAction() call,
+  // so it executes immediately at this outer level rather than being
+  // approval-gated a second time. Named with a `_skill` suffix to stay
+  // visually distinct from raw MCP tool names above.
+  run_workflow_skill: {
+    name: 'run_workflow_skill',
+    description:
+      'Run a named NixOps workflow through the full DATA loop (diagnose, assemble, take action, assess) and propose delivering the result. Call list_workflows first if you are not certain of the exact workflow name.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workflow: { type: 'string', description: 'Exact workflow name from list_workflows.' },
+        brief: { type: 'string', description: 'What this run should accomplish.' },
+      },
+      required: ['workflow', 'brief'],
+    },
+  },
 };
 
 // Tool names that only ever read data — safe to execute immediately in the
 // chat tool loop without going through the approval queue.
-export const READ_ONLY_OPS_TOOLS = new Set<string>(['sheets_read']);
+export const READ_ONLY_OPS_TOOLS = new Set<string>(['sheets_read', 'list_workflows']);
+
+// Skill-tool names dispatched via invokeSkill() rather than useTool() — see
+// NixOpsAgent.executeToolCall(). Kept separate from READ_ONLY_OPS_TOOLS
+// since these are never valid useTool()/MCP calls.
+export const OPS_SKILL_TOOLS = new Set<string>(['run_workflow_skill']);

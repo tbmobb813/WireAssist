@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 import type { AgentTask, IApprovalQueue, MemoryStore, MCPClient, EventBus } from '@wireassist/core';
 import { NixOpsAgent } from '../nixops-agent';
 
@@ -53,10 +56,12 @@ function makeDeps(
 }
 
 describe('NixOpsAgent — chat tool-calling loop', () => {
-  it('config.toolSchemas is populated for sheets_read', () => {
+  it('config.toolSchemas is populated for sheets_read, list_workflows, and run_workflow_skill', () => {
     const agent = new NixOpsAgent(makeDeps());
     const toolSchemas = (agent as any).config.toolSchemas;
-    expect(Object.keys(toolSchemas)).toEqual(['sheets_read']);
+    expect(Object.keys(toolSchemas).sort()).toEqual(
+      ['list_workflows', 'run_workflow_skill', 'sheets_read'].sort()
+    );
   });
 
   it('executeToolCall() runs sheets_read immediately, with no approval', async () => {
@@ -114,5 +119,71 @@ describe('NixOpsAgent — chat tool-calling loop', () => {
       'follow-up',
       expect.objectContaining({ priorMessages: history })
     );
+  });
+});
+
+describe('NixOpsAgent — composable skill-tools in the chat loop', () => {
+  // Uses the real trust-stage module against an isolated temp file (same
+  // approach used elsewhere in this package) — run_workflow_skill reads
+  // getTrustStage() directly, not through the agent handle, so this keeps
+  // the test deterministic (trust stage 2, the default) regardless of any
+  // real ~/.wireassist/ops-trust.json state on the host.
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'wireassist-ops-nixops-agent-'));
+    process.env.WIREASSIST_OPS_TRUST_FILE = join(tempDir, 'ops-trust.json');
+  });
+
+  afterEach(() => {
+    delete process.env.WIREASSIST_OPS_TRUST_FILE;
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('executeToolCall() runs list_workflows immediately, with no approval', async () => {
+    const deps = makeDeps({
+      mcp: { call: jest.fn().mockResolvedValue({ workflows: ['nixlevel-listing'] }) },
+    });
+    const agent = new NixOpsAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'list_workflows',
+      input: {},
+    });
+
+    expect(result).toEqual({ result: { workflows: ['nixlevel-listing'] }, isError: false });
+    expect(deps.approval.request).not.toHaveBeenCalled();
+    expect(deps.mcp.call).toHaveBeenCalledWith('list_workflows', {});
+  });
+
+  it('executeToolCall() dispatches run_workflow_skill via invokeSkill(), letting the skill self-gate its own delivery approval rather than gating the outer call a second time', async () => {
+    const deps = makeDeps({ approval: { request: jest.fn().mockResolvedValue(true) } });
+    const agent = new NixOpsAgent(deps);
+    (agent as any).think = jest.fn().mockResolvedValue('VERDICT: PROCEED\n\nLooks fine.');
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c2',
+      name: 'run_workflow_skill',
+      input: { workflow: 'nixlevel-listing', brief: 'test run' },
+    });
+
+    expect(result.isError).toBe(false);
+    // Called exactly once — the skill's own internal "deliver this run?"
+    // proposal (trust stage 2, the default). No separate/additional "Call
+    // tool" gate at the outer executeToolCall() dispatch level.
+    expect(deps.approval.request).toHaveBeenCalledTimes(1);
+    expect(result.result).toEqual(
+      expect.objectContaining({ workflow: 'nixlevel-listing', approved: true, autoApproved: false })
+    );
+  });
+
+  it('exposes list_workflows and run_workflow_skill in config.toolSchemas, but never treats run_workflow_skill as MCP-authorized', () => {
+    const agent = new NixOpsAgent(makeDeps());
+    const config = (agent as any).config;
+
+    expect(config.toolSchemas).toHaveProperty('list_workflows');
+    expect(config.toolSchemas).toHaveProperty('run_workflow_skill');
+    expect(config.tools).not.toContain('run_workflow_skill');
   });
 });
