@@ -23,7 +23,11 @@ export interface OpsFreeformInput {
   history?: ProviderMessage[];
 }
 
-export type OpsTaskInput = RunWorkflowInput | OpsFreeformInput;
+export interface TrustGraduationNudgesInput {
+  type: 'trust_graduation_nudges';
+}
+
+export type OpsTaskInput = RunWorkflowInput | OpsFreeformInput | TrustGraduationNudgesInput;
 
 export class NixOpsAgent extends BaseAgent {
   constructor(deps: {

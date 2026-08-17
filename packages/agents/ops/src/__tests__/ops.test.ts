@@ -1,5 +1,9 @@
 import { loadOpsContext, listWorkflows, loadWorkflow, parseSheetRef } from '../context-loader';
-import { createWorkflowRunTask, createOpsFreeformTask } from '../task-factory';
+import {
+  createWorkflowRunTask,
+  createOpsFreeformTask,
+  createTrustGraduationNudgesTask,
+} from '../task-factory';
 
 describe('context-loader', () => {
   it('loads SOUL, IDENTITY and USER files', () => {
@@ -62,5 +66,13 @@ describe('task-factory', () => {
     const history = [{ role: 'user' as const, content: 'earlier question' }];
     const task = createOpsFreeformTask({ prompt: 'status?', history });
     expect(task.input).toMatchObject({ type: 'freeform', prompt: 'status?', history });
+  });
+
+  it('creates a queued trust-graduation-nudges task requiring approval', () => {
+    const task = createTrustGraduationNudgesTask();
+    expect(task.status).toBe('queued');
+    expect(task.approvalRequired).toBe(true);
+    expect(task.agentRole).toBe('strategy');
+    expect(task.input).toMatchObject({ type: 'trust_graduation_nudges' });
   });
 });

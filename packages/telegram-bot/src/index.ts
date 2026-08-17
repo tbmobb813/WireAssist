@@ -290,6 +290,12 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
       await send(`💡 ${String(p.summary ?? '').slice(0, 3000)}`);
       break;
     }
+    case 'trust_graduation_nudges_complete': {
+      const candidates = Array.isArray(p.candidates) ? p.candidates : [];
+      if (candidates.length === 0) break;
+      await send(`🎓 ${String(p.summary ?? '').slice(0, 3000)}`);
+      break;
+    }
   }
 }
 
