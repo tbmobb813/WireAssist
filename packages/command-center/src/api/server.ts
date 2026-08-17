@@ -633,6 +633,16 @@ app.post('/api/tasks/generate-plan', async (c) => {
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
+app.post('/api/tasks/content-freeform', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const { prompt, history: rawHistory } = await c.req.json();
+  if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
+  const task = ContentTasks.freeform(prompt, sanitizeHistory(rawHistory));
+  queueContentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
 // ── RESEARCH TASKS ────────────────────────────────────────────────────────
 app.post('/api/tasks/research-topic', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);

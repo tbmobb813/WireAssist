@@ -146,6 +146,105 @@ export const CONTENT_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
       required: ['postId'],
     },
   },
+  // ── Skills, exposed as composable tools (dispatched via invokeSkill(),
+  // not useTool() — see ContentAgent.executeToolCall()). Each wraps the
+  // matching raw tool above with the full pipeline the direct task-factory
+  // route already gets: a specific approval prompt, an SSE event, and a
+  // memory.remember() call on the outcome. Prefer these over the raw tool
+  // of the same name when the user wants the real, tracked action — not a
+  // one-off ephemeral draft. Named with a `_skill` suffix to stay visually
+  // distinct from raw MCP tool names above.
+  generate_post_skill: {
+    name: 'generate_post_skill',
+    description:
+      'Generate a post, score it, and propose it for approval — the full pipeline behind content_generate. Use this instead of content_generate when the user actually wants a post drafted and queued for review, not just a quick throwaway example.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        topic: { type: 'string', description: 'What the post should be about.' },
+        platform: { type: 'string', enum: PLATFORM_ENUM },
+        tone: { type: 'string', description: 'Optional tone, e.g. "direct", "playful".' },
+      },
+      required: ['topic', 'platform'],
+    },
+  },
+  generate_plan_skill: {
+    name: 'generate_plan_skill',
+    description:
+      'Generate a multi-week content plan and propose it for approval — the full pipeline behind content_generate_plan.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        platforms: { type: 'array', items: { type: 'string', enum: PLATFORM_ENUM } },
+        weeksAhead: { type: 'number' },
+        postsPerWeek: { type: 'number' },
+      },
+      required: ['platforms'],
+    },
+  },
+  generate_plan_from_timeline_skill: {
+    name: 'generate_plan_from_timeline_skill',
+    description:
+      'Turn a GTM launch timeline into a content calendar and propose it for approval — the full pipeline behind content_generate_plan_from_timeline.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        productName: { type: 'string' },
+        timeline: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              week: { type: 'string' },
+              focus: { type: 'string' },
+              tasks: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        },
+        platforms: { type: 'array', items: { type: 'string', enum: PLATFORM_ENUM } },
+      },
+      required: ['productName', 'timeline', 'platforms'],
+    },
+  },
+  schedule_post_skill: {
+    name: 'schedule_post_skill',
+    description:
+      'Propose scheduling an already-written post, then schedule it once approved — the full pipeline behind content_schedule_post.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        content: { type: 'string' },
+        platform: { type: 'string', enum: PLATFORM_ENUM },
+        scheduledAt: { type: 'string', description: 'ISO 8601 datetime.' },
+        tags: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['content', 'platform', 'scheduledAt'],
+    },
+  },
+  analyze_post_skill: {
+    name: 'analyze_post_skill',
+    description:
+      'Analyze a piece of content and broadcast the result — the full pipeline behind content_analyze, for when the analysis should show up in the activity feed rather than just answering inline.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        content: { type: 'string' },
+        platform: { type: 'string', enum: PLATFORM_ENUM },
+      },
+      required: ['content', 'platform'],
+    },
+  },
+  list_scheduled_skill: {
+    name: 'list_scheduled_skill',
+    description:
+      'List upcoming scheduled posts and broadcast them — the full pipeline behind content_list_posts, for when the listing should show up in the activity feed rather than just answering inline.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        daysAhead: { type: 'number', description: 'Look this many days ahead, default 14.' },
+      },
+    },
+  },
 };
 
 // Tool names safe to execute immediately in the chat tool loop without going
@@ -166,4 +265,18 @@ export const READ_ONLY_CONTENT_TOOLS = new Set<string>([
   // the agent to take an external action.
   'content_create_campaign',
   'content_mark_published',
+]);
+
+// Skill-tool names dispatched via invokeSkill() rather than useTool() — see
+// ContentAgent.executeToolCall(). Kept separate from READ_ONLY_CONTENT_TOOLS
+// since these are never valid useTool()/MCP calls. Mirrors every skill in
+// CONTENT_SKILLS except freeformSkill, which is a task-level entry point,
+// not something the model calls as a nested tool mid-conversation.
+export const CONTENT_SKILL_TOOLS = new Set<string>([
+  'generate_post_skill',
+  'generate_plan_skill',
+  'generate_plan_from_timeline_skill',
+  'schedule_post_skill',
+  'analyze_post_skill',
+  'list_scheduled_skill',
 ]);
