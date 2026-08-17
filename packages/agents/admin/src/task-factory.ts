@@ -23,6 +23,7 @@ type SupportedTaskInput =
   | { type: 'daily_briefing'; maxEmails?: number; daysAhead?: number }
   | { type: 'follow_up_nudges'; daysStale?: number }
   | { type: 'proactive_insights' }
+  | { type: 'budget_warning_nudge'; thresholdPercent?: number }
   | { type: 'stale_approvals_nudge'; daysStale?: number };
 
 function baseTask(role: AgentRole, description: string, input: SupportedTaskInput): AgentTask {
@@ -140,6 +141,17 @@ export function createProactiveInsightsTask(options?: { description?: string }):
     'admin',
     options?.description ?? 'Reflect on approval/rejection patterns across every agent.',
     { type: 'proactive_insights' }
+  );
+}
+
+export function createBudgetWarningTask(options?: {
+  description?: string;
+  thresholdPercent?: number;
+}): AgentTask {
+  return baseTask(
+    'admin',
+    options?.description ?? 'Check month-to-date spend against the budget warning threshold.',
+    { type: 'budget_warning_nudge', thresholdPercent: options?.thresholdPercent }
   );
 }
 

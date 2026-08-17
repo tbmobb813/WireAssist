@@ -497,7 +497,31 @@ No `jq` needed (no request body). Run it manually once first
 (`WIREASSIST_API_URL=http://localhost:3002 ./dev/trust-graduation-nudges.sh`)
 to confirm it queues successfully before trusting it to cron.
 
-## 12. Stale-approval nudges
+## 12. Budget warning nudge
+
+`dev/budget-warning.sh` triggers the Admin Agent's `budget_warning_nudge`
+task — it checks month-to-date agent spend against a warning threshold
+(default 80% of `WIREASSIST_BUDGET_MONTHLY`) and reports whether it's been
+crossed. This is separate from the hard block in `assertWithinBudget()`
+(which refuses new agent calls once spend reaches 100%) — this nudge is
+the earlier, softer heads-up so the cap doesn't come as a surprise. It
+never calls the LLM itself (just arithmetic on already-recorded usage), so
+it works even before `ANTHROPIC_API_KEY` is configured.
+
+**Cron entry** (daily — once you're over the threshold, spend only climbs
+further before the monthly reset, so a same-day heads-up matters):
+
+```bash
+crontab -e
+# add:
+0 9 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/budget-warning.sh >> /var/log/wireassist-budget-warning.log 2>&1
+```
+
+No `jq` needed (no request body). Run it manually once first
+(`WIREASSIST_API_URL=http://localhost:3002 ./dev/budget-warning.sh`) to
+confirm it queues successfully before trusting it to cron.
+
+## 13. Stale-approval nudges
 
 `dev/stale-approvals.sh` triggers the Admin Agent's `stale_approvals_nudge`
 task — it scans every still-pending approval request across every agent

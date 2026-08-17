@@ -196,6 +196,7 @@ events.on('agent:auto_approved', (p) => broadcast('auto_approved', p));
 events.on('agent:daily_briefing_complete', (p) => broadcast('daily_briefing_complete', p));
 events.on('agent:follow_up_nudges_complete', (p) => broadcast('follow_up_nudges_complete', p));
 events.on('agent:proactive_insights_complete', (p) => broadcast('proactive_insights_complete', p));
+events.on('agent:budget_warning_complete', (p) => broadcast('budget_warning_complete', p));
 events.on('agent:stale_approvals_complete', (p) => broadcast('stale_approvals_complete', p));
 
 // Agent-to-agent handoff: a skill (e.g. Research's research_topic, once its
@@ -380,6 +381,18 @@ app.post('/api/tasks/proactive-insights', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const task = AdminTasks.proactiveInsights();
+  queueAgentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// No anthropicConfigured() gate here, unlike the other proactive-nudge
+// routes above — budget_warning_nudge only does arithmetic on the already-
+// computed BudgetStatus, never an agent.think() call, so it works even
+// before an Anthropic key is configured.
+app.post('/api/tasks/budget-warning', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  const body = await c.req.json().catch(() => ({}));
+  const task = AdminTasks.budgetWarning(body.thresholdPercent ?? 80);
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });

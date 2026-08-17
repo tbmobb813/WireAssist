@@ -6,6 +6,7 @@ import {
   createDailyBriefingTask,
   createFollowUpNudgesTask,
   createProactiveInsightsTask,
+  createBudgetWarningTask,
   createStaleApprovalsTask,
 } from './task-factory';
 
@@ -33,6 +34,10 @@ export const AdminTasks = {
 
   proactiveInsights() {
     return createProactiveInsightsTask();
+  },
+
+  budgetWarning(thresholdPercent = 80) {
+    return createBudgetWarningTask({ thresholdPercent });
   },
 
   staleApprovals(daysStale = 3) {
