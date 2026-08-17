@@ -347,4 +347,30 @@ describe('ResearchAgent — composable skill-tools in the chat loop', () => {
     expect(config.tools).not.toContain('research_topic_skill');
     expect(config.tools).not.toContain('synthesize_findings_skill');
   });
+
+  it('executeToolCall() dispatches research_and_synthesize_skill via invokeSkill(), running the registered chain (research_topic -> synthesize_findings) and surfacing the final synthesis', async () => {
+    const deps = makeDeps();
+    const agent = new ResearchAgent(deps);
+    (agent as any).think = jest
+      .fn()
+      .mockResolvedValueOnce('Findings summary.') // research_topic step
+      .mockResolvedValueOnce('Synthesized result.'); // synthesize_findings step
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c4',
+      name: 'research_and_synthesize_skill',
+      input: { query: 'AI trends 2026', resultCount: 2 },
+    });
+
+    expect(result.isError).toBe(false);
+    expect(deps.mcp.call).toHaveBeenCalledWith('brave_search', {
+      query: 'AI trends 2026',
+      count: 2,
+    });
+    // Both steps of the chain actually ran (one think() call each).
+    expect((agent as any).think).toHaveBeenCalledTimes(2);
+    // The captured result is the LAST step's payload (the synthesis), not
+    // the intermediate search result.
+    expect(result.result).toEqual(expect.objectContaining({ summary: 'Synthesized result.' }));
+  });
 });

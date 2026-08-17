@@ -50,6 +50,23 @@ export const RESEARCH_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
       required: ['topic'],
     },
   },
+  // The one registered SkillChain (research_topic -> synthesize_findings,
+  // see skills/index.ts's RESEARCH_AND_SYNTHESIZE_CHAIN), exposed as a
+  // single composable tool — invokeSkill() runs both steps in sequence and
+  // surfaces the final synthesis as the result.
+  research_and_synthesize_skill: {
+    name: 'research_and_synthesize_skill',
+    description:
+      'Research a topic AND synthesize it together with any prior findings on it, in one pass. Use this instead of research_topic_skill when the user explicitly wants both a fresh search and a synthesis with existing knowledge, not just one or the other.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What to research and synthesize.' },
+        resultCount: { type: 'number', description: 'Max search results to consider, default 5.' },
+      },
+      required: ['query'],
+    },
+  },
 };
 
 // MCP tool names that only ever read data — safe to execute immediately in
@@ -62,4 +79,5 @@ export const READ_ONLY_RESEARCH_TOOLS = new Set<string>(['brave_search']);
 export const RESEARCH_SKILL_TOOLS = new Set<string>([
   'research_topic_skill',
   'synthesize_findings_skill',
+  'research_and_synthesize_skill',
 ]);

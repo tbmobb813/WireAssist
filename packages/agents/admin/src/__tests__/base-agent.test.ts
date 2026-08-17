@@ -6,6 +6,7 @@ import type {
   EventBus,
   AgentConfig,
   Skill,
+  SkillChain,
   ProviderResponse,
   ProviderMessage,
 } from '@wireassist/core';
@@ -58,6 +59,12 @@ class ReadOnlyAwareTestAgent extends TestAgent {
 class DefaultRunTestAgent extends BaseAgent {
   testRegisterSkill(skill: Skill) {
     this.skills.registerSkill(skill);
+  }
+  testRegisterChain(chain: SkillChain) {
+    this.skills.registerChain(chain);
+  }
+  testInvokeSkill(task: AgentTask, skillName: string, input: Record<string, unknown>) {
+    return this.invokeSkill(task, skillName, input);
   }
 }
 
@@ -387,6 +394,90 @@ describe('BaseAgent.run() — default skill dispatch', () => {
     resolveExecute();
     await firstRun;
     expect(agent.status).toBe('idle');
+  });
+});
+
+describe('BaseAgent.invokeSkill()', () => {
+  it('throws when no skill or chain is registered under that name', async () => {
+    const { agent } = makeDefaultRunAgent();
+    await expect(agent.testInvokeSkill(makeTask(), 'nonexistent', {})).rejects.toThrow(
+      /Unknown skill: nonexistent/
+    );
+  });
+
+  it('runs a single skill and returns its last emitted payload as the result', async () => {
+    const { agent, deps } = makeDefaultRunAgent();
+    const execute = jest.fn().mockImplementation(async ({ agent: handle }) => {
+      handle.emit('agent:something_happened', { value: 42 });
+    });
+    agent.testRegisterSkill({ name: 'do_thing', role: 'admin', description: 'x', execute });
+
+    const result = await agent.testInvokeSkill(makeTask(), 'do_thing', { foo: 'bar' });
+
+    expect(result).toEqual({ value: 42 });
+    // Still forwarded to the real event bus, same as any other emit.
+    expect(deps.events.emit).toHaveBeenCalledWith('agent:something_happened', { value: 42 });
+    // The skill receives its own input merged with the resolved type, not a
+    // completely different shape.
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({ input: expect.objectContaining({ foo: 'bar' }) })
+    );
+  });
+
+  it('runs a registered SkillChain end-to-end, threading previousOutput via mapInput', async () => {
+    const { agent } = makeDefaultRunAgent();
+    const step1 = jest.fn().mockImplementation(async ({ agent: handle }) => {
+      handle.emit('agent:step_done', { step: 1 });
+      return { step: 1 };
+    });
+    const step2 = jest.fn().mockImplementation(async ({ agent: handle, input }) => {
+      handle.emit('agent:step_done', { step: 2, receivedFromStep1: input });
+      return { step: 2 };
+    });
+    agent.testRegisterSkill({ name: 'step_one', role: 'admin', description: 'x', execute: step1 });
+    agent.testRegisterSkill({ name: 'step_two', role: 'admin', description: 'x', execute: step2 });
+    agent.testRegisterChain({
+      name: 'two_step_chain',
+      role: 'admin',
+      description: 'a two-step chain',
+      steps: [
+        { skill: 'step_one' },
+        { skill: 'step_two', mapInput: (previousOutput) => ({ from: previousOutput }) },
+      ],
+    });
+
+    const result = await agent.testInvokeSkill(makeTask(), 'two_step_chain', { seed: 'x' });
+
+    expect(step1).toHaveBeenCalledTimes(1);
+    expect(step2).toHaveBeenCalledTimes(1);
+    expect(step2).toHaveBeenCalledWith(expect.objectContaining({ input: { from: { step: 1 } } }));
+    // The capture holds the LAST step's emitted payload, not the first.
+    expect(result).toEqual({ step: 2, receivedFromStep1: { from: { step: 1 } } });
+  });
+
+  it("stops a chain early when a step's continueIf returns false, without running later steps", async () => {
+    const { agent } = makeDefaultRunAgent();
+    const step1 = jest.fn().mockImplementation(async ({ agent: handle }) => {
+      handle.emit('agent:step_done', { ok: false });
+      return { ok: false };
+    });
+    const step2 = jest.fn();
+    agent.testRegisterSkill({ name: 'step_one', role: 'admin', description: 'x', execute: step1 });
+    agent.testRegisterSkill({ name: 'step_two', role: 'admin', description: 'x', execute: step2 });
+    agent.testRegisterChain({
+      name: 'short_circuit_chain',
+      role: 'admin',
+      description: 'stops early',
+      steps: [
+        { skill: 'step_one' },
+        { skill: 'step_two', continueIf: (previousOutput: any) => previousOutput.ok === true },
+      ],
+    });
+
+    const result = await agent.testInvokeSkill(makeTask(), 'short_circuit_chain', {});
+
+    expect(step2).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: false });
   });
 });
 
