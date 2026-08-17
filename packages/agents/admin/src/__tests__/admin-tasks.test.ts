@@ -85,4 +85,32 @@ describe('AdminTasks', () => {
       expect((t.input as { daysStale?: number }).daysStale).toBe(1);
     });
   });
+
+  describe('objectiveId passthrough', () => {
+    it('passes objectiveId through when provided, and leaves it undefined otherwise', () => {
+      expect(AdminTasks.triageEmail(20, 'obj-1').objectiveId).toBe('obj-1');
+      expect(AdminTasks.triageEmail().objectiveId).toBeUndefined();
+
+      expect(AdminTasks.reviewCalendar(7, 'obj-1').objectiveId).toBe('obj-1');
+      expect(AdminTasks.reviewCalendar().objectiveId).toBeUndefined();
+
+      expect(AdminTasks.freeform('p', undefined, 'obj-1').objectiveId).toBe('obj-1');
+      expect(AdminTasks.freeform('p').objectiveId).toBeUndefined();
+
+      expect(AdminTasks.dailyBriefing(20, 7, 'obj-1').objectiveId).toBe('obj-1');
+      expect(AdminTasks.dailyBriefing().objectiveId).toBeUndefined();
+
+      expect(AdminTasks.followUpNudges(3, 'obj-1').objectiveId).toBe('obj-1');
+      expect(AdminTasks.followUpNudges().objectiveId).toBeUndefined();
+
+      expect(AdminTasks.proactiveInsights('obj-1').objectiveId).toBe('obj-1');
+      expect(AdminTasks.proactiveInsights().objectiveId).toBeUndefined();
+
+      expect(AdminTasks.budgetWarning(80, 'obj-1').objectiveId).toBe('obj-1');
+      expect(AdminTasks.budgetWarning().objectiveId).toBeUndefined();
+
+      expect(AdminTasks.staleApprovals(3, 'obj-1').objectiveId).toBe('obj-1');
+      expect(AdminTasks.staleApprovals().objectiveId).toBeUndefined();
+    });
+  });
 });

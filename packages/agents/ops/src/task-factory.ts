@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import type { AgentTask, ProviderMessage } from '@wireassist/core';
 import type { OpsTaskInput } from './nixops-agent';
 
-function baseTask(description: string, input: OpsTaskInput): AgentTask {
+function baseTask(description: string, input: OpsTaskInput, objectiveId?: string): AgentTask {
   const now = new Date();
   return {
     id: randomUUID(),
@@ -13,6 +13,7 @@ function baseTask(description: string, input: OpsTaskInput): AgentTask {
     updatedAt: now,
     input: input as unknown as Record<string, unknown>,
     approvalRequired: true,
+    objectiveId,
   };
 }
 
@@ -20,29 +21,43 @@ export function createWorkflowRunTask(params: {
   workflow: string;
   brief: string;
   description?: string;
+  objectiveId?: string;
 }): AgentTask {
-  return baseTask(params.description ?? `Run workflow "${params.workflow}": ${params.brief}`, {
-    type: 'run_workflow',
-    workflow: params.workflow,
-    brief: params.brief,
-  });
+  return baseTask(
+    params.description ?? `Run workflow "${params.workflow}": ${params.brief}`,
+    {
+      type: 'run_workflow',
+      workflow: params.workflow,
+      brief: params.brief,
+    },
+    params.objectiveId
+  );
 }
 
 export function createOpsFreeformTask(params: {
   prompt: string;
   description?: string;
   history?: ProviderMessage[];
+  objectiveId?: string;
 }): AgentTask {
-  return baseTask(params.description ?? params.prompt, {
-    type: 'freeform',
-    prompt: params.prompt,
-    history: params.history,
-  });
+  return baseTask(
+    params.description ?? params.prompt,
+    {
+      type: 'freeform',
+      prompt: params.prompt,
+      history: params.history,
+    },
+    params.objectiveId
+  );
 }
 
-export function createTrustGraduationNudgesTask(options?: { description?: string }): AgentTask {
+export function createTrustGraduationNudgesTask(options?: {
+  description?: string;
+  objectiveId?: string;
+}): AgentTask {
   return baseTask(
     options?.description ?? "Nudge JNix to graduate any workflow's trust stage after a streak.",
-    { type: 'trust_graduation_nudges' }
+    { type: 'trust_graduation_nudges' },
+    options?.objectiveId
   );
 }

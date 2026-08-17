@@ -83,7 +83,13 @@ export const researchTopicSkill: Skill<ResearchTopicInput, void> = {
         { query, platform, tone }
       );
       if (draftApproved) {
-        const handoffTask = ContentTasks.generatePost(query, platform, tone, summary);
+        const handoffTask = ContentTasks.generatePost(
+          query,
+          platform,
+          tone,
+          summary,
+          task.objectiveId
+        );
         agent.emit('agent:handoff_requested', { task: handoffTask });
       }
     }

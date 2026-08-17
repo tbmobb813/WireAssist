@@ -4,7 +4,13 @@ import type { Platform } from '@wireassist/trendpost-mcp';
 import type { TimelineWeekInput } from './skills/generate-plan-from-timeline';
 
 export const ContentTasks = {
-  generatePost(topic: string, platform: Platform, tone?: string, extraContext?: string): AgentTask {
+  generatePost(
+    topic: string,
+    platform: Platform,
+    tone?: string,
+    extraContext?: string,
+    objectiveId?: string
+  ): AgentTask {
     return {
       id: randomUUID(),
       agentRole: 'content',
@@ -14,6 +20,7 @@ export const ContentTasks = {
       updatedAt: new Date(),
       input: { type: 'generate_post', topic, platform, tone, extraContext },
       approvalRequired: true,
+      objectiveId,
     };
   },
 
@@ -21,7 +28,8 @@ export const ContentTasks = {
     platforms: Platform[],
     weeksAhead = 1,
     postsPerWeek = 3,
-    businessContext?: string
+    businessContext?: string,
+    objectiveId?: string
   ): AgentTask {
     return {
       id: randomUUID(),
@@ -32,6 +40,7 @@ export const ContentTasks = {
       updatedAt: new Date(),
       input: { type: 'generate_plan', platforms, weeksAhead, postsPerWeek, businessContext },
       approvalRequired: true,
+      objectiveId,
     };
   },
 
@@ -39,7 +48,8 @@ export const ContentTasks = {
     content: string,
     platform: Platform,
     scheduledAt: string,
-    tags?: string[]
+    tags?: string[],
+    objectiveId?: string
   ): AgentTask {
     return {
       id: randomUUID(),
@@ -50,10 +60,11 @@ export const ContentTasks = {
       updatedAt: new Date(),
       input: { type: 'schedule_post', content, platform, scheduledAt, tags },
       approvalRequired: true,
+      objectiveId,
     };
   },
 
-  analyzePost(content: string, platform: Platform): AgentTask {
+  analyzePost(content: string, platform: Platform, objectiveId?: string): AgentTask {
     return {
       id: randomUUID(),
       agentRole: 'content',
@@ -63,10 +74,11 @@ export const ContentTasks = {
       updatedAt: new Date(),
       input: { type: 'analyze_post', content, platform },
       approvalRequired: false,
+      objectiveId,
     };
   },
 
-  listScheduled(daysAhead = 14): AgentTask {
+  listScheduled(daysAhead = 14, objectiveId?: string): AgentTask {
     return {
       id: randomUUID(),
       agentRole: 'content',
@@ -76,13 +88,15 @@ export const ContentTasks = {
       updatedAt: new Date(),
       input: { type: 'list_scheduled', daysAhead },
       approvalRequired: false,
+      objectiveId,
     };
   },
 
   generatePlanFromTimeline(
     productName: string,
     timeline: TimelineWeekInput[],
-    platforms: Platform[]
+    platforms: Platform[],
+    objectiveId?: string
   ): AgentTask {
     return {
       id: randomUUID(),
@@ -93,10 +107,11 @@ export const ContentTasks = {
       updatedAt: new Date(),
       input: { type: 'generate_plan_from_timeline', productName, timeline, platforms },
       approvalRequired: true,
+      objectiveId,
     };
   },
 
-  freeform(prompt: string, history?: ProviderMessage[]): AgentTask {
+  freeform(prompt: string, history?: ProviderMessage[], objectiveId?: string): AgentTask {
     return {
       id: randomUUID(),
       agentRole: 'content',
@@ -106,10 +121,11 @@ export const ContentTasks = {
       updatedAt: new Date(),
       input: { type: 'freeform', prompt, history },
       approvalRequired: false,
+      objectiveId,
     };
   },
 
-  publishDuePosts(): AgentTask {
+  publishDuePosts(objectiveId?: string): AgentTask {
     return {
       id: randomUUID(),
       agentRole: 'content',
@@ -119,6 +135,7 @@ export const ContentTasks = {
       updatedAt: new Date(),
       input: { type: 'publish_due_posts' },
       approvalRequired: false,
+      objectiveId,
     };
   },
 };

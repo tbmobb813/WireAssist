@@ -41,6 +41,7 @@ import {
 } from '@wireassist/agent-gtm';
 import { registerTrendPostTools, TrendPostStorage } from '@wireassist/trendpost-mcp';
 import { registerPortfolioRoutes } from './portfolio-routes';
+import { registerObjectiveRoutes } from './objective-routes';
 import { routeChatMessage, type RouteDecision, type ChatHistoryMessage } from './chat-router';
 import { getLocation, setLocation, listNotes, addNote, deleteNote } from './dashboard-widgets';
 import { routeHandoffTask } from '../lib/route-handoff';
@@ -163,6 +164,13 @@ function broadcast(event: string, payload: unknown) {
   recentActivity.unshift({ event, payload, at: new Date().toISOString() });
   if (recentActivity.length > MAX_ACTIVITY) recentActivity.pop();
 
+  const objectiveId = (payload as { objectiveId?: string } | undefined)?.objectiveId;
+  if (objectiveId) {
+    objectiveStore
+      .recordAgentEvent(`agent.${event}`, objectiveId, payload as Record<string, unknown>)
+      .catch(console.error);
+  }
+
   const data = `data: ${JSON.stringify({ event, payload })}\n\n`;
   sseClients.forEach((send) => send(data));
 }
@@ -264,6 +272,7 @@ const app = new Hono();
 
 app.use('*', cors({ origin: 'http://localhost:3001' }));
 const portfolioStore = registerPortfolioRoutes(app, DB_PATH);
+const objectiveStore = registerObjectiveRoutes(app, DB_PATH);
 
 // Health check
 app.get('/health', (c) =>
@@ -597,7 +606,7 @@ function isValidPlatform(p: unknown): p is 'twitter' | 'linkedin' | 'instagram' 
 app.post('/api/tasks/generate-post', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const { topic, platform, tone, context } = await c.req.json();
+  const { topic, platform, tone, context, objectiveId } = await c.req.json();
   if (!topic || typeof topic !== 'string') return c.json({ error: 'topic required' }, 400);
   if (!isValidPlatform(platform)) {
     return c.json({ error: `platform must be one of: ${[...VALID_PLATFORMS].join(', ')}` }, 400);
@@ -608,7 +617,13 @@ app.post('/api/tasks/generate-post', async (c) => {
   if (context !== undefined && (typeof context !== 'string' || context.length > 4000)) {
     return c.json({ error: 'context must be a string under 4000 characters' }, 400);
   }
-  const task = ContentTasks.generatePost(topic, platform, tone, context || undefined);
+  const task = ContentTasks.generatePost(
+    topic,
+    platform,
+    tone,
+    context || undefined,
+    typeof objectiveId === 'string' ? objectiveId : undefined
+  );
   queueContentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
@@ -639,7 +654,8 @@ app.post('/api/tasks/generate-plan', async (c) => {
     platforms as ('twitter' | 'linkedin' | 'instagram' | 'threads')[],
     body.weeksAhead ?? 1,
     body.postsPerWeek ?? 3,
-    body.businessContext || undefined
+    body.businessContext || undefined,
+    typeof body.objectiveId === 'string' ? body.objectiveId : undefined
   );
   queueContentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
@@ -648,9 +664,13 @@ app.post('/api/tasks/generate-plan', async (c) => {
 app.post('/api/tasks/content-freeform', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const { prompt, history: rawHistory } = await c.req.json();
+  const { prompt, history: rawHistory, objectiveId } = await c.req.json();
   if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
-  const task = ContentTasks.freeform(prompt, sanitizeHistory(rawHistory));
+  const task = ContentTasks.freeform(
+    prompt,
+    sanitizeHistory(rawHistory),
+    typeof objectiveId === 'string' ? objectiveId : undefined
+  );
   queueContentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
@@ -659,7 +679,7 @@ app.post('/api/tasks/content-freeform', async (c) => {
 app.post('/api/tasks/research-topic', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const { query, depth, contentDraftPlatform, contentDraftTone } = await c.req.json();
+  const { query, depth, contentDraftPlatform, contentDraftTone, objectiveId } = await c.req.json();
   if (!query || typeof query !== 'string') return c.json({ error: 'query required' }, 400);
   const offerContentDraft = isValidPlatform(contentDraftPlatform)
     ? {
@@ -670,7 +690,8 @@ app.post('/api/tasks/research-topic', async (c) => {
   const task = ResearchTasks.researchTopic(
     query,
     depth === 'deep' ? 'deep' : 'quick',
-    offerContentDraft
+    offerContentDraft,
+    typeof objectiveId === 'string' ? objectiveId : undefined
   );
   queueResearchTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
@@ -679,9 +700,12 @@ app.post('/api/tasks/research-topic', async (c) => {
 app.post('/api/tasks/synthesize', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const { topic } = await c.req.json();
+  const { topic, objectiveId } = await c.req.json();
   if (!topic || typeof topic !== 'string') return c.json({ error: 'topic required' }, 400);
-  const task = ResearchTasks.synthesizeFindings(topic);
+  const task = ResearchTasks.synthesizeFindings(
+    topic,
+    typeof objectiveId === 'string' ? objectiveId : undefined
+  );
   queueResearchTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
@@ -689,9 +713,13 @@ app.post('/api/tasks/synthesize', async (c) => {
 app.post('/api/tasks/research-freeform', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const { prompt, history: rawHistory } = await c.req.json();
+  const { prompt, history: rawHistory, objectiveId } = await c.req.json();
   if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
-  const task = ResearchTasks.freeform(prompt, sanitizeHistory(rawHistory));
+  const task = ResearchTasks.freeform(
+    prompt,
+    sanitizeHistory(rawHistory),
+    typeof objectiveId === 'string' ? objectiveId : undefined
+  );
   queueResearchTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
@@ -763,10 +791,14 @@ app.post('/api/admin/auto-approve/:sender', async (c) => {
 app.post('/api/tasks/ops-workflow', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const { workflow, brief } = await c.req.json();
+  const { workflow, brief, objectiveId } = await c.req.json();
   if (!workflow || typeof workflow !== 'string') return c.json({ error: 'workflow required' }, 400);
   if (!brief || typeof brief !== 'string') return c.json({ error: 'brief required' }, 400);
-  const task = OpsTasks.createWorkflowRunTask({ workflow, brief });
+  const task = OpsTasks.createWorkflowRunTask({
+    workflow,
+    brief,
+    objectiveId: typeof objectiveId === 'string' ? objectiveId : undefined,
+  });
   queueOpsTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
@@ -774,9 +806,12 @@ app.post('/api/tasks/ops-workflow', async (c) => {
 app.post('/api/tasks/ops-freeform', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const { prompt } = await c.req.json();
+  const { prompt, objectiveId } = await c.req.json();
   if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
-  const task = OpsTasks.createOpsFreeformTask({ prompt });
+  const task = OpsTasks.createOpsFreeformTask({
+    prompt,
+    objectiveId: typeof objectiveId === 'string' ? objectiveId : undefined,
+  });
   queueOpsTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
@@ -839,7 +874,12 @@ app.post('/api/tasks/gtm/strategy', async (c) => {
     : [];
   const offerContentCalendar =
     calendarPlatforms.length > 0 ? { platforms: calendarPlatforms } : undefined;
-  const task = GtmTasks.generateStrategy(product, offerContentDraft, offerContentCalendar);
+  const task = GtmTasks.generateStrategy(
+    product,
+    offerContentDraft,
+    offerContentCalendar,
+    typeof body.objectiveId === 'string' ? body.objectiveId : undefined
+  );
   queueGtmTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
@@ -850,7 +890,10 @@ app.post('/api/tasks/gtm/psych', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const product = normalizeGtmProduct(body);
   if (!product) return c.json({ error: 'product name required' }, 400);
-  const task = GtmTasks.generatePsychTactics(product);
+  const task = GtmTasks.generatePsychTactics(
+    product,
+    typeof body.objectiveId === 'string' ? body.objectiveId : undefined
+  );
   queueGtmTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });

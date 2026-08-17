@@ -4,6 +4,11 @@ import {
   createSendEmailTask,
   createScheduleEventTask,
   createFreeformTask,
+  createDailyBriefingTask,
+  createFollowUpNudgesTask,
+  createProactiveInsightsTask,
+  createBudgetWarningTask,
+  createStaleApprovalsTask,
 } from '../task-factory';
 
 describe('createEmailTriageTask', () => {
@@ -124,5 +129,49 @@ describe('createFreeformTask', () => {
     const history = [{ role: 'user' as const, content: 'earlier question' }];
     const t = createFreeformTask({ prompt: 'p', history });
     expect((t.input as { history?: unknown }).history).toEqual(history);
+  });
+});
+
+describe('objectiveId passthrough', () => {
+  it('passes objectiveId through when provided, and leaves it undefined otherwise', () => {
+    expect(createEmailTriageTask({ objectiveId: 'obj-1' }).objectiveId).toBe('obj-1');
+    expect(createEmailTriageTask().objectiveId).toBeUndefined();
+
+    expect(createCalendarReviewTask({ objectiveId: 'obj-1' }).objectiveId).toBe('obj-1');
+    expect(createCalendarReviewTask().objectiveId).toBeUndefined();
+
+    const sendEmailBase = { to: 'a@b.com', subject: 'Hello', body: 'Body' };
+    expect(createSendEmailTask({ ...sendEmailBase, objectiveId: 'obj-1' }).objectiveId).toBe(
+      'obj-1'
+    );
+    expect(createSendEmailTask(sendEmailBase).objectiveId).toBeUndefined();
+
+    const scheduleBase = {
+      summary: 'Standup',
+      start: '2026-06-01T09:00:00Z',
+      end: '2026-06-01T09:30:00Z',
+    };
+    expect(createScheduleEventTask({ ...scheduleBase, objectiveId: 'obj-1' }).objectiveId).toBe(
+      'obj-1'
+    );
+    expect(createScheduleEventTask(scheduleBase).objectiveId).toBeUndefined();
+
+    expect(createFreeformTask({ prompt: 'p', objectiveId: 'obj-1' }).objectiveId).toBe('obj-1');
+    expect(createFreeformTask({ prompt: 'p' }).objectiveId).toBeUndefined();
+
+    expect(createDailyBriefingTask({ objectiveId: 'obj-1' }).objectiveId).toBe('obj-1');
+    expect(createDailyBriefingTask().objectiveId).toBeUndefined();
+
+    expect(createFollowUpNudgesTask({ objectiveId: 'obj-1' }).objectiveId).toBe('obj-1');
+    expect(createFollowUpNudgesTask().objectiveId).toBeUndefined();
+
+    expect(createProactiveInsightsTask({ objectiveId: 'obj-1' }).objectiveId).toBe('obj-1');
+    expect(createProactiveInsightsTask().objectiveId).toBeUndefined();
+
+    expect(createBudgetWarningTask({ objectiveId: 'obj-1' }).objectiveId).toBe('obj-1');
+    expect(createBudgetWarningTask().objectiveId).toBeUndefined();
+
+    expect(createStaleApprovalsTask({ objectiveId: 'obj-1' }).objectiveId).toBe('obj-1');
+    expect(createStaleApprovalsTask().objectiveId).toBeUndefined();
   });
 });

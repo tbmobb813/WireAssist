@@ -221,6 +221,45 @@ describe('ContentTasks.publishDuePosts()', () => {
   });
 });
 
+describe('ContentTasks — objectiveId passthrough', () => {
+  it('passes objectiveId through when provided, and leaves it undefined otherwise', () => {
+    expect(
+      ContentTasks.generatePost('t', 'linkedin', undefined, undefined, 'obj-1').objectiveId
+    ).toBe('obj-1');
+    expect(ContentTasks.generatePost('t', 'linkedin').objectiveId).toBeUndefined();
+
+    expect(ContentTasks.generatePlan(['linkedin'], 1, 3, undefined, 'obj-1').objectiveId).toBe(
+      'obj-1'
+    );
+    expect(ContentTasks.generatePlan(['linkedin']).objectiveId).toBeUndefined();
+
+    expect(
+      ContentTasks.schedulePost('p', 'twitter', '2026-01-01', undefined, 'obj-1').objectiveId
+    ).toBe('obj-1');
+    expect(ContentTasks.schedulePost('p', 'twitter', '2026-01-01').objectiveId).toBeUndefined();
+
+    expect(ContentTasks.analyzePost('p', 'instagram', 'obj-1').objectiveId).toBe('obj-1');
+    expect(ContentTasks.analyzePost('p', 'instagram').objectiveId).toBeUndefined();
+
+    expect(ContentTasks.listScheduled(14, 'obj-1').objectiveId).toBe('obj-1');
+    expect(ContentTasks.listScheduled().objectiveId).toBeUndefined();
+
+    const timeline = [{ week: 'Week 1', focus: 'Teaser', tasks: ['Post teaser'] }];
+    expect(
+      ContentTasks.generatePlanFromTimeline('P', timeline, ['linkedin'], 'obj-1').objectiveId
+    ).toBe('obj-1');
+    expect(
+      ContentTasks.generatePlanFromTimeline('P', timeline, ['linkedin']).objectiveId
+    ).toBeUndefined();
+
+    expect(ContentTasks.freeform('p', undefined, 'obj-1').objectiveId).toBe('obj-1');
+    expect(ContentTasks.freeform('p').objectiveId).toBeUndefined();
+
+    expect(ContentTasks.publishDuePosts('obj-1').objectiveId).toBe('obj-1');
+    expect(ContentTasks.publishDuePosts().objectiveId).toBeUndefined();
+  });
+});
+
 describe('ContentTasks — unique ids', () => {
   it('every task gets a unique uuid id', () => {
     const ids = [

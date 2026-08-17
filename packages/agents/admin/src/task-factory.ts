@@ -26,7 +26,12 @@ type SupportedTaskInput =
   | { type: 'budget_warning_nudge'; thresholdPercent?: number }
   | { type: 'stale_approvals_nudge'; daysStale?: number };
 
-function baseTask(role: AgentRole, description: string, input: SupportedTaskInput): AgentTask {
+function baseTask(
+  role: AgentRole,
+  description: string,
+  input: SupportedTaskInput,
+  objectiveId?: string
+): AgentTask {
   const now = new Date();
   return {
     id: randomUUID(),
@@ -37,22 +42,27 @@ function baseTask(role: AgentRole, description: string, input: SupportedTaskInpu
     updatedAt: now,
     input,
     approvalRequired: true,
+    objectiveId,
   };
 }
 
 export function createEmailTriageTask(options?: {
   description?: string;
   maxEmails?: number;
+  objectiveId?: string;
 }): AgentTask {
-  return baseTask('admin', options?.description ?? 'Triage my inbox and propose actions.', {
-    type: 'email_triage',
-    maxEmails: options?.maxEmails,
-  });
+  return baseTask(
+    'admin',
+    options?.description ?? 'Triage my inbox and propose actions.',
+    { type: 'email_triage', maxEmails: options?.maxEmails },
+    options?.objectiveId
+  );
 }
 
 export function createCalendarReviewTask(options?: {
   description?: string;
   daysAhead?: number;
+  objectiveId?: string;
 }): AgentTask {
   return baseTask(
     'admin',
@@ -60,7 +70,8 @@ export function createCalendarReviewTask(options?: {
     {
       type: 'calendar_review',
       daysAhead: options?.daysAhead ?? 7,
-    }
+    },
+    options?.objectiveId
   );
 }
 
@@ -70,6 +81,7 @@ export function createSendEmailTask(params: {
   body: string;
   threadId?: string;
   description?: string;
+  objectiveId?: string;
 }): AgentTask {
   return baseTask(
     'admin',
@@ -80,7 +92,8 @@ export function createSendEmailTask(params: {
       subject: params.subject,
       body: params.body,
       threadId: params.threadId,
-    }
+    },
+    params.objectiveId
   );
 }
 
@@ -90,78 +103,106 @@ export function createScheduleEventTask(params: {
   end: string;
   attendees?: string[];
   description?: string;
+  objectiveId?: string;
 }): AgentTask {
-  return baseTask('admin', params.description ?? `Schedule calendar event: ${params.summary}`, {
-    type: 'schedule_event',
-    summary: params.summary,
-    start: params.start,
-    end: params.end,
-    attendees: params.attendees,
-    description: params.description,
-  });
+  return baseTask(
+    'admin',
+    params.description ?? `Schedule calendar event: ${params.summary}`,
+    {
+      type: 'schedule_event',
+      summary: params.summary,
+      start: params.start,
+      end: params.end,
+      attendees: params.attendees,
+      description: params.description,
+    },
+    params.objectiveId
+  );
 }
 
 export function createFreeformTask(params: {
   prompt: string;
   description?: string;
   history?: ProviderMessage[];
+  objectiveId?: string;
 }): AgentTask {
-  return baseTask('admin', params.description ?? params.prompt, {
-    type: 'freeform',
-    prompt: params.prompt,
-    history: params.history,
-  });
+  return baseTask(
+    'admin',
+    params.description ?? params.prompt,
+    {
+      type: 'freeform',
+      prompt: params.prompt,
+      history: params.history,
+    },
+    params.objectiveId
+  );
 }
 
 export function createDailyBriefingTask(options?: {
   description?: string;
   maxEmails?: number;
   daysAhead?: number;
+  objectiveId?: string;
 }): AgentTask {
-  return baseTask('admin', options?.description ?? 'Morning briefing: inbox + calendar.', {
-    type: 'daily_briefing',
-    maxEmails: options?.maxEmails,
-    daysAhead: options?.daysAhead,
-  });
+  return baseTask(
+    'admin',
+    options?.description ?? 'Morning briefing: inbox + calendar.',
+    {
+      type: 'daily_briefing',
+      maxEmails: options?.maxEmails,
+      daysAhead: options?.daysAhead,
+    },
+    options?.objectiveId
+  );
 }
 
 export function createFollowUpNudgesTask(options?: {
   description?: string;
   daysStale?: number;
+  objectiveId?: string;
 }): AgentTask {
   return baseTask(
     'admin',
     options?.description ?? 'Check for sent threads awaiting reply and draft follow-ups.',
-    { type: 'follow_up_nudges', daysStale: options?.daysStale }
+    { type: 'follow_up_nudges', daysStale: options?.daysStale },
+    options?.objectiveId
   );
 }
 
-export function createProactiveInsightsTask(options?: { description?: string }): AgentTask {
+export function createProactiveInsightsTask(options?: {
+  description?: string;
+  objectiveId?: string;
+}): AgentTask {
   return baseTask(
     'admin',
     options?.description ?? 'Reflect on approval/rejection patterns across every agent.',
-    { type: 'proactive_insights' }
+    { type: 'proactive_insights' },
+    options?.objectiveId
   );
 }
 
 export function createBudgetWarningTask(options?: {
   description?: string;
   thresholdPercent?: number;
+  objectiveId?: string;
 }): AgentTask {
   return baseTask(
     'admin',
     options?.description ?? 'Check month-to-date spend against the budget warning threshold.',
-    { type: 'budget_warning_nudge', thresholdPercent: options?.thresholdPercent }
+    { type: 'budget_warning_nudge', thresholdPercent: options?.thresholdPercent },
+    options?.objectiveId
   );
 }
 
 export function createStaleApprovalsTask(options?: {
   description?: string;
   daysStale?: number;
+  objectiveId?: string;
 }): AgentTask {
   return baseTask(
     'admin',
     options?.description ?? 'Flag approval requests that have been sitting pending too long.',
-    { type: 'stale_approvals_nudge', daysStale: options?.daysStale }
+    { type: 'stale_approvals_nudge', daysStale: options?.daysStale },
+    options?.objectiveId
   );
 }

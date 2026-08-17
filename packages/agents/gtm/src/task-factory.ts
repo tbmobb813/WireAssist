@@ -7,7 +7,8 @@ export const GtmTasks = {
   generateStrategy(
     product: GtmProductInput,
     offerContentDraft?: { platform: Platform; tone?: string },
-    offerContentCalendar?: { platforms: Platform[] }
+    offerContentCalendar?: { platforms: Platform[] },
+    objectiveId?: string
   ): AgentTask {
     return {
       id: randomUUID(),
@@ -18,10 +19,11 @@ export const GtmTasks = {
       updatedAt: new Date(),
       input: { type: 'generate_gtm', product, offerContentDraft, offerContentCalendar },
       approvalRequired: false,
+      objectiveId,
     };
   },
 
-  generatePsychTactics(product: GtmProductInput): AgentTask {
+  generatePsychTactics(product: GtmProductInput, objectiveId?: string): AgentTask {
     return {
       id: randomUUID(),
       agentRole: 'gtm',
@@ -31,10 +33,11 @@ export const GtmTasks = {
       updatedAt: new Date(),
       input: { type: 'generate_psych', product },
       approvalRequired: false,
+      objectiveId,
     };
   },
 
-  freeform(prompt: string, history?: ProviderMessage[]): AgentTask {
+  freeform(prompt: string, history?: ProviderMessage[], objectiveId?: string): AgentTask {
     return {
       id: randomUUID(),
       agentRole: 'gtm',
@@ -44,6 +47,7 @@ export const GtmTasks = {
       updatedAt: new Date(),
       input: { type: 'freeform', prompt, history },
       approvalRequired: false,
+      objectiveId,
     };
   },
 };

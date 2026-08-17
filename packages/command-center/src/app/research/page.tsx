@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
 import { setContentHandoff } from '@/lib/content-handoff';
 import { setOpsHandoff } from '@/lib/ops-handoff';
+import { ObjectivePicker, useActiveObjectives } from '../objective-picker';
 
 const CONTENT_PLATFORMS = ['twitter', 'linkedin', 'instagram', 'threads'] as const;
 type ContentPlatform = (typeof CONTENT_PLATFORMS)[number];
@@ -58,6 +59,8 @@ export default function ResearchPage() {
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
   const [pending, setPending] = useState<ResearchApproval[]>([]);
   const [acting, setActing] = useState<string | null>(null);
+  const [objectiveId, setObjectiveId] = useState('');
+  const activeObjectives = useActiveObjectives();
 
   const pendingTaskId = useRef<string | null>(null);
 
@@ -144,12 +147,20 @@ export default function ResearchPage() {
       query: query.trim(),
       depth,
       ...(draftContent ? { contentDraftPlatform: draftPlatform } : {}),
+      objectiveId: objectiveId || undefined,
     });
   const runSynthesize = () =>
-    synthesizeTopic.trim() && fire('/api/tasks/synthesize', { topic: synthesizeTopic.trim() });
+    synthesizeTopic.trim() &&
+    fire('/api/tasks/synthesize', {
+      topic: synthesizeTopic.trim(),
+      objectiveId: objectiveId || undefined,
+    });
   const runFreeform = () =>
     freeformPrompt.trim() &&
-    fire('/api/tasks/research-freeform', { prompt: freeformPrompt.trim() });
+    fire('/api/tasks/research-freeform', {
+      prompt: freeformPrompt.trim(),
+      objectiveId: objectiveId || undefined,
+    });
 
   const resolveApproval = async (id: string, approved: boolean) => {
     setActing(id);
@@ -187,6 +198,11 @@ export default function ResearchPage() {
           placeholder="e.g. competitor pricing for AI agent platforms"
           className="w-full rounded px-3 py-2 text-sm mb-3 outline-none"
           style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
+        />
+        <ObjectivePicker
+          objectives={activeObjectives}
+          value={objectiveId}
+          onChange={setObjectiveId}
         />
         <div className="flex gap-2 mb-3">
           {(['quick', 'deep'] as const).map((d) => (

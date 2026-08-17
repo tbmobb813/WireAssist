@@ -102,6 +102,21 @@ describe('GtmTasks.freeform()', () => {
   });
 });
 
+describe('GtmTasks — objectiveId passthrough', () => {
+  it('passes objectiveId through when provided, and leaves it undefined otherwise', () => {
+    expect(GtmTasks.generateStrategy(product, undefined, undefined, 'obj-1').objectiveId).toBe(
+      'obj-1'
+    );
+    expect(GtmTasks.generateStrategy(product).objectiveId).toBeUndefined();
+
+    expect(GtmTasks.generatePsychTactics(product, 'obj-1').objectiveId).toBe('obj-1');
+    expect(GtmTasks.generatePsychTactics(product).objectiveId).toBeUndefined();
+
+    expect(GtmTasks.freeform('p', undefined, 'obj-1').objectiveId).toBe('obj-1');
+    expect(GtmTasks.freeform('p').objectiveId).toBeUndefined();
+  });
+});
+
 describe('GtmTasks — unique ids', () => {
   it('every task gets a unique uuid id', () => {
     const ids = [
