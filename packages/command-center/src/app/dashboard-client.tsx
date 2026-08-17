@@ -232,37 +232,6 @@ function describeEvent(event: string, payload: unknown): { description: string; 
         role: 'admin',
       };
     }
-    case 'trust_graduation_nudges_complete': {
-      const candidates = Array.isArray(p.candidates) ? p.candidates.length : 0;
-      return {
-        description:
-          candidates > 0
-            ? `Trust-graduation check: ${candidates} workflow${candidates !== 1 ? 's' : ''} ready to graduate`
-            : 'Trust-graduation check: nothing ready yet',
-        role: 'strategy',
-      };
-    }
-    case 'research_complete': {
-      const summary = typeof p.summary === 'string' ? p.summary.slice(0, 100) : '';
-      return { description: `Research complete: ${summary}`.trim(), role: 'research' };
-    }
-    case 'gtm_generated':
-      return { description: 'GTM strategy generated — awaiting approval', role: 'gtm' };
-    case 'gtm_psych_generated':
-      return { description: 'GTM psych tactics generated — awaiting approval', role: 'gtm' };
-    case 'ops_stage_complete': {
-      const stage = typeof p.stage === 'string' ? p.stage : '';
-      return { description: `Ops workflow stage complete: ${stage}`, role: 'strategy' };
-    }
-    case 'ops_blocked': {
-      const diagnosis = typeof p.diagnosis === 'string' ? p.diagnosis.slice(0, 100) : '';
-      return { description: `Ops workflow blocked: ${diagnosis}`.trim(), role: 'strategy' };
-    }
-    case 'ops_run_complete': {
-      const workflow = typeof p.workflow === 'string' ? p.workflow : '';
-      const status = p.autoApproved ? 'auto-delivered' : p.approved ? 'delivered' : 'not delivered';
-      return { description: `Ops workflow "${workflow}" ${status}`, role: 'strategy' };
-    }
     case 'auto_approved':
       return {
         description: typeof p.action === 'string' ? `Auto-approved: ${p.action}` : 'Auto-approved',
@@ -740,20 +709,11 @@ export default function DashboardClient() {
         case 'content_approved':
         case 'content_plan_generated':
         case 'post_scheduled':
-        case 'content_analyzed':
-        case 'scheduled_posts':
         case 'daily_briefing_complete':
         case 'follow_up_nudges_complete':
         case 'proactive_insights_complete':
         case 'budget_warning_complete':
         case 'stale_approvals_complete':
-        case 'trust_graduation_nudges_complete':
-        case 'research_complete':
-        case 'gtm_generated':
-        case 'gtm_psych_generated':
-        case 'ops_stage_complete':
-        case 'ops_blocked':
-        case 'ops_run_complete':
         case 'auto_approved':
         case 'handoff_queued':
           addActivity(e.event, e.payload);
