@@ -23,6 +23,8 @@ export class GmailClient {
   private auth: OAuth2Client;
   private gmail: gmail_v1.Gmail;
   private redirectUri: URL;
+  private clientId: string;
+  private clientSecret: string;
 
   constructor() {
     if (!fs.existsSync(CREDENTIALS_PATH)) {
@@ -35,6 +37,8 @@ export class GmailClient {
     const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf8'));
     const { client_secret, client_id, redirect_uris } = credentials.installed ?? credentials.web;
 
+    this.clientId = client_id;
+    this.clientSecret = client_secret;
     this.redirectUri = new URL(redirect_uris[0]);
     this.auth = new google.auth.OAuth2(client_id, client_secret, this.redirectUri.toString());
     this.gmail = google.gmail({ version: 'v1', auth: this.auth });
@@ -77,6 +81,45 @@ export class GmailClient {
     await this.runOAuthFlow();
   }
 
+  // Headless/server-driven counterpart to runOAuthFlow() — no local HTTP
+  // server, no browser spawn. Used when the consent flow is completed by a
+  // human tapping a link (e.g. from a Telegram message) while the app itself
+  // runs on a machine with no display, and the OAuth redirect lands on a
+  // route this same server exposes rather than an ephemeral local port.
+  generateWebAuthUrl(redirectUri: string): string {
+    const authClient = new google.auth.OAuth2(this.clientId, this.clientSecret, redirectUri);
+    return authClient.generateAuthUrl({
+      access_type: 'offline',
+      scope: SCOPES,
+      include_granted_scopes: true,
+      prompt: 'consent',
+    });
+  }
+
+  async completeWebAuth(code: string, redirectUri: string): Promise<void> {
+    const authClient = new google.auth.OAuth2(this.clientId, this.clientSecret, redirectUri);
+    const { tokens } = await authClient.getToken(code);
+    this.saveToken({ ...tokens, savedAt: Date.now() });
+  }
+
+  // Google only returns refresh_token_expires_in for OAuth clients whose
+  // consent screen is still in "Testing" publishing status — such refresh
+  // tokens die in days, not indefinitely. savedAt is stamped by this class
+  // on every real authorization-code exchange (not on ordinary access-token
+  // refreshes, which don't renew the refresh token's own lifetime); older
+  // tokens saved before this field existed fall back to the file's mtime.
+  static getTokenStatus(): { refreshTokenExpiresAt: number; daysRemaining: number } | null {
+    if (!fs.existsSync(TOKEN_PATH)) return null;
+    const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+    if (!token.refresh_token_expires_in) return null;
+    const mintedAt = token.savedAt ?? fs.statSync(TOKEN_PATH).mtimeMs;
+    const refreshTokenExpiresAt = mintedAt + token.refresh_token_expires_in * 1000;
+    return {
+      refreshTokenExpiresAt,
+      daysRemaining: (refreshTokenExpiresAt - Date.now()) / 86_400_000,
+    };
+  }
+
   private async runOAuthFlow(): Promise<void> {
     return new Promise((resolve, reject) => {
       const authUrl = this.auth.generateAuthUrl({
@@ -114,7 +157,7 @@ export class GmailClient {
 
         const { tokens } = await this.auth.getToken(code);
         this.auth.setCredentials(tokens);
-        this.saveToken(tokens);
+        this.saveToken({ ...tokens, savedAt: Date.now() });
         console.log('✅ Gmail authenticated and token saved.\n');
         resolve();
       });

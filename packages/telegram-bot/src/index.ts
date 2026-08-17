@@ -17,6 +17,10 @@
  *   /ask <prompt>        ask anything — routed to the right agent automatically
  *                        (admin, content, research, or ops; GTM requests get
  *                        pointed at the /gtm wizard instead of a direct answer)
+ *   /reauth              get a tap-to-reauthorize link for Gmail/Calendar
+ *                        (Testing-mode Google OAuth refresh tokens expire
+ *                        every few days — same link also gets pushed here
+ *                        automatically before that happens)
  *
  * Also subscribes to the command-center SSE feed and pushes back results from
  * whichever agent handled the request — admin, content, research, or ops —
@@ -76,6 +80,7 @@ async function handleCommand(text: string): Promise<string> {
         '/workflows — NixOps workflows',
         '/run <workflow> <brief>',
         '/ask <prompt> — routed to the right agent automatically',
+        '/reauth — get a Gmail/Calendar re-authorization link',
       ].join('\n');
 
     case '/status': {
@@ -146,6 +151,11 @@ async function handleCommand(text: string): Promise<string> {
         body: JSON.stringify({ workflow, brief }),
       })) as { taskId: string };
       return `🚀 Queued *${workflow}*\nTask: \`${r.taskId}\`\nYou'll get a ping when it needs approval.`;
+    }
+
+    case '/reauth': {
+      const r = (await api('/api/admin/gmail/reauth-url')) as { url: string };
+      return `🔐 Tap to re-authorize Gmail/Calendar:\n${r.url}\n\n(Must be connected to Tailscale.)`;
     }
 
     case '/ask': {
@@ -300,6 +310,16 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
       await send(
         `🧠 *GTM psych tactics generated:* ${psych.length} principle(s) ready. Check the GTM tab for details.`
       );
+      break;
+    }
+    case 'gmail_reauth_needed': {
+      const days = typeof p.daysRemaining === 'number' ? p.daysRemaining : null;
+      const when = p.expired
+        ? 'has *expired*'
+        : days !== null
+          ? `expires in ~${days.toFixed(1)} day(s)`
+          : 'is expiring soon';
+      await send(`🔐 Gmail/Calendar authorization ${when}. Tap to fix:\n${String(p.url ?? '')}`);
       break;
     }
     case 'task_failed':

@@ -20,6 +20,7 @@ import {
   budgetTracker,
   listAutoApproveRecords,
   setAutoApproveOverride,
+  GmailClient,
 } from '@wireassist/agent-admin';
 import { ContentAgent, ContentTasks } from '@wireassist/agent-content';
 import { ResearchAgent, ResearchTasks, setupResearchMCP } from '@wireassist/agent-research';
@@ -66,6 +67,11 @@ let gtmAgent: GtmAgent;
 let trendpostStorage: TrendPostStorage;
 let agentReady = false;
 let gmailReady = false;
+// Timestamp (ms) of the token's own refreshTokenExpiresAt value at the time
+// we last sent a warning — reset to null on a successful re-auth, so a new
+// token (with its own later expiry) can trigger a fresh warning cycle
+// instead of being permanently silenced by the old one.
+let gmailReauthWarnedAt: number | null = null;
 
 function anthropicConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
@@ -226,6 +232,7 @@ events.on('agent:trust_graduation_nudges_complete', (p) =>
   broadcast('trust_graduation_nudges_complete', p)
 );
 events.on('agent:ops_published', (p) => broadcast('ops_published', p));
+events.on('agent:gmail_reauth_needed', (p) => broadcast('gmail_reauth_needed', p));
 events.on('agent:ops_publish_failed', (p) => broadcast('ops_publish_failed', p));
 events.on('agent:gtm_generated', (p) => broadcast('gtm_generated', p));
 events.on('agent:gtm_psych_generated', (p) => broadcast('gtm_psych_generated', p));
@@ -296,7 +303,47 @@ async function bootstrap() {
       '⚠️  ANTHROPIC_API_KEY is not set — dashboard loads, but triage/chat/calendar tasks will fail until you export it.'
     );
   }
+
+  checkGmailReauthExpiry();
+  setInterval(checkGmailReauthExpiry, GMAIL_REAUTH_CHECK_INTERVAL_MS);
+
   console.log('✅ WireAssist API server ready');
+}
+
+// Testing-mode Google OAuth refresh tokens die in days, not indefinitely
+// (see GmailClient.getTokenStatus()) — this fires a one-time warning per
+// token once it's within GMAIL_REAUTH_WARNING_THRESHOLD_DAYS of expiry
+// (and again immediately if it's *already* expired, e.g. right at boot),
+// so JNix gets a Telegram nudge with a tap-to-fix link before Gmail/Calendar
+// silently breaks. Read-only — never itself alters gmailReady.
+const GMAIL_REAUTH_WARNING_THRESHOLD_DAYS = 1.5;
+const GMAIL_REAUTH_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+function checkGmailReauthExpiry(): void {
+  const redirectUri = process.env.WIREASSIST_OAUTH_REDIRECT_URI;
+  if (!redirectUri) return; // no headless re-auth route configured — nothing actionable to send
+
+  let status: { refreshTokenExpiresAt: number; daysRemaining: number } | null;
+  try {
+    status = GmailClient.getTokenStatus();
+  } catch {
+    return;
+  }
+  if (!status || status.daysRemaining > GMAIL_REAUTH_WARNING_THRESHOLD_DAYS) return;
+  if (gmailReauthWarnedAt === status.refreshTokenExpiresAt) return; // already warned for this token
+
+  gmailReauthWarnedAt = status.refreshTokenExpiresAt;
+  let url: string;
+  try {
+    url = new GmailClient().generateWebAuthUrl(redirectUri);
+  } catch {
+    return;
+  }
+  events.emit('agent:gmail_reauth_needed', {
+    daysRemaining: status.daysRemaining,
+    expired: status.daysRemaining <= 0,
+    url,
+  });
 }
 
 // ── Hono app ───────────────────────────────────────────────────────────────
@@ -825,6 +872,48 @@ app.post('/api/admin/auto-approve/:sender', async (c) => {
   const sender = c.req.param('sender');
   const record = setAutoApproveOverride(sender, enabled);
   return c.json({ sender, record });
+});
+
+// Headless Gmail/Calendar re-authorization — for a Testing-mode Google OAuth
+// client, the refresh token expires every few days, and the app has no
+// display to run the normal browser-based flow on. WIREASSIST_OAUTH_REDIRECT_URI
+// is a URL this same server can receive (e.g. a Tailscale-HTTPS hostname),
+// registered as an Authorized redirect URI in Google Cloud Console — a human
+// taps the generated link from anywhere on the tailnet (a phone works fine),
+// consents, and Google redirects the code straight back here.
+app.get('/api/admin/gmail/reauth-url', (c) => {
+  const redirectUri = process.env.WIREASSIST_OAUTH_REDIRECT_URI;
+  if (!redirectUri) {
+    return c.json({ error: 'WIREASSIST_OAUTH_REDIRECT_URI is not configured.' }, 500);
+  }
+  try {
+    return c.json({ url: new GmailClient().generateWebAuthUrl(redirectUri) });
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
+});
+
+app.get('/api/admin/gmail/oauth-callback', async (c) => {
+  const code = c.req.query('code');
+  const error = c.req.query('error');
+  const redirectUri = process.env.WIREASSIST_OAUTH_REDIRECT_URI;
+
+  if (error) return c.html(`<h1>❌ Authorization failed: ${error}</h1>`, 400);
+  if (!code) return c.html('<h1>❌ No authorization code received.</h1>', 400);
+  if (!redirectUri)
+    return c.html('<h1>❌ WIREASSIST_OAUTH_REDIRECT_URI is not configured.</h1>', 500);
+
+  try {
+    await new GmailClient().completeWebAuth(code, redirectUri);
+    // Rebuild Gmail/Calendar/Sheets clients and re-register their MCP tools
+    // against the fresh token — same call bootstrap() makes at startup.
+    await setupAdminMCP(mcp);
+    gmailReady = true;
+    gmailReauthWarnedAt = null;
+    return c.html('<h1>✅ WireAssist Gmail/Calendar re-authorized. You can close this tab.</h1>');
+  } catch (err) {
+    return c.html(`<h1>❌ ${err instanceof Error ? err.message : String(err)}</h1>`, 500);
+  }
 });
 
 app.post('/api/tasks/ops-workflow', async (c) => {

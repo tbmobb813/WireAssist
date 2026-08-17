@@ -1,5 +1,6 @@
 export { AdminAgent } from './admin-agent';
 export { SheetsClient } from './sheets-client';
+export { GmailClient } from './gmail-client';
 export { AdminTasks } from './admin-tasks';
 export { setupAdminMCP } from './mcp-setup';
 export * from './task-factory';
