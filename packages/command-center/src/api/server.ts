@@ -519,6 +519,11 @@ app.post('/api/tasks/freeform', async (c) => {
       queueOpsTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
+    case 'gtm_freeform': {
+      const task = GtmTasks.freeform(decision.prompt, history);
+      queueGtmTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
     case 'gtm_redirect':
       return c.json({
         redirect: '/gtm',
@@ -622,6 +627,16 @@ app.post('/api/tasks/synthesize', async (c) => {
   const { topic } = await c.req.json();
   if (!topic || typeof topic !== 'string') return c.json({ error: 'topic required' }, 400);
   const task = ResearchTasks.synthesizeFindings(topic);
+  queueResearchTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/research-freeform', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const { prompt, history: rawHistory } = await c.req.json();
+  if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
+  const task = ResearchTasks.freeform(prompt, sanitizeHistory(rawHistory));
   queueResearchTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });

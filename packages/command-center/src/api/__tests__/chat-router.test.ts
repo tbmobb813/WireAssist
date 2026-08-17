@@ -63,3 +63,24 @@ describe('buildDecision() — research_topic still works alongside research_free
     });
   });
 });
+
+describe('buildDecision() — gtm_freeform', () => {
+  it('builds a gtm_freeform decision from a prompt', () => {
+    expect(
+      buildDecision('gtm_freeform', { prompt: 'what pricing model fits a PLG SaaS?' })
+    ).toEqual({
+      kind: 'gtm_freeform',
+      prompt: 'what pricing model fits a PLG SaaS?',
+    });
+  });
+
+  it('throws when prompt is missing', () => {
+    expect(() => buildDecision('gtm_freeform', {})).toThrow(RouterError);
+  });
+});
+
+describe('buildDecision() — gtm_redirect still works alongside gtm_freeform', () => {
+  it('builds a gtm_redirect decision', () => {
+    expect(buildDecision('gtm_redirect', {})).toEqual({ kind: 'gtm_redirect' });
+  });
+});

@@ -80,6 +80,28 @@ describe('GtmTasks.generatePsychTactics()', () => {
   });
 });
 
+describe('GtmTasks.freeform()', () => {
+  it('produces a valid task shape', () => {
+    const t = GtmTasks.freeform('what pricing model fits a PLG SaaS?');
+    expect(t.agentRole).toBe('gtm');
+    expect(t.approvalRequired).toBe(false);
+    expect(t.description).toBe('what pricing model fits a PLG SaaS?');
+    expect((t.input as { type: string }).type).toBe('freeform');
+    expect((t.input as { prompt: string }).prompt).toBe('what pricing model fits a PLG SaaS?');
+  });
+
+  it('leaves history undefined when not provided', () => {
+    const t = GtmTasks.freeform('a question');
+    expect((t.input as { history?: unknown }).history).toBeUndefined();
+  });
+
+  it('carries history through when provided', () => {
+    const history = [{ role: 'user' as const, content: 'earlier turn' }];
+    const t = GtmTasks.freeform('a question', history);
+    expect((t.input as { history?: unknown }).history).toEqual(history);
+  });
+});
+
 describe('GtmTasks — unique ids', () => {
   it('every task gets a unique uuid id', () => {
     const ids = [
