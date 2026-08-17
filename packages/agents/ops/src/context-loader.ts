@@ -67,3 +67,17 @@ export function parseSheetRef(workflowMarkdown: string): SheetRef | null {
   const [, spreadsheetId, range] = match;
   return { spreadsheetId, range: range.trim() };
 }
+
+// A workflow file may declare a publish destination with a line like:
+//   **Publish target:** wordpress
+// Only 'wordpress' is supported today. A workflow with no such line never
+// attempts to publish anything — its approved output just ends up in the
+// run log and memory, same as before this existed.
+export type PublishTarget = 'wordpress';
+
+export function parsePublishTarget(workflowMarkdown: string): PublishTarget | null {
+  const match = workflowMarkdown.match(/\*\*Publish target:\*\*\s*(\S+)/);
+  if (!match) return null;
+  const target = match[1].toLowerCase();
+  return target === 'wordpress' ? 'wordpress' : null;
+}

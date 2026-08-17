@@ -32,6 +32,9 @@ import {
   MIN_TRUST_STAGE,
   MAX_TRUST_STAGE,
   setupOpsMCP,
+  registerWordPressTools,
+  registerImageTools,
+  registerYouTubeTools,
 } from '@wireassist/agent-ops';
 import {
   GtmAgent,
@@ -222,6 +225,8 @@ events.on('agent:ops_freeform_response', (p) => broadcast('ops_freeform_response
 events.on('agent:trust_graduation_nudges_complete', (p) =>
   broadcast('trust_graduation_nudges_complete', p)
 );
+events.on('agent:ops_published', (p) => broadcast('ops_published', p));
+events.on('agent:ops_publish_failed', (p) => broadcast('ops_publish_failed', p));
 events.on('agent:gtm_generated', (p) => broadcast('gtm_generated', p));
 events.on('agent:gtm_psych_generated', (p) => broadcast('gtm_psych_generated', p));
 events.on('agent:auto_approved', (p) => broadcast('auto_approved', p));
@@ -263,6 +268,9 @@ async function bootstrap() {
 
   // NixOps Agent — business workflow runner (context files ship with the package)
   setupOpsMCP(mcp);
+  registerWordPressTools(mcp);
+  registerImageTools(mcp);
+  registerYouTubeTools(mcp);
   opsAgent = new NixOpsAgent({ approval, memory, mcp, events });
 
   // GTM Agent — go-to-market strategy and psych tactics generation

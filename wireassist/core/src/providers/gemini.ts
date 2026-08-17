@@ -13,7 +13,7 @@ export class GeminiProvider implements Provider {
     this.apiKey = config.apiKey || process.env.GEMINI_API_KEY || '';
     this.baseUrl = config.baseUrl || 'https://generativelanguage.googleapis.com/v1';
     this.currentModel = config.model || 'gemini-pro';
-    this.timeout = config.timeout || 30000;
+    this.timeout = config.timeout || 180000;
 
     if (!this.apiKey) {
       throw new Error('Gemini API key is required');

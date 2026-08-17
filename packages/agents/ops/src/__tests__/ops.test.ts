@@ -1,4 +1,10 @@
-import { loadOpsContext, listWorkflows, loadWorkflow, parseSheetRef } from '../context-loader';
+import {
+  loadOpsContext,
+  listWorkflows,
+  loadWorkflow,
+  parseSheetRef,
+  parsePublishTarget,
+} from '../context-loader';
 import {
   createWorkflowRunTask,
   createOpsFreeformTask,
@@ -52,6 +58,29 @@ describe('parseSheetRef', () => {
 
   it('returns null for a malformed Sheet line missing the separator', () => {
     expect(parseSheetRef('**Sheet:** 1a2B3cD4eFgH Costs!A1:D100')).toBeNull();
+  });
+});
+
+describe('parsePublishTarget', () => {
+  it('parses a wordpress publish target', () => {
+    const md = '**Trust stage:** 2\n\n**Publish target:** wordpress\n';
+    expect(parsePublishTarget(md)).toBe('wordpress');
+  });
+
+  it('is case-insensitive', () => {
+    expect(parsePublishTarget('**Publish target:** WordPress')).toBe('wordpress');
+  });
+
+  it('returns null when no Publish target line is present', () => {
+    expect(parsePublishTarget('**Trust stage:** 2\n\nNo publish target here.')).toBeNull();
+  });
+
+  it('returns null for an unsupported target', () => {
+    expect(parsePublishTarget('**Publish target:** medium')).toBeNull();
+  });
+
+  it('the live seo-article workflow declares wordpress as its publish target', () => {
+    expect(parsePublishTarget(loadWorkflow('seo-article'))).toBe('wordpress');
   });
 });
 

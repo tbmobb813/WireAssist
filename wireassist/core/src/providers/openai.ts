@@ -13,7 +13,7 @@ export class OpenAIProvider implements Provider {
     this.apiKey = config.apiKey || process.env.OPENAI_API_KEY || '';
     this.baseUrl = config.baseUrl || 'https://api.openai.com/v1';
     this.currentModel = config.model || 'gpt-4';
-    this.timeout = config.timeout || 30000;
+    this.timeout = config.timeout || 180000;
 
     if (!this.apiKey) {
       throw new Error('OpenAI API key is required');

@@ -5,7 +5,7 @@ import type { ProviderMessage } from '../providers/base';
 // Narrower than BaseAgent itself — a Skill can reach these, but never
 // `config`, `client`, or `status` directly.
 export interface SkillAgentHandle {
-  think(userMessage: string, extraContext?: string): Promise<string>;
+  think(userMessage: string, extraContext?: string, maxTokensOverride?: number): Promise<string>;
   useTool(toolName: string, params: Record<string, unknown>): Promise<unknown>;
   loadContext(query: string): Promise<string>;
   remember(content: string, tags?: string[]): void;

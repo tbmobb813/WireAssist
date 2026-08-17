@@ -39,7 +39,18 @@ export class NixOpsAgent extends BaseAgent {
     events: EventBus;
   }) {
     const ctx = loadOpsContext();
-    const tools = ['sheets_read', 'list_workflows'];
+    const tools = [
+      'sheets_read',
+      'list_workflows',
+      // Not LLM-facing (no entry in OPS_TOOL_SCHEMAS) — only authorizes
+      // agent.useTool() calls made internally by run-workflow's WordPress
+      // publish step, never a direct model tool call.
+      'wordpress_publish_draft',
+      'wordpress_upload_media',
+      'wordpress_list_posts',
+      'image_generate',
+      'youtube_search_videos',
+    ];
     const config: AgentConfig = {
       // 'strategy' is the unclaimed slot in the core role union; NixOps owns it.
       role: 'strategy',

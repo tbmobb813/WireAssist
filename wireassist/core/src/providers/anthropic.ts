@@ -41,7 +41,11 @@ export class AnthropicProvider implements Provider {
     this.apiKey = config.apiKey || process.env.ANTHROPIC_API_KEY || '';
     this.baseUrl = config.baseUrl || 'https://api.anthropic.com/v1';
     this.currentModel = config.model || 'claude-3-5-sonnet-20241022';
-    this.timeout = config.timeout || 30000;
+    // 30s was too short for large completions (e.g. NixOps's DATA-loop
+    // stages with maxTokens up to 8192, writing a full article in one
+    // call) — non-streaming responses of that size routinely take over a
+    // minute.
+    this.timeout = config.timeout || 180000;
 
     if (!this.apiKey) {
       throw new Error('Anthropic API key is required');

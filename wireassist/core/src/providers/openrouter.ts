@@ -20,7 +20,7 @@ export class OpenRouterProvider implements Provider {
     this.apiKey = config.apiKey || process.env.OPENROUTER_API_KEY || '';
     this.baseUrl = config.baseUrl || 'https://openrouter.ai/api/v1';
     this.currentModel = config.model || 'openai/gpt-4o';
-    this.timeout = config.timeout || 30000;
+    this.timeout = config.timeout || 180000;
 
     if (!this.apiKey) {
       throw new Error('OpenRouter API key is required');

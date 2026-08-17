@@ -1,7 +1,9 @@
-import type { Skill } from '@wireassist/core';
-import { loadWorkflow, parseSheetRef } from '../context-loader';
+import type { Skill, SkillAgentHandle } from '@wireassist/core';
+import { loadWorkflow, parseSheetRef, parsePublishTarget } from '../context-loader';
 import { getTrustStage } from '../trust-stage';
 import { logRun } from '../run-log';
+import type { DraftPostResult, RecentPost } from '../wordpress-client';
+import { findBestMatch } from '../link-matcher';
 
 export interface RunWorkflowInput {
   workflow: string;
@@ -148,22 +150,62 @@ export const runWorkflowSkill: Skill<RunWorkflowInput, void> = {
           assessment,
         });
 
+    // Only ever runs after a human (or trust-stage 3+) has already approved
+    // delivery — publishing is additive to that gate, never a substitute
+    // for it. A rejected run never reaches WordPress.
+    let publishResult: DraftPostResult | undefined;
+    let publishError: string | undefined;
+    const publishTarget = approved ? parsePublishTarget(workflow) : null;
+    if (publishTarget === 'wordpress') {
+      try {
+        // The assess stage only restates an artifact in full when it found
+        // a gap to fix — a clean pass just reports "Pass" with no gap, and
+        // the actual article body then only exists in the take_action
+        // stage's output. Pass the full transcript so extraction always has
+        // the real content regardless of whether assess had corrections.
+        publishResult = await publishToWordPress(agent, transcript());
+        agent.emit('agent:ops_published', {
+          agentRole: task.agentRole,
+          taskId: task.id,
+          workflow: input.workflow,
+          target: 'wordpress',
+          result: publishResult,
+        });
+      } catch (err) {
+        publishError = err instanceof Error ? err.message : String(err);
+        agent.emit('agent:ops_publish_failed', {
+          agentRole: task.agentRole,
+          taskId: task.id,
+          workflow: input.workflow,
+          target: 'wordpress',
+          error: publishError,
+        });
+      }
+    }
+
     task.output = {
       workflow: input.workflow,
       approved,
       autoApproved,
       transcript: transcript(),
+      ...(publishResult ? { publish: publishResult } : {}),
+      ...(publishError ? { publishError } : {}),
     };
 
     const outcomeLabel = autoApproved ? 'AUTO-APPROVED' : approved ? 'APPROVED' : 'REJECTED';
+    const publishLabel = publishResult
+      ? `\n\nPublished as WordPress draft: ${publishResult.editLink}`
+      : publishError
+        ? `\n\nWordPress publish failed: ${publishError}`
+        : '';
 
     // Full transcript, not a truncated summary — this is the only place the
     // run's actual deliverables survive once the task itself is discarded.
     agent.remember(
-      `NixOps run of "${input.workflow}" (${outcomeLabel}). Brief: ${input.brief}.\n\n${transcript()}`,
+      `NixOps run of "${input.workflow}" (${outcomeLabel}). Brief: ${input.brief}.\n\n${transcript()}${publishLabel}`,
       ['ops-run', input.workflow]
     );
-    logRun(input.workflow, outcomeLabel, `Brief: ${input.brief}\n\n${transcript()}`);
+    logRun(input.workflow, outcomeLabel, `Brief: ${input.brief}\n\n${transcript()}${publishLabel}`);
 
     agent.emit('agent:ops_run_complete', {
       agentRole: task.agentRole,
@@ -172,6 +214,214 @@ export const runWorkflowSkill: Skill<RunWorkflowInput, void> = {
       approved,
       autoApproved,
       transcript: transcript(),
+      publish: publishResult,
+      publishError,
     });
   },
 };
+
+// Extracts the final, corrected artifacts from the full run transcript
+// into a structured payload and pushes them to WordPress as a draft. A
+// second, narrowly-scoped `think()` call rather than trying to regex-parse
+// the DATA loop's free-form markdown sections — the model already
+// produced the content, this just asks it to re-emit the relevant parts
+// as JSON. Needs the FULL transcript, not just the assess stage: assess
+// only restates an artifact when it found a gap, so a clean run's actual
+// article body only exists in take_action's output.
+//
+// Images and internal links are resolved with real data AFTER extraction,
+// in plain code, not by the model: image prompts get generated and
+// uploaded, and internal-link candidates get matched against the site's
+// actual post list (see link-matcher.ts). This keeps the model from ever
+// inventing a URL that doesn't exist — a match either comes from a real
+// WordPress post or the link doesn't happen.
+async function publishToWordPress(
+  agent: SkillAgentHandle,
+  fullTranscript: string
+): Promise<DraftPostResult> {
+  const extraction = await agent.think(
+    [
+      'Extract the FINAL, CORRECTED version of the article and its metadata from the run',
+      'transcript below into a single JSON object — no markdown fences, no commentary, JSON only.',
+      'The transcript has four sections: DIAGNOSE, ASSEMBLE, TAKE_ACTION, and ASSESS. TAKE_ACTION',
+      'has the article and meta package as originally written. ASSESS only restates an artifact in',
+      'full when it found a gap to fix — if ASSESS shows a corrected version of something, use',
+      "that version; for anything ASSESS didn't restate (a clean pass), use the TAKE_ACTION version.",
+      '',
+      'Convert the article body from markdown to clean semantic HTML: <h2>/<h3> for headings',
+      '(the H1 becomes the "title" field instead, do not repeat it in the body), <p> for',
+      'paragraphs, <ul>/<ol> for lists, <strong>/<em> for emphasis.',
+      '',
+      'For each [IMAGE SUGGESTION: ...] marker, replace it in the HTML with a bare token',
+      '{{IMG:0}}, {{IMG:1}}, etc. (in order of appearance), and list the original suggestion',
+      'text as a generation prompt in "imagePrompts" at the matching index.',
+      '',
+      'For each [INTERNAL LINK: anchor text → page type] marker, replace it in the HTML with',
+      'a bare token {{LINK:0}}, {{LINK:1}}, etc., and add an entry to "internalLinkCandidates"',
+      'with that token, the anchor text, and a short topic phrase (a few words capturing what',
+      'the linked page should be about, e.g. "GPU buying guide budget") that can be matched',
+      'against real post titles. Do not invent or guess a URL yourself.',
+      '',
+      'For [EXTERNAL LINK: ...] markers, keep the existing behavior: `<a href="#">` with the',
+      'anchor text and the marker itself in the title attribute, for JNix to fix before publishing.',
+      '',
+      'Also propose 1-3 short YouTube search queries ("youtubeSearchQueries") that would find a',
+      'genuinely relevant video for this article’s topic — skip this if the topic has no natural',
+      'video angle rather than forcing an unrelated query.',
+      '',
+      'Required JSON shape:',
+      '{',
+      '  "title": "the article H1 / working title",',
+      '  "slug": "url-slug-from-meta",',
+      '  "metaTitle": "title tag from the meta package",',
+      '  "metaDescription": "meta description from the meta package",',
+      '  "excerpt": "a 1-2 sentence summary suitable as a WordPress excerpt",',
+      '  "contentHtml": "the full article body as HTML, with {{IMG:n}} / {{LINK:n}} tokens",',
+      '  "imagePrompts": ["prompt for IMG:0", "prompt for IMG:1"],',
+      '  "internalLinkCandidates": [{"token": "LINK:0", "anchorText": "...", "topic": "..."}],',
+      '  "youtubeSearchQueries": ["...", "..."]',
+      '}',
+      '',
+      `FULL RUN TRANSCRIPT:\n${fullTranscript}`,
+    ].join('\n'),
+    undefined,
+    // The agent's default maxTokens (8192) is sized for the four DATA-loop
+    // stages, not for re-emitting a full article as HTML inside one JSON
+    // blob — that alone can approach 8192 before the JSON structure and
+    // link/image metadata are even counted, causing silent truncation.
+    16000
+  );
+
+  const stripped = extraction
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim();
+
+  let parsed: {
+    title: string;
+    slug?: string;
+    metaTitle?: string;
+    metaDescription?: string;
+    excerpt?: string;
+    contentHtml: string;
+    imagePrompts?: string[];
+    internalLinkCandidates?: Array<{ token: string; anchorText: string; topic: string }>;
+    youtubeSearchQueries?: string[];
+  };
+  try {
+    parsed = JSON.parse(stripped);
+  } catch {
+    // A response that doesn't end with '}' almost always means it hit
+    // the token limit mid-output, not that the model wrote malformed
+    // JSON — worth saying plainly rather than making every truncation
+    // look like a formatting bug.
+    const likelyTruncated = !stripped.endsWith('}');
+    throw new Error(
+      `WordPress publish extraction returned unparseable JSON` +
+        (likelyTruncated ? ' (likely truncated — response did not end with "}")' : '') +
+        `. Length: ${stripped.length}. Tail: ${stripped.slice(-500)}`
+    );
+  }
+
+  let contentHtml = parsed.contentHtml;
+  let featuredMediaId: number | undefined;
+
+  // ── Images: generate via Pollinations, upload to WP media library ──
+  for (const [i, prompt] of (parsed.imagePrompts ?? []).entries()) {
+    const token = `{{IMG:${i}}}`;
+    try {
+      const generated = (await agent.useTool('image_generate', { prompt })) as {
+        imageBase64: string;
+        mimeType: string;
+      };
+      const ext = generated.mimeType.includes('png') ? 'png' : 'jpg';
+      const uploaded = (await agent.useTool('wordpress_upload_media', {
+        imageBase64: generated.imageBase64,
+        mimeType: generated.mimeType,
+        filename: `seo-article-image-${i}.${ext}`,
+        altText: prompt,
+      })) as { id: number; sourceUrl: string };
+      if (i === 0) featuredMediaId = uploaded.id;
+      contentHtml = contentHtml.replace(
+        token,
+        `<img src="${uploaded.sourceUrl}" alt="${prompt.replace(/"/g, '')}" />`
+      );
+    } catch {
+      // Image generation/upload is best-effort — fall back to the plain
+      // suggestion text rather than leaving a raw {{IMG:n}} token or
+      // failing the whole publish over one bad image.
+      contentHtml = contentHtml.replace(token, `[IMAGE SUGGESTION: ${prompt}]`);
+    }
+  }
+
+  // ── Internal links: match against real posts, never invent a URL ──
+  if (parsed.internalLinkCandidates?.length) {
+    let posts: RecentPost[] = [];
+    try {
+      posts = (await agent.useTool('wordpress_list_posts', {})) as RecentPost[];
+    } catch {
+      // No post list available — every candidate falls through to plain
+      // text below, same as a candidate with no match.
+    }
+    for (const candidate of parsed.internalLinkCandidates) {
+      const token = `{{${candidate.token}}}`;
+      const match = posts.length ? findBestMatch(candidate.topic, posts) : null;
+      contentHtml = contentHtml.replace(
+        token,
+        match ? `<a href="${match.link}">${candidate.anchorText}</a>` : candidate.anchorText
+      );
+    }
+  }
+
+  // ── YouTube: search, then one small judgment call to pick (or skip) ──
+  if (parsed.youtubeSearchQueries?.length) {
+    try {
+      const seen = new Set<string>();
+      const candidates: Array<{ title: string; channelTitle: string; url: string }> = [];
+      for (const query of parsed.youtubeSearchQueries.slice(0, 3)) {
+        const results = (await agent.useTool('youtube_search_videos', {
+          query,
+          maxResults: 5,
+        })) as Array<{ videoId: string; title: string; channelTitle: string; url: string }>;
+        for (const r of results) {
+          if (!seen.has(r.videoId)) {
+            seen.add(r.videoId);
+            candidates.push(r);
+          }
+        }
+        if (candidates.length >= 5) break;
+      }
+
+      if (candidates.length) {
+        const pick = await agent.think(
+          [
+            `The article is titled "${parsed.title}".`,
+            'From the candidate videos below, pick the single most relevant, appropriate one to',
+            'embed — prefer official manufacturer/reviewer channels over channels that look like',
+            'competing publications or low-quality content. If nothing genuinely fits, say NONE.',
+            'Reply with exactly one line: either the chosen video’s URL, or the word NONE.',
+            '',
+            candidates.map((c) => `- ${c.title} (${c.channelTitle}): ${c.url}`).join('\n'),
+          ].join('\n')
+        );
+        const chosenUrl = candidates.find((c) => pick.includes(c.url))?.url;
+        if (chosenUrl) {
+          contentHtml += `\n<h2>Related Video</h2>\n<p>${chosenUrl}</p>`;
+        }
+      }
+    } catch {
+      // No YouTube credentials configured yet, or the search failed —
+      // skip the video entirely rather than fail the publish.
+    }
+  }
+
+  return agent.useTool('wordpress_publish_draft', {
+    title: parsed.title,
+    slug: parsed.slug,
+    metaTitle: parsed.metaTitle,
+    metaDescription: parsed.metaDescription,
+    excerpt: parsed.excerpt,
+    contentHtml,
+    featuredMediaId,
+  }) as Promise<DraftPostResult>;
+}

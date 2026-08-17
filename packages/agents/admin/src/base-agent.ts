@@ -146,7 +146,8 @@ export abstract class BaseAgent {
   // is allowed to see — no access to config/client/status.
   protected asSkillHandle(): SkillAgentHandle {
     return {
-      think: (userMessage, extraContext) => this.think(userMessage, extraContext),
+      think: (userMessage, extraContext, maxTokensOverride) =>
+        this.think(userMessage, extraContext, maxTokensOverride),
       useTool: (toolName, params) => this.useTool(toolName, params),
       loadContext: (query) => this.loadContext(query),
       remember: (content, tags) => this.remember(content, tags),
@@ -161,7 +162,11 @@ export abstract class BaseAgent {
   // Core reasoning — call Claude with this agent's system prompt.
   // Enforces the monthly budget: refuses new calls once the cap is hit and
   // records actual token usage after every call.
-  protected async think(userMessage: string, extraContext?: string): Promise<string> {
+  protected async think(
+    userMessage: string,
+    extraContext?: string,
+    maxTokensOverride?: number
+  ): Promise<string> {
     budgetTracker.assertWithinBudget();
 
     const model = this.resolveModel();
@@ -169,7 +174,10 @@ export abstract class BaseAgent {
       prompt: userMessage,
       systemPrompt: this.buildSystemPrompt(extraContext),
       model,
-      maxTokens: this.config.maxTokens ?? 2048,
+      // Per-call override for stages whose output genuinely needs more room
+      // than the agent's default (e.g. NixOps re-emitting a full article
+      // as one JSON blob) — the default stays put for every other call.
+      maxTokens: maxTokensOverride ?? this.config.maxTokens ?? 2048,
     });
 
     this.recordUsage(model, response);
