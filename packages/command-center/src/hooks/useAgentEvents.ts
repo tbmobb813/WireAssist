@@ -84,6 +84,14 @@ export type AgentEvent =
           count: number;
         }[];
       };
+    }
+  | {
+      event: 'trust_graduation_nudges_complete';
+      payload: {
+        taskId: string;
+        summary: string;
+        candidates: { workflow: string; streak: number; approved: boolean }[];
+      };
     };
 
 export function useAgentEvents(onEvent: (e: AgentEvent) => void) {

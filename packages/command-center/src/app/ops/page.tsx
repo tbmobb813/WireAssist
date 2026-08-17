@@ -46,6 +46,9 @@ interface OpsApproval {
     workflow?: string;
     brief?: string;
     assessment?: string;
+    currentStage?: number;
+    targetStage?: number;
+    streak?: number;
   };
   status: string;
   createdAt: string;
@@ -78,6 +81,7 @@ export default function OpsPage() {
   const [pending, setPending] = useState<OpsApproval[]>([]);
   const [acting, setActing] = useState<string | null>(null);
   const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
+  const [nudgeSummary, setNudgeSummary] = useState<string | null>(null);
 
   const pendingTaskId = useRef<string | null>(null);
 
@@ -194,6 +198,13 @@ export default function OpsPage() {
           pendingTaskId.current = null;
         }
         if (e.event === 'waiting_approval' || e.event === 'approval_resolved') {
+          fetchPending();
+        }
+        if (e.event === 'trust_graduation_nudges_complete') {
+          // Not gated on pendingTaskId — this is cron-triggered
+          // (dev/trust-graduation-nudges.sh), not fired from a button on this
+          // page, so show it whenever it arrives.
+          setNudgeSummary(e.payload.summary);
           fetchPending();
         }
       },
@@ -477,15 +488,27 @@ export default function OpsPage() {
                 className="rounded p-4"
                 style={{ background: '#080810', border: '1px solid #1e2040' }}
               >
-                <div className="text-xs text-gray-500 mb-2">
-                  Workflow &quot;{p.payload.workflow}&quot;
-                </div>
-                {p.payload.brief && (
-                  <div className="text-xs text-gray-600 mb-2">Brief: {p.payload.brief}</div>
+                {p.action === 'deliver_workflow_output' ? (
+                  <>
+                    <div className="text-xs text-gray-500 mb-2">
+                      Workflow &quot;{p.payload.workflow}&quot;
+                    </div>
+                    {p.payload.brief && (
+                      <div className="text-xs text-gray-600 mb-2">Brief: {p.payload.brief}</div>
+                    )}
+                    <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed mb-3 max-h-64 overflow-y-auto">
+                      {p.payload.assessment}
+                    </p>
+                  </>
+                ) : (
+                  // Every other 'strategy'-role approval (e.g. the
+                  // trust-graduation-nudge proposal) writes its own full,
+                  // human-readable question as `action` — no per-shape
+                  // payload fields to reconstruct here.
+                  <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed mb-3">
+                    {p.action}
+                  </p>
                 )}
-                <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed mb-3 max-h-64 overflow-y-auto">
-                  {p.payload.assessment}
-                </p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => resolveApproval(p.id, true)}
@@ -517,6 +540,20 @@ export default function OpsPage() {
           </div>
         )}
       </div>
+
+      {nudgeSummary && (
+        <div
+          className="rounded-lg border p-5 mb-5"
+          style={{ background: '#0d0d1a', borderColor: '#ffb34730' }}
+        >
+          <div className="text-xs tracking-widest mb-3" style={{ color: '#ffb347' }}>
+            TRUST GRADUATION NUDGES
+          </div>
+          <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+            {nudgeSummary}
+          </p>
+        </div>
+      )}
 
       {stages.length > 0 && (
         <div
