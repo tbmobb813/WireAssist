@@ -320,6 +320,80 @@ describe('AdminAgent — chat tool-calling loop', () => {
   });
 });
 
+describe('AdminAgent — composable skill-tools in the chat loop', () => {
+  it('executeToolCall() dispatches email_triage_skill via invokeSkill(), never gating the outer call behind approval', async () => {
+    const deps = makeDeps({
+      mcp: {
+        call: jest
+          .fn()
+          .mockResolvedValueOnce([{ id: 't1', snippet: 'hi' }])
+          .mockResolvedValueOnce(threadDetailMock()[0]),
+      },
+    });
+    const agent = new AdminAgent(deps);
+    (agent as any).think = jest.fn().mockResolvedValue(
+      JSON.stringify({
+        categories: { urgent: [], replyNeeded: [], fyi: [], ignore: [] },
+        summary: 'All quiet.',
+        urgentCount: 0,
+        replyNeededCount: 0,
+      })
+    );
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'email_triage_skill',
+      input: { maxEmails: 5 },
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.result).toEqual(
+      expect.objectContaining({ summary: 'All quiet.', totalEmails: 1 })
+    );
+    // No proposedActions from an empty triage, so approval.request is never
+    // reached at all — including no extra "Call tool" gate at the outer
+    // dispatch level.
+    expect(deps.approval.request).not.toHaveBeenCalled();
+    expect(deps.mcp.call).toHaveBeenCalledWith('gmail_list_threads', expect.objectContaining({}));
+  });
+
+  it('executeToolCall() dispatches calendar_review_skill via invokeSkill() and surfaces its emitted review as the result', async () => {
+    const deps = makeDeps({ mcp: { call: jest.fn().mockResolvedValue([]) } });
+    const agent = new AdminAgent(deps);
+    (agent as any).think = jest.fn().mockResolvedValue(
+      JSON.stringify({
+        conflicts: [],
+        overloadedDays: [],
+        suggestions: [],
+        summary: 'Light week.',
+      })
+    );
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c2',
+      name: 'calendar_review_skill',
+      input: { daysAhead: 3 },
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.result).toEqual(
+      expect.objectContaining({ review: expect.objectContaining({ summary: 'Light week.' }) })
+    );
+    expect(deps.approval.request).not.toHaveBeenCalled();
+  });
+
+  it('exposes both skill-tools in config.toolSchemas but never treats them as MCP-authorized tools', () => {
+    const deps = makeDeps();
+    const agent = new AdminAgent(deps);
+    const config = (agent as any).config;
+
+    expect(config.toolSchemas).toHaveProperty('email_triage_skill');
+    expect(config.toolSchemas).toHaveProperty('calendar_review_skill');
+    expect(config.tools).not.toContain('email_triage_skill');
+    expect(config.tools).not.toContain('calendar_review_skill');
+  });
+});
+
 describe('AdminAgent.reviewCalendar() — JSON parsing', () => {
   it('parses a response wrapped in ```json markdown fences', async () => {
     const deps = makeDeps({

@@ -233,3 +233,144 @@ describe('ResearchAgent.run() — synthesize_findings', () => {
     );
   });
 });
+
+describe('ResearchAgent — freeform chat loop', () => {
+  it('run() with a freeform task drives runToolLoop() and emits the result as agent:freeform_response', async () => {
+    const deps = makeDeps();
+    const agent = new ResearchAgent(deps);
+    const runToolLoopSpy = jest
+      .spyOn(agent as any, 'runToolLoop')
+      .mockResolvedValue('Here is what I found.');
+
+    const task = makeTask({
+      input: { type: 'freeform', prompt: 'look up X and synthesize with prior findings' },
+    });
+    await agent.run(task);
+
+    expect(runToolLoopSpy).toHaveBeenCalledWith(
+      task,
+      'look up X and synthesize with prior findings',
+      expect.objectContaining({ extraContext: expect.any(String) })
+    );
+    expect(deps.events.emit).toHaveBeenCalledWith('agent:freeform_response', {
+      taskId: task.id,
+      response: 'Here is what I found.',
+    });
+  });
+
+  it('passes task.input.history through to runToolLoop as priorMessages', async () => {
+    const deps = makeDeps();
+    const agent = new ResearchAgent(deps);
+    const runToolLoopSpy = jest.spyOn(agent as any, 'runToolLoop').mockResolvedValue('answer');
+    const history = [{ role: 'user' as const, content: 'earlier question' }];
+
+    const task = makeTask({ input: { type: 'freeform', prompt: 'follow-up', history } });
+    await agent.run(task);
+
+    expect(runToolLoopSpy).toHaveBeenCalledWith(
+      task,
+      'follow-up',
+      expect.objectContaining({ priorMessages: history })
+    );
+  });
+});
+
+describe('ResearchAgent — composable skill-tools in the chat loop', () => {
+  it('executeToolCall() runs brave_search immediately, with no approval', async () => {
+    const deps = makeDeps();
+    const agent = new ResearchAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'brave_search',
+      input: { query: 'AI trends', count: 3 },
+    });
+
+    expect(result.isError).toBe(false);
+    expect(deps.approval.request).not.toHaveBeenCalled();
+    expect(deps.mcp.call).toHaveBeenCalledWith('brave_search', { query: 'AI trends', count: 3 });
+  });
+
+  it('executeToolCall() dispatches research_topic_skill via invokeSkill(), letting the skill self-gate its own storage approval rather than gating the outer call a second time', async () => {
+    const deps = makeDeps();
+    const agent = new ResearchAgent(deps);
+    (agent as any).think = jest.fn().mockResolvedValue('Findings summary.');
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c2',
+      name: 'research_topic_skill',
+      input: { query: 'AI trends 2026', resultCount: 2 },
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.result).toEqual(
+      expect.objectContaining({ summary: 'Findings summary.', taskId: 'task-r1' })
+    );
+    // Called exactly once — the skill's own internal "store these findings?"
+    // proposal. There is no separate/additional "Call tool" gate at the
+    // outer executeToolCall() dispatch level.
+    expect(deps.approval.request).toHaveBeenCalledTimes(1);
+    expect(deps.approval.request).toHaveBeenCalledWith(
+      expect.objectContaining({ action: expect.stringContaining('Store research findings') })
+    );
+  });
+
+  it('executeToolCall() dispatches synthesize_findings_skill via invokeSkill() and surfaces its emitted synthesis', async () => {
+    const deps = makeDeps();
+    const agent = new ResearchAgent(deps);
+    (agent as any).think = jest.fn().mockResolvedValue('Synthesized result.');
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c3',
+      name: 'synthesize_findings_skill',
+      input: { topic: 'AI tools' },
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.result).toEqual(expect.objectContaining({ summary: 'Synthesized result.' }));
+    // Called exactly once — the skill's own internal "store this synthesis?"
+    // proposal, not a second/outer approval gate.
+    expect(deps.approval.request).toHaveBeenCalledTimes(1);
+    expect(deps.approval.request).toHaveBeenCalledWith(
+      expect.objectContaining({ action: expect.stringContaining('Store synthesis') })
+    );
+  });
+
+  it('exposes both skill-tools and brave_search in config.toolSchemas, but never treats the skill-tools as MCP-authorized', () => {
+    const deps = makeDeps();
+    const agent = new ResearchAgent(deps);
+    const config = (agent as any).config;
+
+    expect(config.toolSchemas).toHaveProperty('brave_search');
+    expect(config.toolSchemas).toHaveProperty('research_topic_skill');
+    expect(config.toolSchemas).toHaveProperty('synthesize_findings_skill');
+    expect(config.tools).not.toContain('research_topic_skill');
+    expect(config.tools).not.toContain('synthesize_findings_skill');
+  });
+
+  it('executeToolCall() dispatches research_and_synthesize_skill via invokeSkill(), running the registered chain (research_topic -> synthesize_findings) and surfacing the final synthesis', async () => {
+    const deps = makeDeps();
+    const agent = new ResearchAgent(deps);
+    (agent as any).think = jest
+      .fn()
+      .mockResolvedValueOnce('Findings summary.') // research_topic step
+      .mockResolvedValueOnce('Synthesized result.'); // synthesize_findings step
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c4',
+      name: 'research_and_synthesize_skill',
+      input: { query: 'AI trends 2026', resultCount: 2 },
+    });
+
+    expect(result.isError).toBe(false);
+    expect(deps.mcp.call).toHaveBeenCalledWith('brave_search', {
+      query: 'AI trends 2026',
+      count: 2,
+    });
+    // Both steps of the chain actually ran (one think() call each).
+    expect((agent as any).think).toHaveBeenCalledTimes(2);
+    // The captured result is the LAST step's payload (the synthesis), not
+    // the intermediate search result.
+    expect(result.result).toEqual(expect.objectContaining({ summary: 'Synthesized result.' }));
+  });
+});

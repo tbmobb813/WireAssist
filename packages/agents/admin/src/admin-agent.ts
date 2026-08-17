@@ -8,7 +8,7 @@ import {
   type ProviderToolCall,
 } from '@wireassist/core';
 import { BaseAgent } from './base-agent';
-import { ADMIN_TOOL_SCHEMAS, READ_ONLY_ADMIN_TOOLS } from './tool-schemas';
+import { ADMIN_TOOL_SCHEMAS, READ_ONLY_ADMIN_TOOLS, ADMIN_SKILL_TOOLS } from './tool-schemas';
 import {
   ADMIN_SKILLS,
   proposeOrAutoApprove,
@@ -128,11 +128,15 @@ export class AdminAgent extends BaseAgent {
       name: 'Admin Agent',
       systemPrompt: ADMIN_SYSTEM_PROMPT,
       tools: ADMIN_TOOLS,
+      // Skill-tools (email_triage_skill, calendar_review_skill) are added
+      // to the model-facing schema list here but deliberately NOT to
+      // `tools` above — they're dispatched via invokeSkill(), never
+      // useTool()/MCP, so they have no business in the MCP authorization
+      // list.
       toolSchemas: Object.fromEntries(
-        ADMIN_TOOLS.filter((name) => name in ADMIN_TOOL_SCHEMAS).map((name) => [
-          name,
-          ADMIN_TOOL_SCHEMAS[name],
-        ])
+        [...ADMIN_TOOLS, ...ADMIN_SKILL_TOOLS]
+          .filter((name) => name in ADMIN_TOOL_SCHEMAS)
+          .map((name) => [name, ADMIN_TOOL_SCHEMAS[name]])
       ),
       maxTokens: 4096,
     };
@@ -217,6 +221,14 @@ export class AdminAgent extends BaseAgent {
     call: ProviderToolCall
   ): Promise<{ result: unknown; isError: boolean }> {
     try {
+      if (ADMIN_SKILL_TOOLS.has(call.name)) {
+        // Skill-tools self-gate their own mutations via internal
+        // proposeAction() calls (email_triage/calendar_review both do) —
+        // dispatch immediately rather than approval-gating a second time.
+        const skillName = call.name.replace(/_skill$/, '');
+        return { result: await this.invokeSkill(task, skillName, call.input), isError: false };
+      }
+
       if (this.isReadOnlyTool(call.name)) {
         return { result: await this.useTool(call.name, call.input), isError: false };
       }
@@ -270,6 +282,10 @@ function describeToolCall(call: ProviderToolCall): string {
       return `Append rows to spreadsheet ${input.spreadsheetId}`;
     case 'sheets_update':
       return `Update range ${input.range} in spreadsheet ${input.spreadsheetId}`;
+    case 'email_triage_skill':
+      return 'Triage inbox';
+    case 'calendar_review_skill':
+      return 'Review calendar';
     default:
       return `Run tool "${call.name}"`;
   }

@@ -284,6 +284,51 @@ export abstract class BaseAgent {
     return false;
   }
 
+  // Invokes one of this agent's own registered Skills — or SkillChains — as
+  // a step inside a tool-calling loop (see AdminAgent/ResearchAgent's
+  // executeToolCall() overrides) — the mechanism that lets a multi-step
+  // plan compose an agent's higher-level capabilities (e.g. email_triage,
+  // research_topic, or a whole chain like research_and_synthesize)
+  // alongside raw MCP tool calls, not just one or the other.
+  //
+  // Delegates to SkillExecutor rather than resolving a single Skill
+  // directly, so a registered SkillChain is composable here too — for a
+  // chain, SkillExecutor.run() loops its steps (threading previousOutput
+  // via mapInput, respecting continueIf) against the same handle below.
+  //
+  // Every candidate skill communicates its real result via agent.emit()
+  // rather than a return value, so this wraps emit() to capture the last
+  // payload while still forwarding to the real event bus — dashboard/SSE/
+  // Telegram listeners see the same events they always did. For a chain,
+  // each step emits in turn, so the capture naturally ends up holding the
+  // *last* step's payload — the chain's meaningful final result.
+  //
+  // Deliberately NOT exposed on SkillAgentHandle: a skill must never be
+  // able to invoke another skill or chain (recursion risk). Only
+  // BaseAgent's own executeToolCall() overrides may call this.
+  protected async invokeSkill(
+    parentTask: AgentTask,
+    skillName: string,
+    input: Record<string, unknown>
+  ): Promise<unknown> {
+    if (!this.skills.resolve(this.role, skillName)) {
+      throw new Error(`Unknown skill: ${skillName}`);
+    }
+
+    const subTask: AgentTask = { ...parentTask, input: { type: skillName, ...input } };
+    let captured: unknown;
+    const handle: SkillAgentHandle = {
+      ...this.asSkillHandle(),
+      emit: (event, payload) => {
+        captured = payload;
+        this.events.emit(event, payload);
+      },
+    };
+
+    await new SkillExecutor(this.skills).run(handle, subTask);
+    return captured;
+  }
+
   // Propose an action — pauses and waits for human approval
   protected async proposeAction(
     task: AgentTask,

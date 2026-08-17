@@ -1,12 +1,19 @@
 import { BaseAgent } from '@wireassist/agent-admin';
 import type {
   AgentConfig,
+  AgentTask,
   IApprovalQueue,
   MemoryStore,
   MCPClient,
   EventBus,
+  ProviderToolCall,
 } from '@wireassist/core';
 import { RESEARCH_SKILLS, RESEARCH_AND_SYNTHESIZE_CHAIN } from './skills';
+import {
+  RESEARCH_TOOL_SCHEMAS,
+  READ_ONLY_RESEARCH_TOOLS,
+  RESEARCH_SKILL_TOOLS,
+} from './tool-schemas';
 
 const SYSTEM_PROMPT = `You are a Research Agent for WireAssist. Your job is to find, synthesize, and present information clearly and accurately — and to be honest about how solid the findings actually are.
 
@@ -26,11 +33,22 @@ Principles:
 - Be direct — no filler, no padding.
 - Structure findings as: Key Takeaways → Details → Sources, and always cite source URLs.`;
 
+const RESEARCH_TOOLS = ['brave_search'];
+
 const DEFAULT_CONFIG: AgentConfig = {
   role: 'research',
   name: 'Research Agent',
   systemPrompt: SYSTEM_PROMPT,
-  tools: ['brave_search'],
+  tools: RESEARCH_TOOLS,
+  // Skill-tools (research_topic_skill, synthesize_findings_skill) are added
+  // to the model-facing schema list here but deliberately NOT to `tools`
+  // above — they're dispatched via invokeSkill(), never useTool()/MCP, so
+  // they have no business in the MCP authorization list.
+  toolSchemas: Object.fromEntries(
+    [...RESEARCH_TOOLS, ...RESEARCH_SKILL_TOOLS]
+      .filter((name) => name in RESEARCH_TOOL_SCHEMAS)
+      .map((name) => [name, RESEARCH_TOOL_SCHEMAS[name]])
+  ),
   maxTokens: 2048,
 };
 
@@ -49,4 +67,39 @@ export class ResearchAgent extends BaseAgent {
   }
 
   // run() is inherited from BaseAgent — see skills/ for each capability.
+
+  // ─── TOOL-CALLING LOOP HOOKS (used by BaseAgent.runToolLoop) ──────
+
+  protected isReadOnlyTool(toolName: string): boolean {
+    return READ_ONLY_RESEARCH_TOOLS.has(toolName);
+  }
+
+  protected async executeToolCall(
+    task: AgentTask,
+    call: ProviderToolCall
+  ): Promise<{ result: unknown; isError: boolean }> {
+    try {
+      if (RESEARCH_SKILL_TOOLS.has(call.name)) {
+        // Skill-tools self-gate their own mutations via internal
+        // proposeAction() calls — dispatch immediately rather than
+        // approval-gating a second time. offerContentDraft is never
+        // exposed on research_topic_skill's schema, so the model can't
+        // trigger a Content handoff mid-plan.
+        const skillName = call.name.replace(/_skill$/, '');
+        return { result: await this.invokeSkill(task, skillName, call.input), isError: false };
+      }
+
+      if (this.isReadOnlyTool(call.name)) {
+        return { result: await this.useTool(call.name, call.input), isError: false };
+      }
+
+      const approved = await this.proposeAction(task, `Call tool "${call.name}"`, call.input);
+      if (!approved) {
+        return { result: 'User declined this action.', isError: true };
+      }
+      return { result: await this.useTool(call.name, call.input), isError: false };
+    } catch (error) {
+      return { result: error instanceof Error ? error.message : String(error), isError: true };
+    }
+  }
 }
