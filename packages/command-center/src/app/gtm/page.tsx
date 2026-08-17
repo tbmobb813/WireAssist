@@ -131,6 +131,10 @@ export default function GtmPage() {
   const [pastGtm, setPastGtm] = useState<PastGtmEntry[]>([]);
   const [objectiveId, setObjectiveId] = useState('');
   const activeObjectives = useActiveObjectives();
+  const [freeformPrompt, setFreeformPrompt] = useState('');
+  const [freeformGenerating, setFreeformGenerating] = useState(false);
+  const [freeformResponse, setFreeformResponse] = useState<string | null>(null);
+  const freeformTaskId = useRef<string | null>(null);
 
   const pendingTaskIds = useRef<Set<string>>(new Set());
 
@@ -225,15 +229,57 @@ export default function GtmPage() {
           loadPastGtm();
         }
         if (e.event === 'task_failed' && e.payload.agentRole === 'gtm') {
+          if (e.payload.taskId === freeformTaskId.current) {
+            setError('Question failed — try again.');
+            setFreeformGenerating(false);
+            freeformTaskId.current = null;
+            return;
+          }
           setError(
             'Generation failed — the model response may not have parsed as valid JSON. Try again.'
           );
           checkDone(e.payload.taskId);
         }
+        if (e.event === 'freeform_response') {
+          // agent:freeform_response is shared with Admin/Research's own
+          // freeform loops on the same event bus — only react to the one
+          // this page actually fired.
+          if (e.payload.taskId !== freeformTaskId.current) return;
+          setFreeformResponse(e.payload.response as string);
+          setFreeformGenerating(false);
+          freeformTaskId.current = null;
+        }
       },
       [checkDone, loadPastGtm]
     )
   );
+
+  const runFreeform = async () => {
+    if (!freeformPrompt.trim()) return;
+    setError(null);
+    setFreeformResponse(null);
+    setFreeformGenerating(true);
+    try {
+      const res = await fetch('/api/tasks/gtm-freeform', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: freeformPrompt.trim(),
+          objectiveId: objectiveId || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? 'Failed to ask question');
+        setFreeformGenerating(false);
+        return;
+      }
+      freeformTaskId.current = data.taskId;
+    } catch {
+      setError('Command Center API unreachable.');
+      setFreeformGenerating(false);
+    }
+  };
 
   async function generateAll() {
     if (!product.name.trim()) {
@@ -917,6 +963,43 @@ export default function GtmPage() {
           </div>
         </>
       )}
+
+      <Card title="Ask a Question">
+        <p className="text-xs text-gray-600 mb-3">
+          Quick GTM questions, or ask it to generate a strategy or psych tactics conversationally —
+          the wizard is still the primary path for a full structured plan.
+        </p>
+        <input
+          type="text"
+          value={freeformPrompt}
+          onChange={(e) => setFreeformPrompt(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && runFreeform()}
+          placeholder="e.g. what channel should I launch on with a $0 budget?"
+          className="w-full rounded px-3 py-2 text-sm mb-3 outline-none"
+          style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
+        />
+        <button
+          onClick={runFreeform}
+          disabled={freeformGenerating || !freeformPrompt.trim()}
+          className="w-full py-2 rounded text-xs font-bold tracking-widest transition-colors"
+          style={{
+            background: freeformGenerating || !freeformPrompt.trim() ? '#1e2040' : '#ffb34720',
+            border: `1px solid ${freeformGenerating || !freeformPrompt.trim() ? '#1e2040' : '#ffb34740'}`,
+            color: freeformGenerating || !freeformPrompt.trim() ? '#475569' : '#ffb347',
+            cursor: freeformGenerating || !freeformPrompt.trim() ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {freeformGenerating ? 'ASKING...' : '→ ASK'}
+        </button>
+        {freeformResponse && (
+          <div
+            className="rounded p-3 mt-3 text-sm text-gray-300 whitespace-pre-wrap leading-relaxed"
+            style={{ background: '#080810', border: '1px solid #1e2040' }}
+          >
+            {freeformResponse}
+          </div>
+        )}
+      </Card>
 
       <Card title="Past Generations">
         <p className="text-xs text-gray-600 mb-3">
