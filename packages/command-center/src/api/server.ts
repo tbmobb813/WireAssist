@@ -392,7 +392,14 @@ app.post('/api/tasks/proactive-insights', async (c) => {
 app.post('/api/tasks/budget-warning', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   const body = await c.req.json().catch(() => ({}));
-  const task = AdminTasks.budgetWarning(body.thresholdPercent ?? 80);
+  // A non-numeric/negative value would otherwise silently make `percent >=
+  // threshold` always false (or always true for negatives) — fall back to
+  // the default instead of warning on garbage input.
+  const thresholdPercent =
+    Number.isFinite(body.thresholdPercent) && body.thresholdPercent >= 0
+      ? body.thresholdPercent
+      : 80;
+  const task = AdminTasks.budgetWarning(thresholdPercent);
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
@@ -401,7 +408,8 @@ app.post('/api/tasks/stale-approvals', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const body = await c.req.json().catch(() => ({}));
-  const task = AdminTasks.staleApprovals(body.daysStale ?? 3);
+  const daysStale = Number.isFinite(body.daysStale) && body.daysStale >= 0 ? body.daysStale : 3;
+  const task = AdminTasks.staleApprovals(daysStale);
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });

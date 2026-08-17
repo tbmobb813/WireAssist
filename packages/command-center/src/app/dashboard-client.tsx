@@ -221,6 +221,29 @@ function describeEvent(event: string, payload: unknown): { description: string; 
       const summary = p.summary ? String(p.summary) : '';
       return { description: `Proactive insight: ${summary}`.trim(), role: 'admin' };
     }
+    case 'budget_warning_complete': {
+      const summary = p.summary ? String(p.summary) : '';
+      return { description: `Budget check: ${summary}`.trim(), role: 'admin' };
+    }
+    case 'stale_approvals_complete': {
+      const count = Array.isArray(p.stale) ? p.stale.length : 0;
+      return {
+        description: `Stale-approval check: ${count} approval${count !== 1 ? 's' : ''} sitting unresolved`,
+        role: 'admin',
+      };
+    }
+    case 'auto_approved':
+      return {
+        description: typeof p.action === 'string' ? `Auto-approved: ${p.action}` : 'Auto-approved',
+        role,
+      };
+    case 'handoff_queued': {
+      const task = p.task as { agentRole?: string; description?: string } | undefined;
+      return {
+        description: task?.description ? `Handed off: ${task.description}` : 'Task handed off',
+        role: task?.agentRole ?? 'admin',
+      };
+    }
     default:
       return { description: event, role: typeof p.agentRole === 'string' ? p.agentRole : 'admin' };
   }
@@ -689,6 +712,10 @@ export default function DashboardClient() {
         case 'daily_briefing_complete':
         case 'follow_up_nudges_complete':
         case 'proactive_insights_complete':
+        case 'budget_warning_complete':
+        case 'stale_approvals_complete':
+        case 'auto_approved':
+        case 'handoff_queued':
           addActivity(e.event, e.payload);
           break;
       }
