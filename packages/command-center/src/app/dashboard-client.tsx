@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAgentEvents, type AgentEvent } from '@/hooks/useAgentEvents';
 import Link from 'next/link';
 import PortfolioZones from './portfolio-zones';
+import { ObjectivePicker, useActiveObjectives } from './objective-picker';
 
 interface AgentCard {
   role: string;
@@ -471,6 +472,8 @@ export default function DashboardClient() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [pendingCount, setPendingCount] = useState(0);
   const [failures, setFailures] = useState<Failure[]>([]);
+  const [quickActionObjectiveId, setQuickActionObjectiveId] = useState('');
+  const activeObjectives = useActiveObjectives();
   const [budget, setBudget] = useState<BudgetStatus | null>(null);
   const seenActivityIds = useRef(new Set<string>());
 
@@ -774,7 +777,7 @@ export default function DashboardClient() {
 
   useAgentEvents(handleAgentEvent);
 
-  const queueTask = async (path: string, label: string) => {
+  const queueTask = async (path: string, label: string, requestBody?: Record<string, unknown>) => {
     const queueId = `queue:${path}:${Date.now()}`;
     seenActivityIds.current.add(queueId);
     setActivity((prev) =>
@@ -791,7 +794,11 @@ export default function DashboardClient() {
       ].slice(0, 50)
     );
 
-    const res = await fetch(path, { method: 'POST' });
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody ?? {}),
+    });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       const message =
@@ -804,8 +811,14 @@ export default function DashboardClient() {
     }
   };
 
-  const runTriage = () => queueTask('/api/tasks/triage-email', 'Inbox triage');
-  const runCalendar = () => queueTask('/api/tasks/review-calendar', 'Calendar review');
+  const runTriage = () =>
+    queueTask('/api/tasks/triage-email', 'Inbox triage', {
+      objectiveId: quickActionObjectiveId || undefined,
+    });
+  const runCalendar = () =>
+    queueTask('/api/tasks/review-calendar', 'Calendar review', {
+      objectiveId: quickActionObjectiveId || undefined,
+    });
 
   const statusColor = (s: string) =>
     ({
@@ -1137,19 +1150,26 @@ export default function DashboardClient() {
             </div>
 
             {/* Admin's one-shot actions — the only agent triggerable straight from the video wall */}
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={runTriage}
-                className="flex-1 text-xs py-2 px-3 rounded-lg border border-border text-gray-500 hover:border-accent hover:text-accent transition-colors"
-              >
-                Triage inbox
-              </button>
-              <button
-                onClick={runCalendar}
-                className="flex-1 text-xs py-2 px-3 rounded-lg border border-border text-gray-500 hover:border-accent hover:text-accent transition-colors"
-              >
-                Review calendar
-              </button>
+            <div className="mt-2">
+              <ObjectivePicker
+                objectives={activeObjectives}
+                value={quickActionObjectiveId}
+                onChange={setQuickActionObjectiveId}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={runTriage}
+                  className="flex-1 text-xs py-2 px-3 rounded-lg border border-border text-gray-500 hover:border-accent hover:text-accent transition-colors"
+                >
+                  Triage inbox
+                </button>
+                <button
+                  onClick={runCalendar}
+                  className="flex-1 text-xs py-2 px-3 rounded-lg border border-border text-gray-500 hover:border-accent hover:text-accent transition-colors"
+                >
+                  Review calendar
+                </button>
+              </div>
             </div>
           </div>
 

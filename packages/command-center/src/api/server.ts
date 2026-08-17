@@ -376,7 +376,11 @@ app.post('/api/tasks/triage-email', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!gmailReady) return c.json(gmailRequired(), 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const task = AdminTasks.triageEmail(20);
+  const body = await c.req.json().catch(() => ({}));
+  const task = AdminTasks.triageEmail(
+    20,
+    typeof body.objectiveId === 'string' ? body.objectiveId : undefined
+  );
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
@@ -386,7 +390,10 @@ app.post('/api/tasks/review-calendar', async (c) => {
   if (!gmailReady) return c.json(gmailRequired(), 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const body = await c.req.json().catch(() => ({}));
-  const task = AdminTasks.reviewCalendar(body.daysAhead ?? 7);
+  const task = AdminTasks.reviewCalendar(
+    body.daysAhead ?? 7,
+    typeof body.objectiveId === 'string' ? body.objectiveId : undefined
+  );
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
