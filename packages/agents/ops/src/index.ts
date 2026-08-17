@@ -6,6 +6,7 @@ export {
 } from './nixops-agent';
 export * as OpsTasks from './task-factory';
 export { loadOpsContext, listWorkflows, loadWorkflow } from './context-loader';
+export { setupOpsMCP } from './mcp-setup';
 export {
   getTrustStage,
   setTrustStage,
