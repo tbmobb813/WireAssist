@@ -82,6 +82,8 @@ export default function OpsPage() {
   const [acting, setActing] = useState<string | null>(null);
   const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
   const [nudgeSummary, setNudgeSummary] = useState<string | null>(null);
+  const [checkingNudges, setCheckingNudges] = useState(false);
+  const [nudgeCheckQueued, setNudgeCheckQueued] = useState(false);
 
   const pendingTaskId = useRef<string | null>(null);
 
@@ -201,10 +203,11 @@ export default function OpsPage() {
           fetchPending();
         }
         if (e.event === 'trust_graduation_nudges_complete') {
-          // Not gated on pendingTaskId — this is cron-triggered
-          // (dev/trust-graduation-nudges.sh), not fired from a button on this
-          // page, so show it whenever it arrives.
+          // Not gated on pendingTaskId — this can be cron-triggered
+          // (dev/trust-graduation-nudges.sh) as well as fired manually from
+          // the button below, so show it whenever it arrives either way.
           setNudgeSummary(e.payload.summary);
+          setNudgeCheckQueued(false);
           fetchPending();
         }
       },
@@ -217,6 +220,29 @@ export default function OpsPage() {
     await fetch(`/api/approvals/${id}/${approved ? 'approve' : 'reject'}`, { method: 'POST' });
     setPending((prev) => prev.filter((a) => a.id !== id));
     setActing(null);
+  };
+
+  // Manual trigger for the same check dev/trust-graduation-nudges.sh runs
+  // weekly from cron — lets JNix ask "is anything ready to graduate?" on
+  // demand instead of waiting for the next scheduled run. Queuing returns
+  // immediately; the actual streak check + any proposals happen async, so
+  // this only tracks the POST itself, not the full run.
+  const checkTrustNudges = async () => {
+    setCheckingNudges(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/tasks/ops-trust-nudges', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? `Request failed (${res.status})`);
+        return;
+      }
+      setNudgeCheckQueued(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reach the API');
+    } finally {
+      setCheckingNudges(false);
+    }
   };
 
   async function fire(path: string, body: Record<string, unknown>) {
@@ -471,8 +497,21 @@ export default function OpsPage() {
         className="rounded-lg border p-5 mb-5"
         style={{ background: '#0d0d1a', borderColor: '#ffb34740' }}
       >
-        <div className="text-xs tracking-widest mb-3" style={{ color: '#ffb347' }}>
-          PENDING REVIEW {pending.length > 0 ? `— ${pending.length}` : ''}
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="text-xs tracking-widest" style={{ color: '#ffb347' }}>
+            PENDING REVIEW {pending.length > 0 ? `— ${pending.length}` : ''}
+          </div>
+          <button
+            onClick={checkTrustNudges}
+            disabled={checkingNudges}
+            className="text-xs text-gray-500 hover:text-accent flex-shrink-0"
+          >
+            {checkingNudges
+              ? 'checking...'
+              : nudgeCheckQueued
+                ? 'queued — check back shortly'
+                : '↻ check trust-graduation candidates'}
+          </button>
         </div>
         {pending.length === 0 ? (
           <p className="text-xs text-gray-600">
