@@ -198,6 +198,7 @@ events.on('agent:follow_up_nudges_complete', (p) => broadcast('follow_up_nudges_
 events.on('agent:proactive_insights_complete', (p) => broadcast('proactive_insights_complete', p));
 events.on('agent:budget_warning_complete', (p) => broadcast('budget_warning_complete', p));
 events.on('agent:stale_approvals_complete', (p) => broadcast('stale_approvals_complete', p));
+events.on('agent:publish_due_posts_complete', (p) => broadcast('publish_due_posts_complete', p));
 
 // Agent-to-agent handoff: a skill (e.g. Research's research_topic, once its
 // own approval for the handoff is granted) hands a fully-formed AgentTask
@@ -411,6 +412,17 @@ app.post('/api/tasks/stale-approvals', async (c) => {
   const daysStale = Number.isFinite(body.daysStale) && body.daysStale >= 0 ? body.daysStale : 3;
   const task = AdminTasks.staleApprovals(daysStale);
   queueAgentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// No anthropicConfigured() gate — publish_due_posts never calls the LLM,
+// it's a mechanical sweep over already-approved scheduled posts (the
+// approval gate was scheduling itself), so it works even before an
+// Anthropic key is configured.
+app.post('/api/tasks/publish-due-posts', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  const task = ContentTasks.publishDuePosts();
+  queueContentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
 

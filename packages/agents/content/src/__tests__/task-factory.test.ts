@@ -204,6 +204,23 @@ describe('ContentTasks.generatePlanFromTimeline()', () => {
   });
 });
 
+describe('ContentTasks.publishDuePosts()', () => {
+  it('does NOT require approval', () => {
+    const t = ContentTasks.publishDuePosts();
+    expect(t.approvalRequired).toBe(false);
+  });
+
+  it('has input type publish_due_posts', () => {
+    const t = ContentTasks.publishDuePosts();
+    expect((t.input as { type: string }).type).toBe('publish_due_posts');
+  });
+
+  it('has agentRole content', () => {
+    const t = ContentTasks.publishDuePosts();
+    expect(t.agentRole).toBe('content');
+  });
+});
+
 describe('ContentTasks — unique ids', () => {
   it('every task gets a unique uuid id', () => {
     const ids = [
@@ -213,6 +230,7 @@ describe('ContentTasks — unique ids', () => {
       ContentTasks.schedulePost('p', 'twitter', '2026-01-01').id,
       ContentTasks.analyzePost('p', 'instagram').id,
       ContentTasks.listScheduled().id,
+      ContentTasks.publishDuePosts().id,
     ];
     const unique = new Set(ids);
     expect(unique.size).toBe(ids.length);

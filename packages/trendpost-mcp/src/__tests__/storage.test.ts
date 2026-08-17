@@ -50,6 +50,17 @@ describe('TrendPostStorage — createPost()', () => {
     const b = storage.createPost({ content: 'B', platform: 'twitter', scheduledAt: new Date() });
     expect(a.id).not.toBe(b.id);
   });
+
+  it('round-trips a facebook post', () => {
+    const storage = freshStorage();
+    const post = storage.createPost({
+      content: 'FB post',
+      platform: 'facebook',
+      scheduledAt: new Date(),
+    });
+    expect(post.platform).toBe('facebook');
+    expect(storage.getPost(post.id)!.platform).toBe('facebook');
+  });
 });
 
 describe('TrendPostStorage — getPost()', () => {
@@ -145,6 +156,24 @@ describe('TrendPostStorage — updatePostStatus()', () => {
     const p = storage.createPost({ content: 'x', platform: 'twitter', scheduledAt: new Date() });
     storage.updatePostStatus(p.id, 'failed', 'Rate limit exceeded');
     expect(storage.getPost(p.id)!.errorMessage).toBe('Rate limit exceeded');
+  });
+
+  it('stores platformPostId when provided', () => {
+    const storage = freshStorage();
+    const p = storage.createPost({ content: 'x', platform: 'twitter', scheduledAt: new Date() });
+    storage.updatePostStatus(p.id, 'published', undefined, 'tw-123');
+    expect(storage.getPost(p.id)!.platformPostId).toBe('tw-123');
+  });
+
+  it('does not clobber a previously-recorded platformPostId on a status-only call', () => {
+    // Mirrors content_mark_published's call site, which never passes a 4th
+    // arg — that self-report path must not null out an ID a prior publish
+    // call already recorded.
+    const storage = freshStorage();
+    const p = storage.createPost({ content: 'x', platform: 'twitter', scheduledAt: new Date() });
+    storage.updatePostStatus(p.id, 'published', undefined, 'tw-123');
+    storage.updatePostStatus(p.id, 'published');
+    expect(storage.getPost(p.id)!.platformPostId).toBe('tw-123');
   });
 });
 

@@ -86,6 +86,14 @@ describe('ContentAgent — chat tool-calling loop', () => {
     expect(tools).toContain('content_generate');
   });
 
+  it('content_publish_post is authorized for useTool() but invisible to the chat loop', () => {
+    const agent = new ContentAgent(makeDeps());
+    const tools = (agent as any).config.tools as string[];
+    const toolSchemas = (agent as any).config.toolSchemas;
+    expect(tools).toContain('content_publish_post');
+    expect(toolSchemas).not.toHaveProperty('content_publish_post');
+  });
+
   it('executeToolCall() runs a read-only tool immediately, with no approval', async () => {
     const deps = makeDeps({ mcp: { call: jest.fn().mockResolvedValue([{ id: 'p1' }]) } });
     const agent = new ContentAgent(deps);

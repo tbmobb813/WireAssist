@@ -194,6 +194,20 @@ ANTHROPIC_API_KEY=sk-ant-...
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHAT_ID=...
 WIREASSIST_BUDGET_MONTHLY=30
+
+# Optional — only needed if you're using auto-publish (section 14). Add
+# credentials for whichever platforms you actually plan to publish to;
+# see section 14 for how to obtain each one.
+TWITTER_API_KEY=...
+TWITTER_API_SECRET=...
+TWITTER_ACCESS_TOKEN=...
+TWITTER_ACCESS_SECRET=...
+LINKEDIN_ACCESS_TOKEN=...
+LINKEDIN_PERSON_URN=...
+META_ACCESS_TOKEN=...
+FACEBOOK_PAGE_ID=...
+INSTAGRAM_ACCOUNT_ID=...
+INSTAGRAM_DEFAULT_IMAGE_URL=...
 EOF
 chmod 600 .env
 ```
@@ -545,6 +559,98 @@ crontab -e
 No `jq` needed (no request body). Run it manually once first
 (`WIREASSIST_API_URL=http://localhost:3002 ./dev/stale-approvals.sh`) to
 confirm it queues successfully before trusting it to cron.
+
+## 14. Auto-publish scheduled posts
+
+`dev/auto-publish.sh` triggers the Content Agent's `publish_due_posts` task
+— it checks for any scheduled post whose `scheduledAt` time has arrived and
+publishes each one to its real platform (Twitter, LinkedIn, Facebook,
+Instagram) via the Twitter v2, LinkedIn UGC Posts, and Meta Graph APIs. This
+is the one nudge that actually takes real-world action rather than just
+reporting — but it's still human-gated: scheduling a post already required
+approval (see the Content page's post generator), so this sweep only
+executes an already-approved decision once it's due, it never proposes
+anything new. A post that fails to publish (bad credentials, a platform API
+error) lands in `status: 'failed'` with a diagnostic `errorMessage` and is
+**not** retried automatically — check the Content page or the Telegram
+alert and intervene manually.
+
+Needs the platform credentials below configured in `.env` before it can
+publish anything — without them, due posts will fail with a clear
+"missing credential" error rather than silently doing nothing.
+
+**Cron entry** (every 5 minutes — posts have real scheduled times, like a
+specific 9am slot, not the vague daily/weekly windows the nudges above
+work with, so a coarser cadence would mean posts going out late):
+
+```bash
+crontab -e
+# add:
+*/5 * * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/auto-publish.sh >> /var/log/wireassist-auto-publish.log 2>&1
+```
+
+No `jq` needed (no request body). **Before enabling this cron entry**,
+schedule a real test post via the Content page and manually run
+(`WIREASSIST_API_URL=http://localhost:3002 ./dev/auto-publish.sh`) to
+confirm it actually publishes and the post's status flips to `published` —
+ideally against a throwaway/test account on each platform first, since
+none of Twitter or LinkedIn offer a real sandbox for posting (Meta does —
+see the credentials section below).
+
+### Getting platform API credentials
+
+**Twitter / X**
+
+1. Go to [developer.twitter.com](https://developer.twitter.com/en/portal/dashboard),
+   create a project and app.
+2. Set app permissions to **Read + Write**.
+3. Generate Access Token & Secret under "Keys and Tokens".
+4. Copy all four values (`TWITTER_API_KEY`, `TWITTER_API_SECRET`,
+   `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_SECRET`) to `.env`.
+
+> ⚠️ Free tier = 500 tweets/month. At more than ~16 posts/day sustained,
+> you'll need a paid tier.
+
+**LinkedIn**
+
+1. Create an app at [linkedin.com/developers/apps](https://www.linkedin.com/developers/apps).
+2. Request the `w_member_social` permission.
+3. Complete the OAuth 2.0 flow to get `LINKEDIN_ACCESS_TOKEN`.
+4. Find your Person URN: `GET https://api.linkedin.com/v2/me` → copy the
+   `id` field as `LINKEDIN_PERSON_URN` (with or without the
+   `urn:li:person:` prefix — either works).
+
+> ⚠️ LinkedIn access tokens expire every 60 days. Set a calendar reminder
+> to refresh `LINKEDIN_ACCESS_TOKEN`, or publish attempts will start
+> failing with an auth error.
+
+**Facebook + Instagram (Meta Graph API)**
+
+1. Create an app at [developers.facebook.com](https://developers.facebook.com/apps),
+   add the **Facebook Login** and **Instagram Graph API** products.
+2. Get a Page Access Token with `pages_manage_posts` permission via Graph
+   API Explorer — this is `META_ACCESS_TOKEN` (shared by both platforms).
+3. Find your Facebook Page ID (Page → About → Page ID) as `FACEBOOK_PAGE_ID`.
+4. Find your Instagram Business Account ID in Meta Business Suite →
+   Settings as `INSTAGRAM_ACCOUNT_ID`.
+5. Set `INSTAGRAM_DEFAULT_IMAGE_URL` to a publicly accessible branded
+   graphic (1080×1080px recommended) — Instagram feed posts require an
+   image, and there's no way to post text-only.
+
+> ℹ️ Meta offers a genuine sandbox for testing: create a Facebook **Test
+> App** (a separate App ID in the same Meta Developer account) plus a Test
+> Page/Test Instagram Business Account, and mint a short-lived test token
+> via Graph API Explorer — verify a real publish there before ever using
+> production credentials.
+
+Add all ten variables to the `.env` heredoc in section 4 above:
+`TWITTER_API_KEY`, `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`,
+`TWITTER_ACCESS_SECRET`, `LINKEDIN_ACCESS_TOKEN`, `LINKEDIN_PERSON_URN`,
+`META_ACCESS_TOKEN`, `FACEBOOK_PAGE_ID`, `INSTAGRAM_ACCOUNT_ID`,
+`INSTAGRAM_DEFAULT_IMAGE_URL`. You don't need all of them — only add
+credentials for the platforms you actually plan to auto-publish to; a
+scheduled post for a platform with no credentials configured will fail
+with a clear "missing credential" error rather than blocking the others.
 
 ## Updating after a code change
 

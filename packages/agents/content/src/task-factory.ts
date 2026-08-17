@@ -108,4 +108,17 @@ export const ContentTasks = {
       approvalRequired: false,
     };
   },
+
+  publishDuePosts(): AgentTask {
+    return {
+      id: randomUUID(),
+      agentRole: 'content',
+      description: 'Publish scheduled posts whose time has arrived',
+      status: 'queued',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      input: { type: 'publish_due_posts' },
+      approvalRequired: false,
+    };
+  },
 };
