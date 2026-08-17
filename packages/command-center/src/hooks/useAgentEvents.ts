@@ -92,6 +92,31 @@ export type AgentEvent =
         summary: string;
         candidates: { workflow: string; streak: number; approved: boolean }[];
       };
+    }
+  | {
+      event: 'budget_warning_complete';
+      payload: {
+        taskId: string;
+        warranted: boolean;
+        summary: string;
+        spent: number;
+        budget: number;
+        percent: number;
+        resetsAt: string;
+      };
+    }
+  | {
+      event: 'stale_approvals_complete';
+      payload: {
+        taskId: string;
+        summary: string;
+        stale: { id: string; agentRole: string; action: string; daysPending: number }[];
+      };
+    }
+  | { event: 'auto_approved'; payload: { agentRole: string; taskId: string; action: string } }
+  | {
+      event: 'handoff_queued';
+      payload: { task: { id: string; agentRole: string; description: string } };
     };
 
 export function useAgentEvents(onEvent: (e: AgentEvent) => void) {
