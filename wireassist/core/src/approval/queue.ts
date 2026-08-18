@@ -9,6 +9,12 @@ export class ApprovalQueue {
   constructor(dbPath: string) {
     this.db = new Database(dbPath);
     this.init();
+    // Multiple stores (ApprovalQueue, MemoryStore, ConversationStore, etc.)
+    // each open an independent connection to this same shared file — WAL is
+    // the correct mode for that. See ConversationStore's constructor for
+    // the full incident notes (a transient, non-corrupting error observed
+    // while building /chat persistence, and how callers should handle it).
+    this.db.pragma('journal_mode = WAL');
   }
 
   private init(): void {

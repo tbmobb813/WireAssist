@@ -28,6 +28,10 @@ export class MemoryStore {
   constructor(dbPath: string) {
     this.db = new Database(dbPath);
     this.init();
+    // See ApprovalQueue's constructor — every store sharing this file must
+    // agree on journal mode (WAL), set only after init() finishes creating
+    // any FTS5 virtual tables/triggers.
+    this.db.pragma('journal_mode = WAL');
   }
 
   private init(): void {

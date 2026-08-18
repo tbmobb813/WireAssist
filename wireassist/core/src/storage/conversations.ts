@@ -13,6 +13,21 @@ export class ConversationStore {
   constructor(storagePath: string = './data/aia.db') {
     this.db = new Database(storagePath);
     this.initTables();
+    // WAL mode is the correct configuration once more than one connection
+    // opens the same file — ConversationStore and MessageStore each open
+    // their own independent better-sqlite3 connection to the same DB path,
+    // and MessageStore.create() writes into this class's own `conversations`
+    // table (bumping updated_at) from that other connection. Set after
+    // initTables() so schema/FTS5 creation happens in one consistent mode.
+    // Note: while building the /chat persistence feature, a rare, transient
+    // "database disk image is malformed" error was observed on the very
+    // first cross-connection write to a brand-new database, self-resolving
+    // on every subsequent write with no actual data loss (verified via
+    // PRAGMA integrity_check) — root cause not fully isolated. Callers that
+    // do cross-connection writes soon after creating a fresh DB (see
+    // conversation-routes.ts's auto-title update) should treat that specific
+    // call as best-effort and not let it fail the whole request.
+    this.db.pragma('journal_mode = WAL');
   }
 
   private initTables(): void {

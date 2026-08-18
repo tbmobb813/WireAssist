@@ -52,6 +52,7 @@ import {
 import { registerTrendPostTools, TrendPostStorage } from '@wireassist/trendpost-mcp';
 import { registerPortfolioRoutes } from './portfolio-routes';
 import { registerObjectiveRoutes } from './objective-routes';
+import { registerConversationRoutes } from './conversation-routes';
 import { routeChatMessage, type RouteDecision, type ChatHistoryMessage } from './chat-router';
 import { getLocation, setLocation, listNotes, addNote, deleteNote } from './dashboard-widgets';
 import { routeHandoffTask } from '../lib/route-handoff';
@@ -399,6 +400,7 @@ const app = new Hono();
 app.use('*', cors({ origin: 'http://localhost:3001' }));
 const portfolioStore = registerPortfolioRoutes(app, DB_PATH);
 const objectiveStore = registerObjectiveRoutes(app, DB_PATH, pushSSE);
+registerConversationRoutes(app, DB_PATH);
 
 // Health check
 app.get('/health', (c) =>

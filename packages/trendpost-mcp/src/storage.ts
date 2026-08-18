@@ -47,6 +47,10 @@ export class TrendPostStorage {
     const resolvedPath = dbPath ?? path.join(os.homedir(), '.wireassist', 'wireassist.db');
     this.db = new Database(resolvedPath);
     this.init();
+    // Every store sharing this file (ApprovalQueue, MemoryStore,
+    // ConversationStore, etc.) must agree on journal mode (WAL), set only
+    // after init() finishes creating any FTS5 virtual tables/triggers.
+    this.db.pragma('journal_mode = WAL');
   }
 
   private init(): void {

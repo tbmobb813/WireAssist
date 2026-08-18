@@ -51,6 +51,10 @@ export class ObjectiveStore {
   constructor(storagePath: string = './data/aia.db') {
     this.db = new Database(storagePath);
     this.initTables();
+    // See ApprovalQueue's constructor — every store sharing this file must
+    // agree on journal mode (WAL), set only after initTables() finishes
+    // creating any FTS5 virtual tables/triggers.
+    this.db.pragma('journal_mode = WAL');
   }
 
   private initTables(): void {

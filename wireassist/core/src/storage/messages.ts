@@ -12,7 +12,12 @@ export class MessageStore {
 
   constructor(storagePath: string = './data/aia.db') {
     this.db = new Database(storagePath);
+    // See the matching comment in ConversationStore's constructor — this
+    // class's create() writes into the `conversations` table (bumping
+    // updated_at) from a connection independent of ConversationStore's own,
+    // so WAL mode is required to avoid corrupting the shared file.
     this.initTables();
+    this.db.pragma('journal_mode = WAL');
   }
 
   private initTables(): void {
