@@ -904,14 +904,18 @@ app.get('/api/admin/gmail/oauth-callback', async (c) => {
     return c.html('<h1>❌ WIREASSIST_OAUTH_REDIRECT_URI is not configured.</h1>', 500);
 
   try {
+    console.log(`[gmail-reauth] code received, exchanging (redirectUri=${redirectUri})`);
     await new GmailClient().completeWebAuth(code, redirectUri);
+    console.log('[gmail-reauth] token exchange + save succeeded');
     // Rebuild Gmail/Calendar/Sheets clients and re-register their MCP tools
     // against the fresh token — same call bootstrap() makes at startup.
     await setupAdminMCP(mcp);
+    console.log('[gmail-reauth] setupAdminMCP re-registered tools; gmailReady = true');
     gmailReady = true;
     gmailReauthWarnedAt = null;
     return c.html('<h1>✅ WireAssist Gmail/Calendar re-authorized. You can close this tab.</h1>');
   } catch (err) {
+    console.error('[gmail-reauth] failed:', err);
     return c.html(`<h1>❌ ${err instanceof Error ? err.message : String(err)}</h1>`, 500);
   }
 });
