@@ -6,6 +6,12 @@ export interface ProposeSkillInput {
 }
 
 const PROPOSED_SKILL_PATH_PREFIX = 'packages/agents/admin/src/skills/proposed/';
+// Self-referential by design — a drafted skill's file paths are always
+// relative to this repo's own source tree, so the target is always this
+// repo. Confirmed live: without this, the GitHub Dev Agent correctly asked
+// for owner/repo instead of guessing, rather than proceeding — override via
+// env var if this codebase is ever forked/renamed.
+const TARGET_REPO = process.env.WIREASSIST_REPO ?? 'tbmobb813/WireAssist';
 
 // One real existing skill, shown as a few-shot example of the exact shape
 // the drafted code must follow — small and self-contained, no chain
@@ -143,7 +149,7 @@ export const proposeSkillSkill: Skill<ProposeSkillInput, void> = {
     }
 
     const slug = parsed.filename.replace(/\.ts$/, '');
-    const prPrompt = `Open a draft pull request proposing a new Admin skill. Do this in order:
+    const prPrompt = `Open a draft pull request proposing a new Admin skill, in the ${TARGET_REPO} repository. Do this in order:
 1. Create a new branch named "skill-proposal/${slug}" from the default branch.
 2. Add a new file at "${PROPOSED_SKILL_PATH_PREFIX}${parsed.filename}" on that branch with exactly this content:
 

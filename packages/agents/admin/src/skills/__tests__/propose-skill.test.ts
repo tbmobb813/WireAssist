@@ -96,6 +96,9 @@ describe('proposeSkillSkill', () => {
     const prompt = handoffCall[1].task.input.prompt as string;
     expect(prompt).toContain('packages/agents/admin/src/skills/proposed/weather-check.ts');
     expect(prompt).toContain('DRAFT pull request');
+    // Confirmed live: without the target repo stated explicitly, the GitHub
+    // Dev Agent correctly asked for owner/repo instead of guessing.
+    expect(prompt).toContain('tbmobb813/WireAssist');
 
     expect(agent.emit).toHaveBeenCalledWith(
       'agent:propose_skill_response',
