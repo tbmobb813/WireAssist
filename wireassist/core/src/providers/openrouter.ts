@@ -1,16 +1,33 @@
 // OpenRouter implementation — OpenAI-compatible chat completions API that
 // proxies to many underlying model vendors (pass e.g. "anthropic/claude-sonnet-4.5"
 // or "openai/gpt-4o" as the model).
-import { Provider, ProviderCompletionOptions, ProviderResponse, ProviderType } from './base';
+import {
+  Provider,
+  ProviderCompletionOptions,
+  ProviderResponse,
+  ProviderType,
+  ProviderToolCall,
+  ProviderHttpError,
+} from './base';
 import type { ProviderConfig } from '../types';
 
-interface OpenRouterMessage {
-  role: 'system' | 'user';
-  content: string;
+// OpenAI-compatible chat message shapes, just the parts this provider
+// reads/writes. `tool_calls`/`tool_call_id` follow OpenAI's function-calling
+// wire format (arguments as a JSON *string*, not an object).
+interface OpenRouterToolCall {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
 }
+type OpenRouterMessage =
+  | { role: 'system'; content: string }
+  | { role: 'user'; content: string }
+  | { role: 'assistant'; content: string | null; tool_calls?: OpenRouterToolCall[] }
+  | { role: 'tool'; tool_call_id: string; content: string };
 
 export class OpenRouterProvider implements Provider {
   type: ProviderType = 'openrouter';
+  supportsTools = true;
   currentModel: string;
   private apiKey: string;
   private baseUrl: string;
@@ -50,22 +67,51 @@ export class OpenRouterProvider implements Provider {
         // underlying models OpenRouter proxies to reject it outright.
         ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
         max_tokens: options.maxTokens,
+        // No tool_choice: leave it at the default ("auto") so the model can
+        // end the loop with a plain-text answer instead of being forced to
+        // call a tool every turn — same reasoning as AnthropicProvider.
+        ...(options.tools?.length
+          ? {
+              tools: options.tools.map((t) => ({
+                type: 'function' as const,
+                function: { name: t.name, description: t.description, parameters: t.inputSchema },
+              })),
+            }
+          : {}),
       }),
       signal: AbortSignal.timeout(this.timeout),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`OpenRouter API error: ${response.status} - ${error}`);
+      throw new ProviderHttpError(
+        'openrouter',
+        response.status,
+        `OpenRouter API error: ${response.status} - ${error}`
+      );
     }
 
     const data = (await response.json()) as {
-      choices: Array<{ message: { content: string }; finish_reason: string }>;
+      choices: Array<{
+        message: { content: string | null; tool_calls?: OpenRouterToolCall[] };
+        finish_reason: string;
+      }>;
       usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
       model: string;
     };
+
+    const message = data.choices[0].message;
+    const toolCalls: ProviderToolCall[] = (message.tool_calls ?? []).map((tc) => ({
+      id: tc.id,
+      name: tc.function.name,
+      input: JSON.parse(tc.function.arguments),
+    }));
+
     return {
-      content: data.choices[0].message.content,
+      // OpenAI-compatible APIs return content: null when the model only
+      // calls tools, unlike Anthropic's content-block array.
+      content: message.content ?? '',
+      ...(toolCalls.length ? { toolCalls } : {}),
       tokensUsed: data.usage?.total_tokens,
       promptTokens: data.usage?.prompt_tokens,
       completionTokens: data.usage?.completion_tokens,
@@ -98,7 +144,11 @@ export class OpenRouterProvider implements Provider {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`OpenRouter API error: ${response.status} - ${error}`);
+      throw new ProviderHttpError(
+        'openrouter',
+        response.status,
+        `OpenRouter API error: ${response.status} - ${error}`
+      );
     }
 
     const reader = response.body?.getReader();
@@ -144,7 +194,11 @@ export class OpenRouterProvider implements Provider {
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to list models: ${response.status}`);
+      throw new ProviderHttpError(
+        'openrouter',
+        response.status,
+        `Failed to list models: ${response.status}`
+      );
     }
 
     // OpenRouter aggregates many vendors — unlike OpenAIProvider, no name-prefix filter.
@@ -162,32 +216,62 @@ export class OpenRouterProvider implements Provider {
   }
 
   private buildMessages(options: ProviderCompletionOptions): OpenRouterMessage[] {
+    if (!options.messages?.length) {
+      const messages: OpenRouterMessage[] = [];
+      if (options.systemPrompt) messages.push({ role: 'system', content: options.systemPrompt });
+      const contextContent = this.buildContextContent(options);
+      if (contextContent) messages.push({ role: 'system', content: contextContent });
+      messages.push({ role: 'user', content: options.prompt });
+      return messages;
+    }
+
+    // Translate the provider-agnostic turn history into OpenAI's wire
+    // format. Unlike Anthropic, OpenAI has a real `tool` role — each tool
+    // result is its own message, no coalescing needed.
     const messages: OpenRouterMessage[] = [];
+    if (options.systemPrompt) messages.push({ role: 'system', content: options.systemPrompt });
+    const contextContent = this.buildContextContent(options);
+    if (contextContent) messages.push({ role: 'system', content: contextContent });
 
-    if (options.systemPrompt) {
-      messages.push({ role: 'system', content: options.systemPrompt });
+    for (const message of options.messages) {
+      if (message.role === 'user') {
+        messages.push({ role: 'user', content: message.content });
+        continue;
+      }
+      if (message.role === 'assistant') {
+        const tool_calls = (message.toolCalls ?? []).map((call) => ({
+          id: call.id,
+          type: 'function' as const,
+          function: { name: call.name, arguments: JSON.stringify(call.input) },
+        }));
+        messages.push({
+          role: 'assistant',
+          content: message.content || null,
+          ...(tool_calls.length ? { tool_calls } : {}),
+        });
+        continue;
+      }
+      // role === 'tool_result'
+      messages.push({ role: 'tool', tool_call_id: message.toolCallId, content: message.content });
     }
-
-    if (options.context) {
-      let contextContent = '';
-
-      if (options.context.files && options.context.files.length > 0) {
-        contextContent += '\n\n## Relevant Files:\n';
-        for (const file of options.context.files) {
-          contextContent += `\n### ${file.path}\n\`\`\`${file.language}\n${file.content}\n\`\`\`\n`;
-        }
-      }
-
-      if (options.context.gitDiff) {
-        contextContent += '\n\n## Git Changes:\n```diff\n' + options.context.gitDiff + '\n```\n';
-      }
-
-      if (contextContent) {
-        messages.push({ role: 'system', content: contextContent });
-      }
-    }
-
-    messages.push({ role: 'user', content: options.prompt });
     return messages;
+  }
+
+  private buildContextContent(options: ProviderCompletionOptions): string {
+    if (!options.context) return '';
+    let contextContent = '';
+
+    if (options.context.files && options.context.files.length > 0) {
+      contextContent += '\n\n## Relevant Files:\n';
+      for (const file of options.context.files) {
+        contextContent += `\n### ${file.path}\n\`\`\`${file.language}\n${file.content}\n\`\`\`\n`;
+      }
+    }
+
+    if (options.context.gitDiff) {
+      contextContent += '\n\n## Git Changes:\n```diff\n' + options.context.gitDiff + '\n```\n';
+    }
+
+    return contextContent;
   }
 }

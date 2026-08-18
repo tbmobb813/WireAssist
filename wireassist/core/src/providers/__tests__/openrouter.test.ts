@@ -1,4 +1,5 @@
 import { OpenRouterProvider } from '../openrouter';
+import { ProviderHttpError } from '../base';
 
 function mockFetchOnce(response: Partial<Response> & { json?: () => Promise<unknown> }) {
   (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -145,6 +146,25 @@ describe('OpenRouterProvider.complete()', () => {
     );
   });
 
+  it('throws a ProviderHttpError carrying the real status code', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      text: async () => 'service unavailable',
+    });
+
+    const provider = new OpenRouterProvider({ type: 'openrouter', apiKey: 'k' });
+    let caught: unknown;
+    try {
+      await provider.complete({ prompt: 'hi' });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ProviderHttpError);
+    expect((caught as ProviderHttpError).provider).toBe('openrouter');
+    expect((caught as ProviderHttpError).status).toBe(503);
+  });
+
   it('omits temperature entirely when the caller does not specify one', async () => {
     mockFetchOnce({
       json: async () => ({
@@ -173,6 +193,121 @@ describe('OpenRouterProvider.complete()', () => {
 
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
     expect(body.temperature).toBe(0.3);
+  });
+});
+
+describe('OpenRouterProvider — tool calling', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+
+  it('translates ProviderToolDefinition[] to OpenAI function-tool shape', async () => {
+    mockFetchOnce({
+      json: async () => ({
+        choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+        model: 'm',
+      }),
+    });
+
+    const provider = new OpenRouterProvider({ type: 'openrouter', apiKey: 'k' });
+    await provider.complete({
+      prompt: 'hi',
+      tools: [{ name: 'search', description: 'Search the web', inputSchema: { type: 'object' } }],
+    });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.tools).toEqual([
+      {
+        type: 'function',
+        function: { name: 'search', description: 'Search the web', parameters: { type: 'object' } },
+      },
+    ]);
+  });
+
+  it('omits tools entirely when none are given', async () => {
+    mockFetchOnce({
+      json: async () => ({
+        choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+        model: 'm',
+      }),
+    });
+
+    const provider = new OpenRouterProvider({ type: 'openrouter', apiKey: 'k' });
+    await provider.complete({ prompt: 'hi' });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body).not.toHaveProperty('tools');
+  });
+
+  it('parses message.tool_calls back into ProviderToolCall[]', async () => {
+    mockFetchOnce({
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: null,
+              tool_calls: [
+                {
+                  id: 'call_1',
+                  type: 'function',
+                  function: { name: 'search', arguments: '{"query":"cats"}' },
+                },
+              ],
+            },
+            finish_reason: 'tool_calls',
+          },
+        ],
+        model: 'm',
+      }),
+    });
+
+    const provider = new OpenRouterProvider({ type: 'openrouter', apiKey: 'k' });
+    const result = await provider.complete({ prompt: 'hi', tools: [] });
+
+    expect(result.content).toBe('');
+    expect(result.toolCalls).toEqual([{ id: 'call_1', name: 'search', input: { query: 'cats' } }]);
+  });
+
+  it('translates a full multi-turn history (user, assistant-with-tool_calls, tool_result) to OpenAI wire format', async () => {
+    mockFetchOnce({
+      json: async () => ({
+        choices: [{ message: { content: 'done' }, finish_reason: 'stop' }],
+        model: 'm',
+      }),
+    });
+
+    const provider = new OpenRouterProvider({ type: 'openrouter', apiKey: 'k' });
+    await provider.complete({
+      prompt: 'unused when messages is set',
+      systemPrompt: 'You are helpful',
+      messages: [
+        { role: 'user', content: 'find cats' },
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [{ id: 'call_1', name: 'search', input: { query: 'cats' } }],
+        },
+        { role: 'tool_result', toolCallId: 'call_1', content: 'found 3 cats' },
+      ],
+    });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.messages).toEqual([
+      { role: 'system', content: 'You are helpful' },
+      { role: 'user', content: 'find cats' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: { name: 'search', arguments: '{"query":"cats"}' },
+          },
+        ],
+      },
+      { role: 'tool', tool_call_id: 'call_1', content: 'found 3 cats' },
+    ]);
   });
 });
 

@@ -5,6 +5,10 @@ import type { ProviderType, AIContext } from '../types';
 export interface Provider {
   type: ProviderType;
   currentModel: string;
+  // Whether this provider's complete() honors options.tools/messages for a
+  // real multi-turn tool-calling loop. BaseAgent.runToolLoop() falls back to
+  // a single-shot think() call when false — see base-agent.ts.
+  supportsTools: boolean;
 
   complete(options: ProviderCompletionOptions): Promise<ProviderResponse>;
   stream(options: ProviderCompletionOptions): Promise<AsyncGenerator<string>>;
@@ -12,9 +16,24 @@ export interface Provider {
   validateConfig(): Promise<boolean>;
 }
 
+// Thrown by a provider's complete()/stream() on a non-ok HTTP response, with
+// the real status code attached — lets callers (e.g. BaseAgent's fallback
+// wrapper) distinguish a retryable outage/rate-limit from a genuine bad
+// request without parsing the error message string.
+export class ProviderHttpError extends Error {
+  constructor(
+    public readonly provider: ProviderType,
+    public readonly status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = 'ProviderHttpError';
+  }
+}
+
 // JSON-Schema tool definition handed to the model, and the structured call
-// it hands back — shape mirrors Anthropic's tool_use, since that's the only
-// provider that implements tool-calling today (see anthropic.ts).
+// it hands back — provider-agnostic; see Provider.supportsTools for which
+// providers actually implement it (anthropic.ts, openrouter.ts).
 export interface ProviderToolDefinition {
   name: string;
   description: string;

@@ -15,9 +15,11 @@ import {
   type ProviderMessage,
   type ProviderToolCall,
   type ProviderResponse,
+  type ProviderCompletionOptions,
   SkillRegistry,
   SkillExecutor,
   ProviderFactory,
+  ProviderHttpError,
 } from '@wireassist/core';
 import {
   isValidDelegationTarget,
@@ -88,6 +90,48 @@ export abstract class BaseAgent {
       });
     }
     return this._provider;
+  }
+
+  // Lazily constructs an OpenRouter provider to fail over to when the
+  // primary is Anthropic — undefined (no fallback attempted) when
+  // OPENROUTER_API_KEY isn't set, or the primary isn't Anthropic (no
+  // fallback chain for other primaries; this is specifically "don't let an
+  // Anthropic outage take the platform down", not a general N-provider
+  // failover framework).
+  private _fallbackProvider?: Provider;
+  private getFallbackProvider(): Provider | undefined {
+    if (this.getProvider().type !== 'anthropic' || !process.env.OPENROUTER_API_KEY) {
+      return undefined;
+    }
+    if (!this._fallbackProvider) {
+      this._fallbackProvider = ProviderFactory.create({ type: 'openrouter' });
+    }
+    return this._fallbackProvider;
+  }
+
+  // Wraps a single provider.complete() call with automatic, per-call
+  // failover: on a retryable failure from the primary (outage/rate-limit/
+  // network — see isRetryableProviderError()), transparently retries once
+  // via OpenRouter routed to the same underlying Claude model, so an
+  // Anthropic outage doesn't take every agent down. Not sticky — the next
+  // call still tries the primary first, so a recovered primary is used
+  // again immediately.
+  protected async completeWithFallback(
+    options: ProviderCompletionOptions
+  ): Promise<ProviderResponse> {
+    try {
+      return await this.getProvider().complete(options);
+    } catch (error) {
+      if (!isRetryableProviderError(error)) throw error;
+      const fallback = this.getFallbackProvider();
+      if (!fallback) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[${this.role}] Anthropic call failed (${message}) — retrying via OpenRouter`);
+      return await fallback.complete({
+        ...options,
+        model: toOpenRouterModel(options.model ?? this.resolveModel()),
+      });
+    }
   }
 
   // Resolves the model to use for this agent, provider-aware — an agent
@@ -176,7 +220,7 @@ export abstract class BaseAgent {
     budgetTracker.assertWithinBudget();
 
     const model = this.resolveModel();
-    const response = await this.getProvider().complete({
+    const response = await this.completeWithFallback({
       prompt: userMessage,
       systemPrompt: this.buildSystemPrompt(extraContext),
       model,
@@ -186,7 +230,9 @@ export abstract class BaseAgent {
       maxTokens: maxTokensOverride ?? this.config.maxTokens ?? 2048,
     });
 
-    this.recordUsage(model, response);
+    // response.model, not the pre-resolved `model` — completeWithFallback()
+    // may have served this via OpenRouter under a different model string.
+    this.recordUsage(response.model || model, response);
     return response.content;
   }
 
@@ -211,15 +257,15 @@ export abstract class BaseAgent {
   // authorized tools to call, executes them, and feeds results back until
   // it returns a final text answer (or the iteration cap is hit). Falls
   // back to a single plain-text think() when the active provider doesn't
-  // support tool-calling (only AnthropicProvider does today) or the agent
-  // has no toolSchemas configured — chat still answers, just without tools.
+  // support tool-calling (Provider.supportsTools) or the agent has no
+  // toolSchemas configured — chat still answers, just without tools.
   protected async runToolLoop(
     task: AgentTask,
     userMessage: string,
     opts?: { extraContext?: string; maxIterations?: number; priorMessages?: ProviderMessage[] }
   ): Promise<string> {
     const tools = this.config.toolSchemas ? Object.values(this.config.toolSchemas) : [];
-    if (this.getProvider().type !== 'anthropic' || tools.length === 0) {
+    if (!this.getProvider().supportsTools || tools.length === 0) {
       // think() has no messages-array support — fold prior turns into the
       // context string instead, so conversational memory still survives on
       // non-Anthropic providers rather than silently vanishing.
@@ -239,7 +285,7 @@ export abstract class BaseAgent {
 
     for (let i = 0; i < maxIterations; i++) {
       budgetTracker.assertWithinBudget();
-      const response = await this.getProvider().complete({
+      const response = await this.completeWithFallback({
         prompt: userMessage,
         messages,
         tools,
@@ -247,7 +293,9 @@ export abstract class BaseAgent {
         model,
         maxTokens: this.config.maxTokens ?? 2048,
       });
-      this.recordUsage(model, response);
+      // response.model, not the pre-resolved `model` — completeWithFallback()
+      // may have served this via OpenRouter under a different model string.
+      this.recordUsage(response.model || model, response);
 
       if (!response.toolCalls?.length) {
         return response.content;
@@ -494,4 +542,31 @@ function foldPriorMessagesIntoContext(
     .join('\n');
   const header = `Recent conversation:\n${transcript}`;
   return extraContext ? `${header}\n\n${extraContext}` : header;
+}
+
+// Retryable (worth failing over to OpenRouter): no HTTP status available at
+// all (network/timeout failure — fetch rejecting, AbortSignal.timeout
+// firing), or status 429 (rate-limited) or >= 500 (outage/overloaded).
+// Not retryable: any other 4xx (400 bad request, 401/403 auth, 404 model-
+// not-found) — those indicate a problem with the request itself or our own
+// Anthropic credential, which a different provider won't fix, and silently
+// routing a bad request to a second paid API would mask a real bug instead
+// of surfacing it.
+function isRetryableProviderError(error: unknown): boolean {
+  if (error instanceof ProviderHttpError) {
+    return error.status === 429 || error.status >= 500;
+  }
+  // Any other thrown value (network error, DOMException from
+  // AbortSignal.timeout, etc.) has no HTTP status to check — couldn't even
+  // reach the API, which is exactly the outage case worth failing over for.
+  return true;
+}
+
+// Maps a direct-Anthropic model string to OpenRouter's vendor-prefixed form,
+// so the fallback call hits the same underlying Claude model via a
+// different HTTP path rather than switching models — keeps behavior as
+// close to identical as possible. No-op if the model already looks
+// vendor-prefixed (e.g. a caller already passed an OpenRouter-style slug).
+function toOpenRouterModel(model: string): string {
+  return model.includes('/') ? model : `anthropic/${model}`;
 }

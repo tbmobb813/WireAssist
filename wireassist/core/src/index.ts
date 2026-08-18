@@ -14,6 +14,7 @@ export { PrivacyController, AuditLogger, ConversationEncryption } from './privac
 
 // Provider types
 export { ProviderFactory } from './providers';
+export { ProviderHttpError } from './providers/base';
 export type {
   Provider,
   ProviderCompletionOptions,

@@ -1,4 +1,5 @@
 import { AnthropicProvider } from '../anthropic';
+import { ProviderHttpError } from '../base';
 import type { ProviderMessage, ProviderToolDefinition } from '../base';
 
 describe('AnthropicProvider — constructor', () => {
@@ -115,6 +116,25 @@ describe('AnthropicProvider.complete()', () => {
     await expect(provider.complete({ prompt: 'hi' })).rejects.toThrow(
       /Anthropic API error: 401 - invalid key/
     );
+  });
+
+  it('throws a ProviderHttpError carrying the real status code', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      status: 529,
+      text: async () => 'overloaded',
+    });
+
+    const provider = new AnthropicProvider({ type: 'anthropic', apiKey: 'k' });
+    let caught: unknown;
+    try {
+      await provider.complete({ prompt: 'hi' });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ProviderHttpError);
+    expect((caught as ProviderHttpError).provider).toBe('anthropic');
+    expect((caught as ProviderHttpError).status).toBe(529);
   });
 
   it('omits temperature entirely when the caller does not specify one', async () => {

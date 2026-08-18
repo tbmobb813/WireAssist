@@ -4,6 +4,7 @@ import type { ProviderConfig } from '../types';
 
 export class OllamaProvider implements Provider {
   type: ProviderType = 'ollama';
+  supportsTools = false;
   currentModel: string;
   private baseUrl: string;
   private timeout: number;

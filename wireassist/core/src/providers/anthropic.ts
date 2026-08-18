@@ -5,6 +5,7 @@ import {
   ProviderResponse,
   ProviderType,
   ProviderToolCall,
+  ProviderHttpError,
 } from './base';
 import type { ProviderConfig } from '../types';
 
@@ -32,6 +33,7 @@ type AnthropicMessage =
 
 export class AnthropicProvider implements Provider {
   type: ProviderType = 'anthropic';
+  supportsTools = true;
   currentModel: string;
   private apiKey: string;
   private baseUrl: string;
@@ -87,7 +89,11 @@ export class AnthropicProvider implements Provider {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`Anthropic API error: ${response.status} - ${error}`);
+      throw new ProviderHttpError(
+        'anthropic',
+        response.status,
+        `Anthropic API error: ${response.status} - ${error}`
+      );
     }
 
     const data = (await response.json()) as {
@@ -140,7 +146,11 @@ export class AnthropicProvider implements Provider {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`Anthropic API error: ${response.status} - ${error}`);
+      throw new ProviderHttpError(
+        'anthropic',
+        response.status,
+        `Anthropic API error: ${response.status} - ${error}`
+      );
     }
 
     const reader = response.body?.getReader();

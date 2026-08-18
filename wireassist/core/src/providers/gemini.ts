@@ -4,6 +4,7 @@ import type { ProviderConfig } from '../types';
 
 export class GeminiProvider implements Provider {
   type: ProviderType = 'gemini';
+  supportsTools = false;
   currentModel: string;
   private apiKey: string;
   private baseUrl: string;

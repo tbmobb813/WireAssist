@@ -9,8 +9,9 @@ import type {
   SkillChain,
   ProviderResponse,
   ProviderMessage,
+  ProviderCompletionOptions,
 } from '@wireassist/core';
-import { ProviderFactory } from '@wireassist/core';
+import { ProviderFactory, ProviderHttpError } from '@wireassist/core';
 import { BaseAgent } from '../base-agent';
 import { budgetTracker } from '../budget';
 
@@ -39,6 +40,9 @@ class TestAgent extends BaseAgent {
     opts?: { extraContext?: string; maxIterations?: number; priorMessages?: ProviderMessage[] }
   ) {
     return this.runToolLoop(task, userMessage, opts);
+  }
+  testCompleteWithFallback(options: ProviderCompletionOptions) {
+    return this.completeWithFallback(options);
   }
 }
 
@@ -551,6 +555,7 @@ describe('BaseAgent.think()', () => {
     completeMock = jest.fn().mockResolvedValue(stubResponse());
     createSpy = jest.spyOn(ProviderFactory, 'create').mockReturnValue({
       type: 'anthropic',
+      supportsTools: true,
       currentModel: 'claude-sonnet-5',
       complete: completeMock,
       stream: jest.fn(),
@@ -675,6 +680,148 @@ describe('BaseAgent.think()', () => {
   });
 });
 
+describe('BaseAgent.completeWithFallback()', () => {
+  function stubResponse(overrides: Partial<ProviderResponse> = {}): ProviderResponse {
+    return { content: 'ok', model: 'claude-sonnet-5', ...overrides };
+  }
+
+  let primaryComplete: jest.Mock;
+  let fallbackComplete: jest.Mock;
+
+  function makeAgent(config: Partial<AgentConfig> = {}) {
+    const agentConfig: AgentConfig = {
+      role: 'admin',
+      name: 'Test Agent',
+      systemPrompt: 'sys',
+      tools: [],
+      ...config,
+    };
+    return new TestAgent(agentConfig, makeDeps());
+  }
+
+  beforeEach(() => {
+    primaryComplete = jest.fn();
+    fallbackComplete = jest.fn();
+    jest.spyOn(ProviderFactory, 'create').mockImplementation((cfg) => {
+      if (cfg.type === 'openrouter') {
+        return {
+          type: 'openrouter',
+          supportsTools: true,
+          currentModel: cfg.model ?? 'openrouter/auto',
+          complete: fallbackComplete,
+          stream: jest.fn(),
+          listModels: jest.fn(),
+          validateConfig: jest.fn(),
+        };
+      }
+      return {
+        type: 'anthropic',
+        supportsTools: true,
+        currentModel: cfg.model ?? 'claude-sonnet-5',
+        complete: primaryComplete,
+        stream: jest.fn(),
+        listModels: jest.fn(),
+        validateConfig: jest.fn(),
+      };
+    });
+    jest.spyOn(budgetTracker, 'assertWithinBudget').mockImplementation(() => {});
+    jest.spyOn(budgetTracker, 'record').mockReturnValue(0);
+  });
+
+  afterEach(() => {
+    delete process.env.OPENROUTER_API_KEY;
+    jest.restoreAllMocks();
+  });
+
+  it('returns the primary provider result directly when it succeeds', async () => {
+    primaryComplete.mockResolvedValueOnce(stubResponse({ content: 'primary answer' }));
+    const agent = makeAgent();
+
+    const result = await agent.testCompleteWithFallback({ prompt: 'hi' });
+
+    expect(result.content).toBe('primary answer');
+    expect(fallbackComplete).not.toHaveBeenCalled();
+  });
+
+  it('retries via OpenRouter on a 503 from the primary, when OPENROUTER_API_KEY is set', async () => {
+    process.env.OPENROUTER_API_KEY = 'k';
+    primaryComplete.mockRejectedValueOnce(
+      new ProviderHttpError('anthropic', 503, 'Anthropic API error: 503 - overloaded')
+    );
+    fallbackComplete.mockResolvedValueOnce(
+      stubResponse({ content: 'fallback answer', model: 'anthropic/claude-sonnet-5' })
+    );
+    const agent = makeAgent();
+
+    const result = await agent.testCompleteWithFallback({ prompt: 'hi', model: 'claude-sonnet-5' });
+
+    expect(result.content).toBe('fallback answer');
+    expect(fallbackComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'anthropic/claude-sonnet-5' })
+    );
+  });
+
+  it('retries via OpenRouter on a 429 from the primary', async () => {
+    process.env.OPENROUTER_API_KEY = 'k';
+    primaryComplete.mockRejectedValueOnce(new ProviderHttpError('anthropic', 429, 'rate limited'));
+    fallbackComplete.mockResolvedValueOnce(stubResponse({ content: 'fallback answer' }));
+    const agent = makeAgent();
+
+    const result = await agent.testCompleteWithFallback({ prompt: 'hi' });
+    expect(result.content).toBe('fallback answer');
+  });
+
+  it('retries via OpenRouter on a network/timeout error with no HTTP status', async () => {
+    process.env.OPENROUTER_API_KEY = 'k';
+    primaryComplete.mockRejectedValueOnce(new Error('fetch failed'));
+    fallbackComplete.mockResolvedValueOnce(stubResponse({ content: 'fallback answer' }));
+    const agent = makeAgent();
+
+    const result = await agent.testCompleteWithFallback({ prompt: 'hi' });
+    expect(result.content).toBe('fallback answer');
+  });
+
+  it('does NOT retry on a 400 bad request — surfaces the original error', async () => {
+    process.env.OPENROUTER_API_KEY = 'k';
+    primaryComplete.mockRejectedValueOnce(new ProviderHttpError('anthropic', 400, 'bad request'));
+    const agent = makeAgent();
+
+    await expect(agent.testCompleteWithFallback({ prompt: 'hi' })).rejects.toThrow('bad request');
+    expect(fallbackComplete).not.toHaveBeenCalled();
+  });
+
+  it('does NOT retry on a 401 auth error — surfaces the original error', async () => {
+    process.env.OPENROUTER_API_KEY = 'k';
+    primaryComplete.mockRejectedValueOnce(new ProviderHttpError('anthropic', 401, 'unauthorized'));
+    const agent = makeAgent();
+
+    await expect(agent.testCompleteWithFallback({ prompt: 'hi' })).rejects.toThrow('unauthorized');
+    expect(fallbackComplete).not.toHaveBeenCalled();
+  });
+
+  it('does not attempt a fallback when OPENROUTER_API_KEY is unset — surfaces the original error', async () => {
+    delete process.env.OPENROUTER_API_KEY;
+    primaryComplete.mockRejectedValueOnce(new ProviderHttpError('anthropic', 503, 'overloaded'));
+    const agent = makeAgent();
+
+    await expect(agent.testCompleteWithFallback({ prompt: 'hi' })).rejects.toThrow('overloaded');
+    expect(fallbackComplete).not.toHaveBeenCalled();
+  });
+
+  it('does not attempt a fallback when the primary provider is not anthropic', async () => {
+    // Here the agent's own (only) provider IS 'openrouter' — getProvider()
+    // resolves to the mock's openrouter branch, so this call is what
+    // actually fails; the assertion is that no *second* call happens.
+    process.env.OPENROUTER_API_KEY = 'k';
+    fallbackComplete.mockRejectedValueOnce(new ProviderHttpError('openrouter', 503, 'overloaded'));
+    const agent = makeAgent({ provider: 'openrouter' });
+
+    await expect(agent.testCompleteWithFallback({ prompt: 'hi' })).rejects.toThrow('overloaded');
+    expect(fallbackComplete).toHaveBeenCalledTimes(1);
+    expect(primaryComplete).not.toHaveBeenCalled();
+  });
+});
+
 describe('BaseAgent.runToolLoop()', () => {
   function stubResponse(overrides: Partial<ProviderResponse> = {}): ProviderResponse {
     return { content: '', model: 'claude-sonnet-5', ...overrides };
@@ -686,6 +833,7 @@ describe('BaseAgent.runToolLoop()', () => {
     completeMock = jest.fn();
     jest.spyOn(ProviderFactory, 'create').mockReturnValue({
       type: 'anthropic',
+      supportsTools: true,
       currentModel: 'claude-sonnet-5',
       complete: completeMock,
       stream: jest.fn(),
@@ -714,10 +862,13 @@ describe('BaseAgent.runToolLoop()', () => {
     return { agent: new ReadOnlyAwareTestAgent(config, deps), deps };
   }
 
-  it('falls back to think() when the provider is not anthropic', async () => {
+  it('falls back to think() when the provider does not support tools', async () => {
+    // openai (unlike anthropic/openrouter) has no tool-calling support today
+    // — see Provider.supportsTools.
     jest.spyOn(ProviderFactory, 'create').mockReturnValue({
-      type: 'openrouter',
-      currentModel: 'openrouter/auto',
+      type: 'openai',
+      supportsTools: false,
+      currentModel: 'gpt-4o',
       complete: completeMock,
       stream: jest.fn(),
       listModels: jest.fn(),
@@ -730,7 +881,7 @@ describe('BaseAgent.runToolLoop()', () => {
       name: 'Test Agent',
       systemPrompt: 'sys',
       tools: [],
-      provider: 'openrouter',
+      provider: 'openai',
       toolSchemas: { x: { name: 'x', description: 'd', inputSchema: {} } },
     };
     const agent = new TestAgent(config, makeDeps());
@@ -739,6 +890,27 @@ describe('BaseAgent.runToolLoop()', () => {
     expect(result).toBe('plain answer');
     expect(completeMock).toHaveBeenCalledWith(
       expect.not.objectContaining({ tools: expect.anything() })
+    );
+  });
+
+  it('does not fall back to think() for openrouter — it supports tools too', async () => {
+    jest.spyOn(ProviderFactory, 'create').mockReturnValue({
+      type: 'openrouter',
+      supportsTools: true,
+      currentModel: 'openrouter/auto',
+      complete: completeMock,
+      stream: jest.fn(),
+      listModels: jest.fn(),
+      validateConfig: jest.fn(),
+    });
+    completeMock.mockResolvedValueOnce(stubResponse({ content: 'tool-loop answer' }));
+
+    const { agent } = makeToolAgent();
+    const result = await agent.testRunToolLoop(makeTask(), 'hello');
+
+    expect(result).toBe('tool-loop answer');
+    expect(completeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ tools: expect.any(Array) })
     );
   });
 
@@ -773,10 +945,11 @@ describe('BaseAgent.runToolLoop()', () => {
     ]);
   });
 
-  it('folds priorMessages into extraContext when falling back to think() (non-Anthropic provider)', async () => {
+  it('folds priorMessages into extraContext when falling back to think() (provider without tool support)', async () => {
     jest.spyOn(ProviderFactory, 'create').mockReturnValue({
-      type: 'openrouter',
-      currentModel: 'openrouter/auto',
+      type: 'openai',
+      supportsTools: false,
+      currentModel: 'gpt-4o',
       complete: completeMock,
       stream: jest.fn(),
       listModels: jest.fn(),
@@ -789,7 +962,7 @@ describe('BaseAgent.runToolLoop()', () => {
       name: 'Test Agent',
       systemPrompt: 'sys',
       tools: [],
-      provider: 'openrouter',
+      provider: 'openai',
       toolSchemas: { x: { name: 'x', description: 'd', inputSchema: {} } },
     };
     const agent = new TestAgent(config, makeDeps());

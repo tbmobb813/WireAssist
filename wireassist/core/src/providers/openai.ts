@@ -4,6 +4,7 @@ import type { ProviderConfig } from '../types';
 
 export class OpenAIProvider implements Provider {
   type: ProviderType = 'openai';
+  supportsTools = false;
   currentModel: string;
   private apiKey: string;
   private baseUrl: string;
