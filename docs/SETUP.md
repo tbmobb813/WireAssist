@@ -65,6 +65,26 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 You can also `export ANTHROPIC_API_KEY=...` in your shell, or use `packages/command-center/.env.local` for package-only overrides.
 
+### OpenRouter fallback (optional, recommended)
+
+If `OPENROUTER_API_KEY` is set, every agent automatically retries a failed Anthropic call once via
+OpenRouter (routed to the same Claude model) before giving up — an Anthropic outage, rate limit,
+or timeout no longer takes the whole platform down. Without this key set, a failed Anthropic call
+just fails, same as before this existed.
+
+1. Create an account and API key at [openrouter.ai](https://openrouter.ai/keys).
+2. Add it alongside `ANTHROPIC_API_KEY` in the same `.env`:
+
+```bash
+OPENROUTER_API_KEY=sk-or-...
+```
+
+Fallback only triggers on a retryable failure (network/timeout, HTTP 429, or 5xx) — a bad request
+or an invalid Anthropic key still fails immediately rather than silently masking the problem by
+routing to a second paid API. Each fallback call logs a `console.warn` naming the agent and the
+original error, so a run of fallbacks is visible in the deployment logs even though it never
+surfaces to the user.
+
 ### Google Gmail + Calendar + Sheets
 
 1. Create a project in [Google Cloud Console](https://console.cloud.google.com/).
