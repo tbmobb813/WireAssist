@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as http from 'http';
 import * as os from 'os';
 import { spawn } from 'child_process';
+import { logger } from '@wireassist/core/logger';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
@@ -54,9 +55,7 @@ export class GmailClient {
     if (fs.existsSync(TOKEN_PATH)) {
       const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
       if (!this.hasRequiredScopes(token.scope)) {
-        console.log(
-          '\n⚠️  Existing token is missing required Gmail/Calendar scopes. Re-authorizing...'
-        );
+        logger.warn('\n⚠️  Existing token is missing required Gmail/Calendar scopes. Re-authorizing...');
         await this.runOAuthFlow();
         return;
       }
@@ -129,8 +128,8 @@ export class GmailClient {
         prompt: 'consent',
       });
 
-      console.log('\n🔐 Opening browser for Gmail authorization...');
-      console.log('If it does not open automatically, visit:\n', authUrl);
+      logger.info('\n🔐 Opening browser for Gmail authorization...');
+      logger.info('If it does not open automatically, visit:\n', authUrl);
 
       // Start a local server to catch the OAuth callback
       const server = http.createServer(async (req, res) => {
@@ -158,7 +157,7 @@ export class GmailClient {
         const { tokens } = await this.auth.getToken(code);
         this.auth.setCredentials(tokens);
         this.saveToken({ ...tokens, savedAt: Date.now() });
-        console.log('✅ Gmail authenticated and token saved.\n');
+        logger.info('✅ Gmail authenticated and token saved.\n');
         resolve();
       });
 
@@ -190,8 +189,8 @@ export class GmailClient {
               : { command: 'xdg-open', args: [authUrl] };
         const child = spawn(opener.command, opener.args, { detached: true, stdio: 'ignore' });
         child.on('error', (error) => {
-          console.error('Failed to open browser automatically:', error.message);
-          console.log('Open this URL manually:\n', authUrl);
+          logger.error('Failed to open browser automatically:', error.message);
+          logger.info('Open this URL manually:\n', authUrl);
         });
         child.unref();
       });

@@ -35,8 +35,10 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const API_URL = process.env.WIREASSIST_API_URL ?? 'http://localhost:3002';
 
+import { logger } from '@wireassist/core/logger';
+
 if (!BOT_TOKEN || !CHAT_ID) {
-  console.error('TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set.');
+  logger.error('TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set.');
   process.exit(1);
 }
 
@@ -47,7 +49,7 @@ async function send(text: string): Promise<void> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: 'Markdown' }),
-  }).catch((err) => console.error('sendMessage failed:', err));
+  }).catch((err) => logger.error('sendMessage failed:', err));
 }
 
 async function api(path: string, init?: RequestInit): Promise<unknown> {
@@ -204,7 +206,7 @@ async function pollLoop(): Promise<never> {
         }
       }
     } catch (err) {
-      console.error('poll error:', err instanceof Error ? err.message : err);
+      logger.error('poll error:', err instanceof Error ? err.message : err);
       await new Promise((r) => setTimeout(r, 5000));
     }
   }
@@ -217,7 +219,7 @@ async function sseLoop(): Promise<never> {
     try {
       const res = await fetch(`${API_URL}/api/events`);
       if (!res.ok || !res.body) throw new Error(`SSE connect failed: ${res.status}`);
-      console.log('SSE connected');
+      logger.info('SSE connected');
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
@@ -240,7 +242,7 @@ async function sseLoop(): Promise<never> {
         }
       }
     } catch (err) {
-      console.error('SSE error:', err instanceof Error ? err.message : err);
+      logger.error('SSE error:', err instanceof Error ? err.message : err);
     }
     await new Promise((r) => setTimeout(r, 5000));
   }
