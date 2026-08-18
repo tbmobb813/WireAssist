@@ -816,6 +816,20 @@ app.post('/api/tasks/generate-plan', async (c) => {
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
+app.post('/api/tasks/admin-freeform', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const { prompt, history: rawHistory, objectiveId } = await c.req.json();
+  if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
+  const task = AdminTasks.freeform(
+    prompt,
+    sanitizeHistory(rawHistory),
+    typeof objectiveId === 'string' ? objectiveId : undefined
+  );
+  queueAgentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
 app.post('/api/tasks/content-freeform', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
