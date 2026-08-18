@@ -21,7 +21,8 @@ export const researchTopicSkill: Skill<ResearchTopicInput, void> = {
   requiresApproval: true,
 
   async execute({ agent, task, input }) {
-    const { query, resultCount = 5, offerContentDraft } = input;
+    // Brave's own API default and max are both 20 (Web Search API docs).
+    const { query, resultCount = 20, offerContentDraft } = input;
 
     const context = await agent.loadContext(query);
 

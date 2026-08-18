@@ -13,7 +13,10 @@ export const RESEARCH_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'The search query.' },
-        count: { type: 'number', description: 'Max results to return, default 5.' },
+        count: {
+          type: 'number',
+          description: "Max results to return, default 20 (Brave's own default and max).",
+        },
       },
       required: ['query'],
     },
@@ -33,7 +36,10 @@ export const RESEARCH_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'What to research.' },
-        resultCount: { type: 'number', description: 'Max search results to consider, default 5.' },
+        resultCount: {
+          type: 'number',
+          description: "Max search results to consider, default 20 (Brave's own default and max).",
+        },
       },
       required: ['query'],
     },
@@ -62,7 +68,10 @@ export const RESEARCH_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'What to research and synthesize.' },
-        resultCount: { type: 'number', description: 'Max search results to consider, default 5.' },
+        resultCount: {
+          type: 'number',
+          description: "Max search results to consider, default 20 (Brave's own default and max).",
+        },
       },
       required: ['query'],
     },

@@ -13,7 +13,10 @@ interface BraveSearchResponse {
 export function setupResearchMCP(mcp: MCPClient): void {
   mcp.register('brave_search', async (params) => {
     const query = params.query as string;
-    const count = (params.count as number | undefined) ?? 5;
+    // Brave's own API default and max are both 20 (Web Search API docs) —
+    // this used to override that down to 5, which just meant every search
+    // saw a quarter of what Brave would return by default.
+    const count = (params.count as number | undefined) ?? 20;
     const apiKey = process.env.BRAVE_API_KEY;
 
     if (!apiKey) {
