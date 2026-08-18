@@ -117,12 +117,18 @@ The GitHub Dev Agent is the first agent in this codebase to speak the real Model
 1. GitHub → Settings → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → Generate new token.
 2. Repository access: an explicit list of the repos you want it to see (recommended, smaller blast radius) rather than "All repositories."
 3. Permissions — grant only:
-   - **Contents**: Read-only
+   - **Contents**: Read and write (needed for `create_or_update_file`/`create_branch` — the
+     Admin skill-proposal pilot's tool allowlist restricts what these can actually touch: file
+     writes only under `packages/agents/admin/src/skills/proposed/`, branches only named
+     `skill-proposal/*`. Read-only is enough if you don't want that pilot enabled — the agent
+     boots fine either way, those two tools just won't be authorized.)
    - **Issues**: Read and write
    - **Pull requests**: Read and write
    - **Metadata**: Read-only (required baseline for every fine-grained token)
 
-   Do **not** grant Administration, Webhooks, Secrets, or any Actions-write permission — the agent never needs them, and its own tool allowlist (`packages/agents/github/src/tool-policy.ts`) refuses to call anything outside read/comment/label/draft-PR regardless of what the token could technically do.
+   Do **not** grant Administration, Webhooks, Secrets, or any Actions-write permission — the agent never needs them, and its own tool allowlist (`packages/agents/github/src/tool-policy.ts`) refuses to call anything outside read/comment/label/draft-PR/the two narrowly-scoped file-write tools regardless of what the token could technically do.
+
+   If you already generated a token with Contents: Read-only before this pilot existed, edit its permissions on GitHub (Settings → Developer settings → Personal access tokens → Fine-grained tokens → your token → Edit permissions) rather than generating a new one — no code-side changes needed, the agent picks up the wider scope on its next connection.
 
 Place the token at:
 
