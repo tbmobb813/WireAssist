@@ -28,7 +28,7 @@
     "smoke": "bash dev/smoke_api.sh",
     "e2e": "pnpm exec playwright test --config packages/command-center/playwright-e2e/playwright.config.ts",
     "prepare": "husky || true",
-    "clean": "pnpm -r --if-present clean && rm -rf node_modules pnpm-lock.yaml"
+    "clean": "pnpm -r --if-present clean && rm -rf node_modules"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
