@@ -60,12 +60,14 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'admin_triage',
-    description: 'User wants their email inbox triaged/reviewed.',
+    description:
+      'User EXPLICITLY asks to triage, review, clean up, or go through their email inbox — the message names "email"/"inbox" directly. Do not use this for vague productivity/status requests that might merely touch email as a side effect; those route to admin_freeform.',
     input_schema: { type: 'object', properties: {} },
   },
   {
     name: 'admin_calendar',
-    description: 'User wants their calendar reviewed/checked for upcoming events.',
+    description:
+      'User EXPLICITLY asks to check, review, or look at their calendar/schedule/meetings/events — the message names "calendar"/"schedule"/"meetings" directly. Do not use this for vague productivity/status requests ("how are things", "what should I do today", "help me get organized") that don\'t name the calendar; those route to admin_freeform, where Admin can decide for itself whether checking the calendar is relevant.',
     input_schema: {
       type: 'object',
       properties: {
@@ -191,7 +193,13 @@ Guidance:
   a specific product routes to gtm_redirect — never admin_freeform or anything else. A general
   GTM question or discussion (pricing models, positioning angles, launch tactics) that isn't asking
   to generate one for a specific product routes to gtm_freeform instead.
-- Ambiguous, general-knowledge, or small-talk messages route to admin_freeform.
+- Ambiguous, general-knowledge, or small-talk messages route to admin_freeform. This includes
+  vague productivity/status/motivation requests that never name a specific admin tool's subject —
+  "how are things looking", "what should I do today", "help me get organized", "I have a bunch of
+  half-done stuff, what should I actually do" — even though Admin's own freeform tool loop may
+  itself decide to check email or the calendar once it starts working. Only route directly to
+  admin_triage/admin_calendar when the message itself names "email"/"inbox" or
+  "calendar"/"schedule"/"meetings" as the explicit subject.
 - Anything about a specific GitHub repo, issue, or pull request — "what are the open issues
   on X", "comment on PR #12", "what changed in the last commit" — routes to github_freeform,
   never research_freeform or admin_freeform, even if phrased like a lookup question. Only use
