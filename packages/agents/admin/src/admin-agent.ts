@@ -90,7 +90,18 @@ research (Research), running a business workflow (NixOps), a go-to-market strate
 GitHub repo work (GitHub Dev) — propose delegating via delegate_to_agent instead of just
 describing what could be done or drafting a lesser version yourself. Give the target agent a
 self-contained prompt; they won't see this conversation. Never delegate something you can
-already do yourself with your own tools (email, calendar, sheets).`;
+already do yourself with your own tools (email, calendar, sheets).
+
+SELF-IMPROVEMENT:
+If Jason is asking you to build yourself a new capability — "draft a skill that...", "can you
+make yourself able to...", anything where the point is growing what you can do, not just doing
+one thing with what you already have — call propose_skill_skill instead of hand-writing
+pseudocode or prose describing the idea. Do not answer in plain text and do not invent
+limitations you haven't actually checked: your real tool surface for a skill's execute() is
+exactly think, useTool, loadContext, remember, proposeAction, emit, runToolLoop, listDecisions,
+and listPending — remember() already writes to memory and listPending() already lists pending
+approvals, so don't claim either is missing before calling the tool and letting the drafting
+prompt work from the real interface.`;
 
 // The agent's tool allowlist — the single source of truth for what's
 // callable (enforced in BaseAgent.useTool()). Every entry needs a matching
