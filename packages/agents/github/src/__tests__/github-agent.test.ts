@@ -38,6 +38,16 @@ const authorizedTools: RemoteToolDefinition[] = [
     description: 'Open a pull request',
     inputSchema: { type: 'object' },
   },
+  {
+    name: 'create_or_update_file',
+    description: 'Create or update a file',
+    inputSchema: { type: 'object' },
+  },
+  {
+    name: 'create_branch',
+    description: 'Create a branch',
+    inputSchema: { type: 'object' },
+  },
 ];
 
 function makeDeps(
@@ -193,6 +203,69 @@ describe('GitHubAgent.executeToolCall', () => {
     expect(result).toEqual({ result: { ok: true }, isError: false });
   });
 
+  it('rejects create_or_update_file when path is outside the proposed-skill staging directory', async () => {
+    const deps = makeDeps();
+    const agent = new GitHubAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c7',
+      name: 'create_or_update_file',
+      input: { path: 'packages/command-center/src/api/server.ts', content: 'x' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(String(result.result)).toContain('packages/agents/admin/src/skills/proposed/');
+    expect(deps.approval.request).not.toHaveBeenCalled();
+    expect(deps.githubClient.callTool).not.toHaveBeenCalled();
+  });
+
+  it('allows create_or_update_file under the proposed-skill staging directory, still gated by approval', async () => {
+    const deps = makeDeps();
+    const agent = new GitHubAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c8',
+      name: 'create_or_update_file',
+      input: {
+        path: 'packages/agents/admin/src/skills/proposed/example-skill.ts',
+        content: 'export const x = 1;',
+      },
+    });
+
+    expect(deps.approval.request).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ result: { ok: true }, isError: false });
+  });
+
+  it('rejects create_branch unless the branch name starts with skill-proposal/', async () => {
+    const deps = makeDeps();
+    const agent = new GitHubAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c9',
+      name: 'create_branch',
+      input: { branch: 'main' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(String(result.result)).toContain('skill-proposal/');
+    expect(deps.approval.request).not.toHaveBeenCalled();
+    expect(deps.githubClient.callTool).not.toHaveBeenCalled();
+  });
+
+  it('allows create_branch when the name starts with skill-proposal/, still gated by approval', async () => {
+    const deps = makeDeps();
+    const agent = new GitHubAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c10',
+      name: 'create_branch',
+      input: { branch: 'skill-proposal/example-skill' },
+    });
+
+    expect(deps.approval.request).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ result: { ok: true }, isError: false });
+  });
+
   it('rejects issue_write when state is "closed", even with approval available', async () => {
     const deps = makeDeps();
     const agent = new GitHubAgent(deps);
@@ -285,6 +358,8 @@ describe('GitHubAgent config', () => {
       [
         'add_issue_comment',
         'create_pull_request',
+        'create_or_update_file',
+        'create_branch',
         'issue_read',
         'issue_write',
         'pull_request_review_write',

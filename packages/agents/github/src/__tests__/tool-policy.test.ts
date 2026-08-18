@@ -60,3 +60,17 @@ describe('READ_ONLY_GITHUB_TOOLS', () => {
     expect(READ_ONLY_GITHUB_TOOLS.has('create_pull_request')).toBe(false);
   });
 });
+
+describe('GITHUB_TOOL_ALLOWLIST — propose_skill pilot additions', () => {
+  it('now includes create_or_update_file and create_branch', () => {
+    expect(GITHUB_TOOL_ALLOWLIST.has('create_or_update_file')).toBe(true);
+    expect(GITHUB_TOOL_ALLOWLIST.has('create_branch')).toBe(true);
+  });
+
+  it('still excludes push_files, delete_file, and merge/admin tools', () => {
+    expect(GITHUB_TOOL_ALLOWLIST.has('push_files')).toBe(false);
+    expect(GITHUB_TOOL_ALLOWLIST.has('delete_file')).toBe(false);
+    expect(GITHUB_TOOL_ALLOWLIST.has('merge_pull_request')).toBe(false);
+    expect(GITHUB_TOOL_ALLOWLIST.has('create_repository')).toBe(false);
+  });
+});

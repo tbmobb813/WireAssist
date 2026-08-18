@@ -13,9 +13,13 @@ import { GITHUB_TOOL_ALLOWLIST, READ_ONLY_GITHUB_TOOLS } from './tool-policy';
 import { buildGithubToolSchemas } from './tool-schemas';
 import type { GitHubMcpClient, RemoteToolDefinition } from './github-client';
 
+const PROPOSED_SKILL_PATH_PREFIX = 'packages/agents/admin/src/skills/proposed/';
+
 const GITHUB_SYSTEM_PROMPT = `You are the GitHub Dev Agent for WireAssist.
 You give JNix read access to his GitHub repos, issues, and pull requests, plus a narrow
-set of write actions: commenting, labeling, and opening pull requests as DRAFTS ONLY.
+set of write actions: commenting, labeling, opening pull requests as DRAFTS ONLY, and —
+narrowly, only for Admin's skill-proposal pilot — writing a new file under
+${PROPOSED_SKILL_PATH_PREFIX} on a skill-proposal/* branch.
 
 BOUNDARIES (non-negotiable, enforced in code — do not attempt to work around them):
 - You never merge or close an issue or pull request. issue_write can update an issue's
@@ -23,7 +27,10 @@ BOUNDARIES (non-negotiable, enforced in code — do not attempt to work around t
 - You never approve or request changes on a pull request review. pull_request_review_write
   can submit an APPROVE or REQUEST_CHANGES review — you only ever leave a COMMENT-only
   review, or work with pending/resolve-thread actions.
-- You never push commits, create/delete branches, or delete anything.
+- You never push commits, delete anything, or push multiple files at once (push_files is
+  not available to you). create_or_update_file only works for paths under
+  ${PROPOSED_SKILL_PATH_PREFIX} — nowhere else in the repo. create_branch only works for
+  branch names starting with skill-proposal/ — never any other branch.
 - You never open a pull request as anything but a draft (create_pull_request with
   draft: true, always).
 - Every write action requires JNix's explicit approval before it happens — you propose,
@@ -120,6 +127,34 @@ export class GitHubAgent extends BaseAgent {
       ) {
         return {
           result: `pull_request_review_write must not be called with event: "${call.input.event}".`,
+          isError: true,
+        };
+      }
+
+      // New file content is only ever allowed under Admin's proposed-skill
+      // staging directory — never anywhere else in the repo, regardless of
+      // what the model asks for. A file sitting there is inert (never
+      // imported, never registered) until a human moves it out as a
+      // separate, deliberate step.
+      if (
+        call.name === 'create_or_update_file' &&
+        !String(call.input.path ?? '').startsWith(PROPOSED_SKILL_PATH_PREFIX)
+      ) {
+        return {
+          result: `create_or_update_file is only allowed under ${PROPOSED_SKILL_PATH_PREFIX}`,
+          isError: true,
+        };
+      }
+
+      // Branches created by this agent are only ever for a proposed-skill
+      // PR — never a generically-named branch that could be confused with
+      // real work.
+      if (
+        call.name === 'create_branch' &&
+        !String(call.input.branch ?? call.input.ref ?? '').startsWith('skill-proposal/')
+      ) {
+        return {
+          result: 'create_branch is only allowed for branch names starting with skill-proposal/',
           isError: true,
         };
       }

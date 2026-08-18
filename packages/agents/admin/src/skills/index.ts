@@ -9,6 +9,7 @@ import { followUpNudgesSkill } from './follow-up-nudges';
 import { proactiveInsightsSkill } from './proactive-insights';
 import { budgetWarningSkill } from './budget-warning';
 import { staleApprovalsSkill } from './stale-approvals';
+import { proposeSkillSkill } from './propose-skill';
 
 export const ADMIN_SKILLS: Skill[] = [
   emailTriageSkill,
@@ -21,6 +22,7 @@ export const ADMIN_SKILLS: Skill[] = [
   proactiveInsightsSkill,
   budgetWarningSkill,
   staleApprovalsSkill,
+  proposeSkillSkill,
 ];
 
 export {
@@ -34,5 +36,6 @@ export {
   proactiveInsightsSkill,
   budgetWarningSkill,
   staleApprovalsSkill,
+  proposeSkillSkill,
 };
 export { proposeOrAutoApprove } from './propose-or-auto-approve';

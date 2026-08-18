@@ -22,9 +22,17 @@ import { logger } from '@wireassist/core/logger';
 // status — out of v1 scope entirely, not just the closing part),
 // label_write (manages the repo's label *definitions* — creating/renaming/
 // deleting label types — not applying a label to an issue, which is a
-// labels field on issue_write instead), create_or_update_file, delete_file,
-// create_branch, push_files, create_repository, fork_repository, and any
-// org/repo-admin, collaborator/team, or secret/Actions-write tool.
+// labels field on issue_write instead), delete_file, push_files,
+// create_repository, fork_repository, and any org/repo-admin,
+// collaborator/team, or secret/Actions-write tool.
+//
+// create_or_update_file and create_branch ARE allowed (added for the
+// propose_skill pilot — an Admin skill that drafts new skill code and asks
+// this agent to open a draft PR containing it) but only within the narrow
+// bounds enforced in github-agent.ts's executeToolCall(): file writes are
+// restricted to the packages/agents/admin/src/skills/proposed/ staging
+// directory, and branches must be named skill-proposal/*. Nothing else in
+// the repo is reachable through either tool.
 export const READ_ONLY_GITHUB_TOOLS = new Set([
   'issue_read',
   'pull_request_read',
@@ -53,11 +61,17 @@ export const READ_ONLY_GITHUB_TOOLS = new Set([
 //     'REQUEST_CHANGES' (a COMMENT-only review, or a pending/resolve-thread
 //     action, is fine; approving or blocking a PR is a human decision).
 //   - create_pull_request: rejected unless draft === true.
+//   - create_or_update_file: rejected unless path starts with
+//     packages/agents/admin/src/skills/proposed/.
+//   - create_branch: rejected unless the branch name starts with
+//     skill-proposal/.
 const WRITE_GITHUB_TOOLS = new Set([
   'add_issue_comment',
   'issue_write',
   'pull_request_review_write',
   'create_pull_request',
+  'create_or_update_file',
+  'create_branch',
 ]);
 
 export const GITHUB_TOOL_ALLOWLIST = new Set([...READ_ONLY_GITHUB_TOOLS, ...WRITE_GITHUB_TOOLS]);
