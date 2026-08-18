@@ -90,6 +90,36 @@ On first agent startup, a browser OAuth flow runs and saves the token. Gmail, Ca
 
 If you generated a token before Sheets support was added, it's missing the `spreadsheets` scope — `gmail.authenticate()` detects this automatically (`hasRequiredScopes()` checks the full scope list) and re-runs the OAuth flow next time an agent starts. No manual token deletion needed, just complete the re-auth prompt.
 
+### GitHub Dev Agent
+
+The GitHub Dev Agent is the first agent in this codebase to speak the real Model Context Protocol — it connects to [GitHub's official hosted MCP server](https://api.githubcopilot.com/mcp/) rather than a hand-rolled REST client. It's optional: if credentials are missing or the connection fails, the rest of WireAssist still boots (same as Gmail/Calendar).
+
+1. GitHub → Settings → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → Generate new token.
+2. Repository access: an explicit list of the repos you want it to see (recommended, smaller blast radius) rather than "All repositories."
+3. Permissions — grant only:
+   - **Contents**: Read-only
+   - **Issues**: Read and write
+   - **Pull requests**: Read and write
+   - **Metadata**: Read-only (required baseline for every fine-grained token)
+
+   Do **not** grant Administration, Webhooks, Secrets, or any Actions-write permission — the agent never needs them, and its own tool allowlist (`packages/agents/github/src/tool-policy.ts`) refuses to call anything outside read/comment/label/draft-PR regardless of what the token could technically do.
+
+Place the token at:
+
+```text
+~/.wireassist/github-credentials.json
+```
+
+```json
+{ "personalAccessToken": "github_pat_..." }
+```
+
+(Or `$WIREASSIST_HOME/.wireassist/github-credentials.json` with a custom base directory, same convention as Gmail.)
+
+On startup, check the logs for either a successful connection or `⚠️ GitHub agent unavailable` — the latter means the credentials file is missing/malformed, the token is invalid, or the MCP connection failed (network, GitHub outage). A per-tool `⚠️ GitHub MCP server did not advertise allowlisted tool "..."` warning means the token's permissions don't cover something the agent expects — usually a missing Issues/Pull requests scope.
+
+The agent never merges, closes, or pushes — it can read anything the token can see, and can comment, label, or open **draft-only** pull requests, always gated behind the approval queue the same way every other agent's mutations are.
+
 ### Desktop app (frozen)
 
 The Tauri package under `wireassist/aia/` is shelved. Skip this section unless you are reviving **WireAssist Desktop**.

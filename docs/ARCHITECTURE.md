@@ -107,12 +107,13 @@ Sheets is the same OAuth client/token as Gmail and Calendar — a token generate
 
 ### Other agents
 
-| Package                      | Path                        | Role                                                                                                                                                                                                             |
-| ---------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@wireassist/agent-content`  | `packages/agents/content/`  | Generates and schedules posts. Uses `@wireassist/trendpost-mcp` for storage and MCP tools.                                                                                                                       |
-| `@wireassist/agent-research` | `packages/agents/research/` | Web search and synthesis into structured findings.                                                                                                                                                               |
-| `@wireassist/agent-ops`      | `packages/agents/ops/`      | NixOps — runs real business workflows (defined as markdown in `context/workflows/*.md`) through the DATA loop (Diagnose, Assemble, Take action, Assess), gated by a per-workflow trust stage (`trust-stage.ts`). |
-| `@wireassist/agent-gtm`      | `packages/agents/gtm/`      | Go-to-market strategy and psychological marketing tactics; can pre-fill from a project's own repo docs.                                                                                                          |
+| Package                      | Path                        | Role                                                                                                                                                                                                                                       |
+| ---------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@wireassist/agent-content`  | `packages/agents/content/`  | Generates and schedules posts. Uses `@wireassist/trendpost-mcp` for storage and MCP tools.                                                                                                                                                 |
+| `@wireassist/agent-research` | `packages/agents/research/` | Web search and synthesis into structured findings.                                                                                                                                                                                         |
+| `@wireassist/agent-ops`      | `packages/agents/ops/`      | NixOps — runs real business workflows (defined as markdown in `context/workflows/*.md`) through the DATA loop (Diagnose, Assemble, Take action, Assess), gated by a per-workflow trust stage (`trust-stage.ts`).                           |
+| `@wireassist/agent-gtm`      | `packages/agents/gtm/`      | Go-to-market strategy and psychological marketing tactics; can pre-fill from a project's own repo docs.                                                                                                                                    |
+| `@wireassist/agent-github`   | `packages/agents/github/`   | Reads GitHub issues/PRs/code and can comment, label, or open draft-only PRs (never merge/close/push) — the first agent to speak the real Model Context Protocol against GitHub's hosted MCP server, rather than a hand-rolled REST client. |
 
 **NixOps trust ladder** (`packages/agents/ops/src/trust-stage.ts`), stored per-workflow in `$WIREASSIST_HOME/.wireassist/ops-trust.json`:
 
@@ -246,13 +247,14 @@ Email triage additionally emits `agent:triage_complete` with structured per-emai
 
 ## Data locations
 
-| Path                                   | Contents                                               |
-| -------------------------------------- | ------------------------------------------------------ |
-| `~/.wireassist/gmail-credentials.json` | Google OAuth client secret (user-provided)             |
-| `~/.wireassist/gmail-token.json`       | OAuth access + refresh token (Gmail, Calendar, Sheets) |
-| `~/.wireassist/wireassist.db`          | Approvals, memory, portfolio/focus (Command Center)    |
-| `~/.wireassist/ops-trust.json`         | Per-workflow NixOps trust stage                        |
-| `~/.wireassist/budget.json`            | Month-to-date spend tracking                           |
+| Path                                    | Contents                                               |
+| --------------------------------------- | ------------------------------------------------------ |
+| `~/.wireassist/gmail-credentials.json`  | Google OAuth client secret (user-provided)             |
+| `~/.wireassist/gmail-token.json`        | OAuth access + refresh token (Gmail, Calendar, Sheets) |
+| `~/.wireassist/github-credentials.json` | GitHub PAT for the real MCP client (user-provided)     |
+| `~/.wireassist/wireassist.db`           | Approvals, memory, portfolio/focus (Command Center)    |
+| `~/.wireassist/ops-trust.json`          | Per-workflow NixOps trust stage                        |
+| `~/.wireassist/budget.json`             | Month-to-date spend tracking                           |
 
 Override base directory with `WIREASSIST_HOME` (in Docker: `/data`, via the named volume).
 

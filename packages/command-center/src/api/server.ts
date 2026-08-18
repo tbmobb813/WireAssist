@@ -43,6 +43,12 @@ import {
   prefillFromRepoDoc,
   type GtmProductInput,
 } from '@wireassist/agent-gtm';
+import {
+  GitHubAgent,
+  GitHubTasks,
+  GitHubMcpClient,
+  resolveAuthorizedGithubTools,
+} from '@wireassist/agent-github';
 import { registerTrendPostTools, TrendPostStorage } from '@wireassist/trendpost-mcp';
 import { registerPortfolioRoutes } from './portfolio-routes';
 import { registerObjectiveRoutes } from './objective-routes';
@@ -64,6 +70,8 @@ let contentAgent: ContentAgent;
 let researchAgent: ResearchAgent;
 let opsAgent: NixOpsAgent;
 let gtmAgent: GtmAgent;
+let githubAgent: GitHubAgent | undefined;
+let githubReady = false;
 let trendpostStorage: TrendPostStorage;
 let agentReady = false;
 let gmailReady = false;
@@ -156,6 +164,23 @@ function queueGtmTask(task: Parameters<GtmAgent['run']>[0]) {
   return task;
 }
 
+/** Run one GitHub task at a time. */
+let githubTaskChain: Promise<void> = Promise.resolve();
+
+function queueGithubTask(task: Parameters<GitHubAgent['run']>[0]) {
+  if (!githubAgent) {
+    console.error(
+      'GitHub task queued but the GitHub agent never connected — dropping task',
+      task.id
+    );
+    return task;
+  }
+  const agent = githubAgent;
+  emitTaskQueued(task);
+  githubTaskChain = githubTaskChain.then(() => agent.run(task)).catch(logAgentTaskError);
+  return task;
+}
+
 function sqliteSetupHint(): string {
   return (
     'SQLite (better-sqlite3) is not built. Run:\n' +
@@ -236,6 +261,7 @@ events.on('agent:gmail_reauth_needed', (p) => broadcast('gmail_reauth_needed', p
 events.on('agent:ops_publish_failed', (p) => broadcast('ops_publish_failed', p));
 events.on('agent:gtm_generated', (p) => broadcast('gtm_generated', p));
 events.on('agent:gtm_psych_generated', (p) => broadcast('gtm_psych_generated', p));
+events.on('agent:github_freeform_response', (p) => broadcast('github_freeform_response', p));
 events.on('agent:auto_approved', (p) => broadcast('auto_approved', p));
 events.on('agent:daily_briefing_complete', (p) => broadcast('daily_briefing_complete', p));
 events.on('agent:follow_up_nudges_complete', (p) => broadcast('follow_up_nudges_complete', p));
@@ -256,6 +282,7 @@ events.on('agent:handoff_requested', (p) => {
     research: (t) => queueResearchTask(t as Parameters<ResearchAgent['run']>[0]),
     strategy: (t) => queueOpsTask(t as Parameters<NixOpsAgent['run']>[0]),
     gtm: (t) => queueGtmTask(t as Parameters<GtmAgent['run']>[0]),
+    github: (t) => queueGithubTask(t as Parameters<GitHubAgent['run']>[0]),
     admin: (t) => queueAgentTask(t as Parameters<AdminAgent['run']>[0]),
   });
   if (routed) broadcast('handoff_queued', p);
@@ -282,6 +309,26 @@ async function bootstrap() {
 
   // GTM Agent — go-to-market strategy and psych tactics generation
   gtmAgent = new GtmAgent({ approval, memory, mcp, events });
+
+  // GitHub Dev Agent — real MCP client against GitHub's hosted MCP server
+  // (the first agent in this codebase to speak the actual Model Context
+  // Protocol rather than WireAssist's own internal tool registry). Connection
+  // must succeed before toolSchemas can be built (the tool catalog is fetched
+  // live via tools/list), so — like Gmail/Calendar — this degrades gracefully:
+  // GitHub tools unavailable but the rest of the app still boots if the PAT
+  // is missing/invalid or the network is down.
+  try {
+    const githubClient = new GitHubMcpClient();
+    await githubClient.connect();
+    const authorizedTools = resolveAuthorizedGithubTools(await githubClient.listRemoteTools());
+    githubAgent = new GitHubAgent({ approval, memory, mcp, events, githubClient, authorizedTools });
+    githubReady = true;
+  } catch (err) {
+    console.warn(
+      '⚠️  GitHub agent unavailable (credentials missing/invalid or MCP connection failed). Other agents still work.',
+      err instanceof Error ? err.message : err
+    );
+  }
 
   // Admin Agent — always constructed so freeform chat works without Gmail/Calendar
   // credentials. Gmail/Calendar tools register separately below; email/calendar-
@@ -385,6 +432,12 @@ app.get('/api/agent/status', (c) => {
       role: 'gtm',
       name: 'GTM Agent',
       status: gtmAgent?.status ?? 'idle',
+    },
+    github: {
+      role: 'github',
+      name: 'GitHub Dev Agent',
+      status: githubAgent?.status ?? 'idle',
+      ready: githubReady,
     },
   });
 });
@@ -1041,6 +1094,20 @@ app.post('/api/tasks/gtm-freeform', async (c) => {
     typeof objectiveId === 'string' ? objectiveId : undefined
   );
   queueGtmTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/github-freeform', async (c) => {
+  if (!githubReady) return c.json({ error: 'GitHub agent not configured' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const { prompt, objectiveId } = await c.req.json();
+  if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
+  const task = GitHubTasks.freeform(
+    prompt,
+    undefined,
+    typeof objectiveId === 'string' ? objectiveId : undefined
+  );
+  queueGithubTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
 

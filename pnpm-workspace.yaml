@@ -9,6 +9,7 @@ packages:
   - 'packages/agents/research'
   - 'packages/agents/ops'
   - 'packages/agents/gtm'
+  - 'packages/agents/github'
   - 'packages/telegram-bot'
 
 allowBuilds:

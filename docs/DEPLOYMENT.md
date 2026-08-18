@@ -239,6 +239,19 @@ docker run --rm -v wireassist_wireassist-data:/data -v /tmp:/src busybox \
   sh -c "mkdir -p /data/.wireassist && cp /src/gmail-credentials.json /src/gmail-token.json /data/.wireassist/"
 ```
 
+If you're also using the GitHub Dev Agent, copy its credentials file into the same
+volume the same way (see `docs/SETUP.md`'s "GitHub Dev Agent" section for how to
+generate the token):
+
+```bash
+# From your laptop:
+scp ~/.wireassist/github-credentials.json user@vps-host:/tmp/
+
+# Back on the VPS:
+docker run --rm -v wireassist_wireassist-data:/data -v /tmp:/src busybox \
+  sh -c "cp /src/github-credentials.json /data/.wireassist/"
+```
+
 (Volume name is `<project-dir-name>_wireassist-data` — check the real name
 with `docker volume ls` if the clone directory isn't `wireassist`.)
 

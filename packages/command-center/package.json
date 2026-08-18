@@ -26,6 +26,7 @@
     "@wireassist/agent-research": "workspace:*",
     "@wireassist/agent-ops": "workspace:*",
     "@wireassist/agent-gtm": "workspace:*",
+    "@wireassist/agent-github": "workspace:*",
     "@wireassist/core": "workspace:*",
     "@wireassist/trendpost-mcp": "workspace:*",
     "better-sqlite3": "^12.11.1",

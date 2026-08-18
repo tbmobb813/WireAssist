@@ -24,6 +24,7 @@ COPY packages/agents/content/package.json packages/agents/content/package.json
 COPY packages/agents/research/package.json packages/agents/research/package.json
 COPY packages/agents/ops/package.json packages/agents/ops/package.json
 COPY packages/agents/gtm/package.json packages/agents/gtm/package.json
+COPY packages/agents/github/package.json packages/agents/github/package.json
 COPY packages/trendpost-mcp/package.json packages/trendpost-mcp/package.json
 COPY packages/marketing/package.json packages/marketing/package.json
 COPY packages/command-center/package.json packages/command-center/package.json

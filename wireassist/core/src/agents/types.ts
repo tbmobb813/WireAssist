@@ -1,7 +1,7 @@
 import type { ProviderType } from '../types';
 import type { ProviderToolDefinition } from '../providers/base';
 
-export type AgentRole = 'admin' | 'content' | 'research' | 'strategy' | 'gtm';
+export type AgentRole = 'admin' | 'content' | 'research' | 'strategy' | 'gtm' | 'github';
 
 export type AgentStatus = 'idle' | 'running' | 'waiting_approval' | 'error';
 
