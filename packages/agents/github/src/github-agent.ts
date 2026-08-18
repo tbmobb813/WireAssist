@@ -85,6 +85,17 @@ export class GitHubAgent extends BaseAgent {
     return READ_ONLY_GITHUB_TOOLS.has(toolName);
   }
 
+  // Lets a plain HTTP route call an allowlisted read-only GitHub tool
+  // directly — bypassing agent.think()/the LLM tool-loop entirely — for
+  // deterministic lookups (e.g. listing repos for a UI picker) that don't
+  // need conversational reasoning and shouldn't cost a model call.
+  async callReadOnlyTool(name: string, input: Record<string, unknown> = {}): Promise<unknown> {
+    if (!this.isReadOnlyTool(name)) {
+      throw new Error(`"${name}" is not an allowlisted read-only GitHub tool`);
+    }
+    return this.githubClient.callTool(name, input);
+  }
+
   protected async executeToolCall(
     task: AgentTask,
     call: ProviderToolCall

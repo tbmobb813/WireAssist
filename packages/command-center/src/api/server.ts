@@ -183,6 +183,62 @@ function queueGithubTask(task: Parameters<GitHubAgent['run']>[0]) {
   return task;
 }
 
+// GitHubMcpClient.callTool() returns MCP's array-of-content-blocks shape
+// ([{ type: 'text', text: '...' }]) — extract the first text block, parse it
+// as JSON, and normalize to a flat repo list. Field names aren't verified
+// live yet (SSH to the VPS is unreachable from this sandbox), so this
+// defensively accepts both GitHub REST-style snake_case and camelCase keys
+// rather than assuming one exact shape.
+interface RepoSummary {
+  id: string;
+  name: string;
+  fullName: string;
+  url: string;
+  description: string | null;
+  private: boolean;
+}
+
+function parseRepoSearchResult(raw: unknown): RepoSummary[] {
+  const blocks = Array.isArray(raw) ? raw : [];
+  const textBlock = blocks.find(
+    (b): b is { type: string; text: string } =>
+      typeof b === 'object' && b !== null && (b as { type?: unknown }).type === 'text'
+  );
+  if (!textBlock) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(textBlock.text);
+  } catch {
+    return [];
+  }
+
+  const items: unknown[] = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray((parsed as { items?: unknown[] })?.items)
+      ? (parsed as { items: unknown[] }).items
+      : Array.isArray((parsed as { repositories?: unknown[] })?.repositories)
+        ? (parsed as { repositories: unknown[] }).repositories
+        : [];
+
+  return items
+    .map((item) => {
+      const r = item as Record<string, unknown>;
+      const fullName = (r.full_name ?? r.fullName ?? r.name ?? '') as string;
+      const url = (r.html_url ?? r.htmlUrl ?? r.url ?? '') as string;
+      if (!fullName || !url) return null;
+      return {
+        id: String(r.id ?? fullName),
+        name: (r.name ?? fullName.split('/').pop() ?? fullName) as string,
+        fullName,
+        url,
+        description: (r.description ?? null) as string | null,
+        private: Boolean(r.private ?? r.isPrivate ?? false),
+      };
+    })
+    .filter((r): r is RepoSummary => r !== null);
+}
+
 function sqliteSetupHint(): string {
   return (
     'SQLite (better-sqlite3) is not built. Run:\n' +
@@ -443,6 +499,25 @@ app.get('/api/agent/status', (c) => {
       ready: githubReady,
     },
   });
+});
+
+// Deterministic (non-LLM) repo list for UI pickers — bypasses the GitHub
+// agent's chat/tool-loop entirely via callReadOnlyTool().
+app.get('/api/github/repos', async (c) => {
+  if (!githubAgent || !githubReady) {
+    return c.json({ error: 'GitHub agent not connected', repos: [] }, 503);
+  }
+  try {
+    const owner = process.env.GITHUB_USERNAME ?? 'tbmobb813';
+    const raw = await githubAgent.callReadOnlyTool('search_repositories', {
+      query: `user:${owner}`,
+      perPage: 100,
+    });
+    return c.json({ repos: parseRepoSearchResult(raw) });
+  } catch (err) {
+    logger.error('GitHub repo list failed', err instanceof Error ? err.message : err);
+    return c.json({ error: 'Failed to list GitHub repos', repos: [] }, 502);
+  }
 });
 
 // Recent agent events (for activity feed on load / missed SSE)

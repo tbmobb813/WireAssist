@@ -8,6 +8,12 @@ import { useState } from 'react';
 const LANES = ['product', 'career', 'client', 'personal'] as const;
 type Lane = (typeof LANES)[number];
 
+interface GithubRepo {
+  fullName: string;
+  name: string;
+  url: string;
+}
+
 export default function NewProjectForm({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -15,6 +21,26 @@ export default function NewProjectForm({ onCreated }: { onCreated: () => void })
   const [startActive, setStartActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [repos, setRepos] = useState<GithubRepo[]>([]);
+  const [repoFullName, setRepoFullName] = useState('');
+
+  async function openForm() {
+    setOpen(true);
+    try {
+      const res = await fetch('/api/github/repos');
+      if (!res.ok) return; // GitHub not connected — picker just stays empty
+      const body = await res.json();
+      setRepos(body.repos ?? []);
+    } catch {
+      // Network error — same as above, form still works without the picker
+    }
+  }
+
+  function selectRepo(fullName: string) {
+    setRepoFullName(fullName);
+    const repo = repos.find((r) => r.fullName === fullName);
+    if (repo && !name.trim()) setName(repo.name);
+  }
 
   async function submit() {
     setError(null);
@@ -23,6 +49,7 @@ export default function NewProjectForm({ onCreated }: { onCreated: () => void })
       return;
     }
     setSaving(true);
+    const repo = repos.find((r) => r.fullName === repoFullName);
     const res = await fetch('/api/portfolio/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -30,6 +57,7 @@ export default function NewProjectForm({ onCreated }: { onCreated: () => void })
         name: name.trim(),
         lane,
         status: startActive ? 'active' : 'paused',
+        metadata: repo ? { githubRepo: { fullName: repo.fullName, url: repo.url } } : undefined,
       }),
     });
     setSaving(false);
@@ -41,6 +69,7 @@ export default function NewProjectForm({ onCreated }: { onCreated: () => void })
     setName('');
     setLane('product');
     setStartActive(true);
+    setRepoFullName('');
     setOpen(false);
     onCreated();
   }
@@ -48,7 +77,7 @@ export default function NewProjectForm({ onCreated }: { onCreated: () => void })
   if (!open) {
     return (
       <button
-        onClick={() => setOpen(true)}
+        onClick={openForm}
         className="rounded border border-white/30 px-3 py-2 text-sm hover:bg-white/10"
       >
         + New project
@@ -78,6 +107,22 @@ export default function NewProjectForm({ onCreated }: { onCreated: () => void })
           ))}
         </select>
       </div>
+      {repos.length > 0 && (
+        <select
+          value={repoFullName}
+          onChange={(e) => selectRepo(e.target.value)}
+          className="mt-3 w-full rounded border border-white/20 bg-transparent p-2 text-sm outline-none focus:border-white"
+        >
+          <option value="" className="bg-black">
+            Link a GitHub repo (optional)
+          </option>
+          {repos.map((r) => (
+            <option key={r.fullName} value={r.fullName} className="bg-black">
+              {r.fullName}
+            </option>
+          ))}
+        </select>
+      )}
       <label className="mt-3 flex items-center gap-2 text-xs opacity-70">
         <input
           type="checkbox"
@@ -99,6 +144,7 @@ export default function NewProjectForm({ onCreated }: { onCreated: () => void })
           onClick={() => {
             setOpen(false);
             setError(null);
+            setRepoFullName('');
           }}
           className="rounded border border-white/30 px-3 py-1.5 text-xs hover:bg-white/10"
         >

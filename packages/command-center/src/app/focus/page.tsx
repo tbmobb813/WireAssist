@@ -10,6 +10,7 @@ interface Project {
   lane: string;
   status: string;
   resumeNote: string | null;
+  metadata?: { githubRepo?: { fullName: string; url: string } } | null;
 }
 
 export default function FocusPage() {
@@ -108,7 +109,8 @@ export default function FocusPage() {
               </option>
               {active.map((p) => (
                 <option key={p.id} value={p.id} className="bg-black">
-                  {p.name} ({p.lane})
+                  {p.name} ({p.lane}
+                  {p.metadata?.githubRepo ? ` — ${p.metadata.githubRepo.fullName}` : ''})
                 </option>
               ))}
             </select>
@@ -139,6 +141,16 @@ export default function FocusPage() {
                     {p.resumeNote && (
                       <span className="block text-xs opacity-50">{p.resumeNote}</span>
                     )}
+                    {p.metadata?.githubRepo && (
+                      <a
+                        href={p.metadata.githubRepo.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block text-xs opacity-60 hover:opacity-100"
+                      >
+                        ↗ {p.metadata.githubRepo.fullName}
+                      </a>
+                    )}
                   </span>
                   <button
                     onClick={() => activate(p.id)}
@@ -166,7 +178,8 @@ export default function FocusPage() {
                 </option>
                 {icebox.map((p) => (
                   <option key={p.id} value={p.id} className="bg-black">
-                    {p.name} ({p.lane})
+                    {p.name} ({p.lane}
+                    {p.metadata?.githubRepo ? ` — ${p.metadata.githubRepo.fullName}` : ''})
                   </option>
                 ))}
               </select>

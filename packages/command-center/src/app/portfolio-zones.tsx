@@ -7,12 +7,19 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import NewProjectForm from './new-project-form';
 
+interface GithubRepo {
+  fullName: string;
+  name: string;
+  url: string;
+}
+
 interface Project {
   id: string;
   name: string;
   lane: string;
   status: 'active' | 'paused' | 'icebox' | 'done';
   resumeNote: string | null;
+  metadata?: { githubRepo?: { fullName: string; url: string } } | null;
 }
 
 interface Today {
@@ -28,6 +35,7 @@ export default function PortfolioZones() {
   const [icebox, setIcebox] = useState<Project[]>([]);
   const [showIcebox, setShowIcebox] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [repos, setRepos] = useState<GithubRepo[]>([]);
 
   const refresh = useCallback(async () => {
     const [t, p, i] = await Promise.all([
@@ -46,7 +54,22 @@ export default function PortfolioZones() {
 
   useEffect(() => {
     refresh().catch(() => setError('Portfolio API unreachable'));
+    fetch('/api/github/repos')
+      .then((r) => (r.ok ? r.json() : { repos: [] }))
+      .then((body) => setRepos(body.repos ?? []))
+      .catch(() => setRepos([]));
   }, [refresh]);
+
+  async function linkRepo(projectId: string, fullName: string) {
+    const repo = repos.find((r) => r.fullName === fullName);
+    if (!repo) return;
+    const res = await fetch(`/api/portfolio/projects/${projectId}/metadata`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ githubRepo: { fullName: repo.fullName, url: repo.url } }),
+    });
+    if (res.ok) await refresh();
+  }
 
   async function transition(id: string, to: Project['status']) {
     setError(null);
@@ -100,7 +123,7 @@ export default function PortfolioZones() {
         </div>
         <div className="mt-2 space-y-2">
           {today.active.map((p) => (
-            <Row key={p.id} p={p}>
+            <Row key={p.id} p={p} repos={repos} onLinkRepo={linkRepo}>
               <Btn onClick={() => transition(p.id, 'paused')}>Pause</Btn>
               <Btn onClick={() => transition(p.id, 'done')}>Done</Btn>
             </Row>
@@ -112,7 +135,7 @@ export default function PortfolioZones() {
         <h3 className="text-sm uppercase tracking-wide opacity-60">Paused ({paused.length})</h3>
         <div className="mt-2 space-y-2">
           {paused.map((p) => (
-            <Row key={p.id} p={p}>
+            <Row key={p.id} p={p} repos={repos} onLinkRepo={linkRepo}>
               <Btn onClick={() => transition(p.id, 'active')}>Activate</Btn>
               <Btn onClick={() => transition(p.id, 'icebox')}>Icebox</Btn>
             </Row>
@@ -130,7 +153,7 @@ export default function PortfolioZones() {
         {showIcebox && (
           <div className="mt-2 space-y-2">
             {icebox.map((p) => (
-              <Row key={p.id} p={p} dim>
+              <Row key={p.id} p={p} repos={repos} onLinkRepo={linkRepo} dim>
                 <Btn onClick={() => transition(p.id, 'paused')}>Wake</Btn>
               </Row>
             ))}
@@ -141,7 +164,20 @@ export default function PortfolioZones() {
   );
 }
 
-function Row({ p, dim, children }: { p: Project; dim?: boolean; children: ReactNode }) {
+function Row({
+  p,
+  dim,
+  children,
+  repos,
+  onLinkRepo,
+}: {
+  p: Project;
+  dim?: boolean;
+  children: ReactNode;
+  repos: GithubRepo[];
+  onLinkRepo: (projectId: string, fullName: string) => void;
+}) {
+  const repo = p.metadata?.githubRepo;
   return (
     <div
       className={`flex items-center justify-between rounded border border-white/10 p-3 ${
@@ -151,6 +187,33 @@ function Row({ p, dim, children }: { p: Project; dim?: boolean; children: ReactN
       <span>
         {p.name} <span className="text-xs opacity-50">({p.lane})</span>
         {p.resumeNote && <span className="block text-xs opacity-50">{p.resumeNote}</span>}
+        {repo ? (
+          <a
+            href={repo.url}
+            target="_blank"
+            rel="noreferrer"
+            className="block text-xs opacity-60 hover:opacity-100"
+          >
+            ↗ {repo.fullName}
+          </a>
+        ) : (
+          repos.length > 0 && (
+            <select
+              defaultValue=""
+              onChange={(e) => e.target.value && onLinkRepo(p.id, e.target.value)}
+              className="mt-1 rounded border border-white/20 bg-transparent p-1 text-xs opacity-70 outline-none focus:border-white"
+            >
+              <option value="" className="bg-black">
+                Link GitHub repo…
+              </option>
+              {repos.map((r) => (
+                <option key={r.fullName} value={r.fullName} className="bg-black">
+                  {r.fullName}
+                </option>
+              ))}
+            </select>
+          )
+        )}
       </span>
       <span className="flex gap-2">{children}</span>
     </div>
