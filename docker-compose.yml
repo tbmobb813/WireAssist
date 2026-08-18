@@ -13,6 +13,11 @@ services:
       # proxies /api/* to it internally (next.config.ts), and the
       # telegram-bot service reaches it over the compose network.
       - '100.71.202.102:3001:3001'
+      # Loopback-only fallback, independent of Tailscale: if the tailnet is
+      # down or misbehaving, `ssh -L 3001:127.0.0.1:3001 <host>` still reaches
+      # the dashboard through SSH alone. Never reachable except via SSH
+      # tunnel or a process on the VPS itself — not a public exposure.
+      - '127.0.0.1:3001:3001'
     env_file:
       - .env
     environment:
