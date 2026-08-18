@@ -1,6 +1,5 @@
 'use client';
 import { useState, useCallback, useRef, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
 import { setContentHandoff } from '@/lib/content-handoff';
@@ -170,13 +169,7 @@ export default function ResearchPage() {
   };
 
   return (
-    <div className="min-h-screen p-8 max-w-3xl mx-auto">
-      <div className="mb-6">
-        <Link href="/" className="text-xs text-gray-600 hover:text-accent tracking-widest">
-          ← COMMAND CENTER
-        </Link>
-      </div>
-
+    <div className="p-8 max-w-3xl mx-auto">
       <div className="mb-8">
         <div className="text-xs tracking-widest text-accent mb-2">WIREASSIST // RESEARCH</div>
         <h1 className="text-3xl font-black">RESEARCH AGENT</h1>

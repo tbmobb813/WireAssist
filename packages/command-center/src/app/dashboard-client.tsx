@@ -3,7 +3,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAgentEvents, type AgentEvent } from '@/hooks/useAgentEvents';
 import Link from 'next/link';
 import PortfolioZones from './portfolio-zones';
-import { ObjectivePicker, useActiveObjectives } from './objective-picker';
+import DashboardHero from './dashboard-hero';
+import DashboardBudgetTile from './dashboard-budget-tile';
+import DashboardUpcomingTile from './dashboard-upcoming-tile';
+import DashboardQuickNoteTile from './dashboard-quicknote-tile';
+import DashboardWorkforceTile from './dashboard-workforce-tile';
+import DashboardActivityTile from './dashboard-activity-tile';
 
 interface AgentCard {
   role: string;
@@ -18,33 +23,6 @@ interface UpcomingEvent {
   end: string;
 }
 
-function greeting(date: Date): string {
-  const h = date.getHours();
-  if (h < 5) return 'Working late';
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  if (h < 21) return 'Good evening';
-  return 'Working late';
-}
-
-function formatEventWhen(iso: string): string {
-  const d = new Date(iso);
-  const isAllDay = !iso.includes('T');
-  const today = new Date();
-  const isToday = d.toDateString() === today.toDateString();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  const isTomorrow = d.toDateString() === tomorrow.toDateString();
-
-  const time = isAllDay
-    ? 'All day'
-    : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-
-  if (isToday) return time;
-  if (isTomorrow) return `Tomorrow ${isAllDay ? '' : time}`.trim();
-  return `${d.toLocaleDateString([], { weekday: 'short' })} ${isAllDay ? '' : time}`.trim();
-}
-
 interface DashboardLocation {
   lat: number;
   lon: number;
@@ -56,39 +34,10 @@ interface Weather {
   code: number;
 }
 
-// WMO weather codes (Open-Meteo) collapsed to a small icon set.
-function weatherIcon(code: number): string {
-  if (code === 0) return '☀️';
-  if (code <= 2) return '🌤️';
-  if (code === 3) return '☁️';
-  if (code === 45 || code === 48) return '🌫️';
-  if (code >= 51 && code <= 67) return '🌧️';
-  if (code >= 71 && code <= 77) return '🌨️';
-  if (code >= 80 && code <= 82) return '🌦️';
-  if (code >= 95) return '⛈️';
-  return '🌡️';
-}
-
 interface QuickNote {
   id: string;
   text: string;
   createdAt: string;
-}
-
-// role 'strategy' is NixOps — there's no dedicated 'ops' AgentRole yet.
-function agentLink(role: string): { href: string; label: string } {
-  switch (role) {
-    case 'content':
-      return { href: '/content', label: 'Open content' };
-    case 'gtm':
-      return { href: '/gtm', label: 'Open GTM' };
-    case 'research':
-      return { href: '/research', label: 'Open research' };
-    case 'strategy':
-      return { href: '/ops', label: 'Open ops' };
-    default:
-      return { href: '/chat', label: 'Ask via chat' };
-  }
 }
 
 interface ActivityItem {
@@ -289,160 +238,6 @@ function describeEvent(event: string, payload: unknown): { description: string; 
   }
 }
 
-// Events whose payload carries more than the one-line summary shown in the
-// feed — the row can be expanded to see it instead of it being discarded.
-function hasExpandableDetail(event: string): boolean {
-  return event === 'triage_complete' || event === 'calendar_review_complete';
-}
-
-function TriageDetail({ payload }: { payload: unknown }) {
-  const p = payload as {
-    categories?: {
-      urgent?: { threadId: string; from: string; subject: string; reason: string }[];
-      replyNeeded?: { threadId: string; from: string; subject: string; draftReply: string }[];
-      fyi?: { threadId: string; from: string; subject: string }[];
-      ignore?: { threadId: string; reason: string }[];
-    };
-  };
-  const c = p.categories ?? {};
-  return (
-    <div className="space-y-3">
-      {(c.urgent?.length ?? 0) > 0 && (
-        <div>
-          <div className="text-xs uppercase tracking-wide text-red-400 mb-1">Urgent</div>
-          <div className="space-y-1">
-            {c.urgent!.map((e, i) => (
-              <div key={i} className="rounded border border-white/10 p-2 text-xs">
-                <div className="text-gray-300">
-                  <span className="opacity-60">{e.from}</span> — {e.subject}
-                </div>
-                <div className="mt-1 opacity-60">{e.reason}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {(c.replyNeeded?.length ?? 0) > 0 && (
-        <div>
-          <div className="text-xs uppercase tracking-wide text-amber-400 mb-1">Reply needed</div>
-          <div className="space-y-1">
-            {c.replyNeeded!.map((e, i) => (
-              <div key={i} className="rounded border border-white/10 p-2 text-xs">
-                <div className="text-gray-300">
-                  <span className="opacity-60">{e.from}</span> — {e.subject}
-                </div>
-                <div className="mt-1 opacity-60 italic">&quot;{e.draftReply}&quot;</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {(c.fyi?.length ?? 0) > 0 && (
-        <div>
-          <div className="text-xs uppercase tracking-wide text-sky-400 mb-1">FYI</div>
-          <div className="space-y-1">
-            {c.fyi!.map((e, i) => (
-              <div key={i} className="rounded border border-white/10 p-2 text-xs text-gray-300">
-                <span className="opacity-60">{e.from}</span> — {e.subject}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {(c.ignore?.length ?? 0) > 0 && (
-        <div>
-          <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">
-            Ignored ({c.ignore!.length})
-          </div>
-          <div className="space-y-1">
-            {c.ignore!.map((e, i) => (
-              <div key={i} className="text-xs opacity-50">
-                {e.reason}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CalendarReviewDetail({ payload }: { payload: unknown }) {
-  const p = payload as {
-    events?: { id: string; summary: string; start: string; end: string }[];
-    review?: {
-      conflicts?: { event1: string; event2: string; overlap: string }[];
-      overloadedDays?: { date: string; eventCount: number; recommendation: string }[];
-      suggestions?: { type: string; description: string; action: string }[];
-    };
-  };
-  const r = p.review ?? {};
-  const events = p.events ?? [];
-  return (
-    <div className="space-y-3">
-      {(r.conflicts?.length ?? 0) > 0 && (
-        <div>
-          <div className="text-xs uppercase tracking-wide text-red-400 mb-1">Conflicts</div>
-          <div className="space-y-1">
-            {r.conflicts!.map((c, i) => (
-              <div key={i} className="rounded border border-white/10 p-2 text-xs text-gray-300">
-                {c.event1} ↔ {c.event2}
-                <div className="mt-1 opacity-60">{c.overlap}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {(r.overloadedDays?.length ?? 0) > 0 && (
-        <div>
-          <div className="text-xs uppercase tracking-wide text-amber-400 mb-1">Overloaded days</div>
-          <div className="space-y-1">
-            {r.overloadedDays!.map((d, i) => (
-              <div key={i} className="rounded border border-white/10 p-2 text-xs text-gray-300">
-                {d.date} — {d.eventCount} events
-                <div className="mt-1 opacity-60">{d.recommendation}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {(r.suggestions?.length ?? 0) > 0 && (
-        <div>
-          <div className="text-xs uppercase tracking-wide text-sky-400 mb-1">Suggestions</div>
-          <div className="space-y-1">
-            {r.suggestions!.map((s, i) => (
-              <div key={i} className="rounded border border-white/10 p-2 text-xs text-gray-300">
-                <span className="opacity-60">{s.type}</span> — {s.description}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {events.length > 0 && (
-        <div>
-          <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">
-            Events in window ({events.length})
-          </div>
-          <div className="space-y-1">
-            {events.map((e) => (
-              <div key={e.id} className="text-xs text-gray-400">
-                {e.summary} — {new Date(e.start).toLocaleString()} →{' '}
-                {new Date(e.end).toLocaleString()}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ActivityDetail({ event, payload }: { event: string; payload: unknown }) {
-  if (event === 'triage_complete') return <TriageDetail payload={payload} />;
-  if (event === 'calendar_review_complete') return <CalendarReviewDetail payload={payload} />;
-  return null;
-}
-
 interface Failure {
   id: string;
   role: string;
@@ -472,8 +267,6 @@ export default function DashboardClient() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [pendingCount, setPendingCount] = useState(0);
   const [failures, setFailures] = useState<Failure[]>([]);
-  const [quickActionObjectiveId, setQuickActionObjectiveId] = useState('');
-  const activeObjectives = useActiveObjectives();
   const [budget, setBudget] = useState<BudgetStatus | null>(null);
   const seenActivityIds = useRef(new Set<string>());
 
@@ -811,124 +604,30 @@ export default function DashboardClient() {
     }
   };
 
-  const runTriage = () =>
+  const runTriage = (objectiveId: string) =>
     queueTask('/api/tasks/triage-email', 'Inbox triage', {
-      objectiveId: quickActionObjectiveId || undefined,
+      objectiveId: objectiveId || undefined,
     });
-  const runCalendar = () =>
+  const runCalendar = (objectiveId: string) =>
     queueTask('/api/tasks/review-calendar', 'Calendar review', {
-      objectiveId: quickActionObjectiveId || undefined,
+      objectiveId: objectiveId || undefined,
     });
-
-  const statusColor = (s: string) =>
-    ({
-      idle: '#4fc3f7',
-      running: '#00ff9d',
-      waiting_approval: '#ffb347',
-      error: '#ef4444',
-    })[s] ?? '#4fc3f7';
-
-  const statusLabel = (s: string) =>
-    ({
-      idle: 'IDLE',
-      running: 'RUNNING',
-      waiting_approval: 'NEEDS APPROVAL',
-      error: 'ERROR',
-    })[s] ?? s.toUpperCase();
 
   const attentionCount =
     pendingCount + failures.length + (budget && budget.percent >= BUDGET_WARN_PERCENT ? 1 : 0);
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="p-8">
       <div className="max-w-6xl mx-auto">
-        {/* Hero — greeting, live clock, weather, date. Sets the tone: this is your
-            assistant, not an ops console. Glass/depth accent used sparingly, only here. */}
-        <div
-          className="mb-8 flex flex-wrap items-end justify-between gap-6 rounded-3xl px-7 py-6"
-          style={{
-            background: 'linear-gradient(135deg, rgba(79,195,247,0.07), rgba(192,132,252,0.04))',
-            border: '1px solid rgba(79,195,247,0.15)',
-            backdropFilter: 'blur(12px)',
-          }}
-        >
-          <div>
-            <div className="font-mono text-[11px] tracking-[0.25em] text-accent/70 mb-2">
-              WIREASSIST
-            </div>
-            <h1 className="text-4xl font-semibold tracking-tight">
-              {now ? greeting(now) : 'Hello'}, Jason
-            </h1>
-            <p className="text-gray-500 text-sm mt-2">
-              {now
-                ? now.toLocaleDateString([], {
-                    weekday: 'long',
-                    month: 'long',
-                    day: 'numeric',
-                  })
-                : ''}
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="font-mono text-5xl font-light tracking-tight text-gray-100 tabular-nums">
-              {now ? now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '--:--'}
-            </div>
-            {location === null ? (
-              <div className="flex items-center gap-2 mt-2 justify-end">
-                <input
-                  value={locationInput}
-                  onChange={(e) => setLocationInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && saveLocation()}
-                  placeholder="Set your city for weather"
-                  className="text-xs rounded-full px-3 py-1.5 outline-none w-44"
-                  style={{ background: '#0d0d1a', border: '1px solid #1e2040', color: '#e2e8f0' }}
-                />
-                <button
-                  onClick={saveLocation}
-                  disabled={savingLocation || !locationInput.trim()}
-                  className="text-xs px-3 py-1.5 rounded-full text-accent border border-accent/30 hover:bg-accent/10 transition-colors disabled:opacity-40"
-                >
-                  {savingLocation ? '…' : 'Save'}
-                </button>
-              </div>
-            ) : location && weather ? (
-              <div className="text-sm text-gray-400 mt-1">
-                {weatherIcon(weather.code)} {weather.tempF}°F · {location.label}
-              </div>
-            ) : location ? (
-              <div className="text-sm text-gray-600 mt-1">{location.label}</div>
-            ) : null}
-          </div>
-        </div>
-
-        {/* Nav */}
-        <div className="flex flex-wrap gap-2 mb-8">
-          {[
-            { href: '/', label: 'Dashboard' },
-            {
-              href: '/approvals',
-              label: `Approvals${pendingCount > 0 ? ` (${pendingCount})` : ''}`,
-              urgent: pendingCount > 0,
-            },
-            { href: '/content', label: 'Content' },
-            { href: '/chat', label: 'Agent Chat' },
-            { href: '/memory', label: 'Memory' },
-            { href: '/onboarding', label: 'Setup' },
-          ].map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="px-4 py-2 text-sm rounded-full border transition-colors"
-              style={{
-                borderColor: item.urgent ? '#ffb34760' : '#1e2040',
-                background: item.urgent ? '#ffb34712' : 'transparent',
-                color: item.urgent ? '#ffb347' : '#94a3b8',
-              }}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </div>
+        <DashboardHero
+          now={now}
+          location={location}
+          weather={weather}
+          locationInput={locationInput}
+          onLocationInputChange={setLocationInput}
+          savingLocation={savingLocation}
+          onSaveLocation={saveLocation}
+        />
 
         {/* Needs Attention — everything that requires a decision, in one place */}
         <div className="mb-6">
@@ -999,247 +698,29 @@ export default function DashboardClient() {
             <PortfolioZones />
           </div>
 
-          {/* Budget — small stat tile, always visible (not just when near cap) */}
-          <div
-            className="rounded-2xl border p-5 flex flex-col justify-between"
-            style={{ background: '#0d0d1a', borderColor: '#1e2040', minHeight: '160px' }}
-          >
-            <div className="text-sm font-semibold text-gray-300">Budget</div>
-            {budget ? (
-              <div>
-                <div className="text-3xl font-semibold text-gray-100 tabular-nums">
-                  ${budget.remaining.toFixed(2)}
-                </div>
-                {/* Whole-dollar rounding used to make small spend
-                    (e.g. $0.03 of $30) round to the same number as the cap
-                    and look like nothing was tracked — cents fix that, and
-                    spend is now shown explicitly rather than only implied
-                    by remaining vs. cap. */}
-                <div className="text-xs text-gray-600 mb-2">
-                  left of ${budget.budget.toFixed(0)} · ${budget.spent.toFixed(2)} spent
-                </div>
-                <div
-                  className="h-1.5 rounded-full overflow-hidden"
-                  style={{ background: '#1e2040' }}
-                >
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(100, budget.percent)}%`,
-                      background:
-                        budget.percent >= BUDGET_WARN_PERCENT
-                          ? '#ffb347'
-                          : budget.percent >= 100
-                            ? '#ef4444'
-                            : '#00ff9d',
-                    }}
-                  />
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-gray-600">Loading…</p>
-            )}
-          </div>
+          <DashboardBudgetTile budget={budget} />
 
-          {/* Upcoming + Quick Note — medium tiles side by side, not stacked */}
-          <div
-            className="md:col-span-2 rounded-2xl border p-5"
-            style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-sm font-semibold text-gray-300">Upcoming</div>
-              <Link href="/onboarding" className="text-xs text-gray-600 hover:text-accent">
-                {calendarReady === false ? 'connect calendar' : ''}
-              </Link>
-            </div>
-            {calendarReady === null ? (
-              <p className="text-sm text-gray-600">Loading…</p>
-            ) : calendarReady === false ? (
-              <p className="text-sm text-gray-600">
-                Connect Google Calendar in Setup to see what&apos;s next here.
-              </p>
-            ) : calendarEvents.length === 0 ? (
-              <p className="text-sm text-gray-600">Nothing on the calendar in the next 7 days.</p>
-            ) : (
-              <div className="space-y-3">
-                {calendarEvents.map((e) => (
-                  <div key={e.id} className="flex items-start gap-3">
-                    <div className="text-xs text-accent font-mono w-16 flex-shrink-0 pt-0.5">
-                      {formatEventWhen(e.start)}
-                    </div>
-                    <div className="text-sm text-gray-200 leading-snug">{e.summary}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <DashboardUpcomingTile calendarReady={calendarReady} calendarEvents={calendarEvents} />
 
-          <div
-            className="md:col-span-2 rounded-2xl border p-5"
-            style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
-          >
-            <div className="text-sm font-semibold text-gray-300 mb-3">Quick note</div>
-            <div className="flex gap-2 mb-3">
-              <input
-                value={noteDraft}
-                onChange={(e) => setNoteDraft(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && saveNote()}
-                placeholder="Jot something down…"
-                className="flex-1 text-sm rounded-lg px-3 py-2 outline-none"
-                style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
-              />
-              <button
-                onClick={saveNote}
-                disabled={!noteDraft.trim()}
-                className="text-xs px-3 rounded-lg text-accent border border-accent/30 hover:bg-accent/10 transition-colors disabled:opacity-30"
-              >
-                Save
-              </button>
-            </div>
-            {notes.length === 0 ? (
-              <p className="text-xs text-gray-600">Nothing saved yet.</p>
-            ) : (
-              <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                {notes.map((n) => (
-                  <div key={n.id} className="flex items-start justify-between gap-2 group">
-                    <span className="text-sm text-gray-300 leading-snug">{n.text}</span>
-                    <button
-                      onClick={() => removeNote(n.id)}
-                      className="text-xs text-gray-700 hover:text-gray-400 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <DashboardQuickNoteTile
+            notes={notes}
+            noteDraft={noteDraft}
+            onNoteDraftChange={setNoteDraft}
+            onSaveNote={saveNote}
+            onRemoveNote={removeNote}
+          />
 
-          {/* Workforce — status at a glance; click through for detail */}
-          <div className="md:col-span-2">
-            <div className="text-sm font-semibold text-gray-300 mb-4">Workforce</div>
-            <div className="space-y-2">
-              {agents.map((agent) => (
-                <Link
-                  key={agent.role}
-                  href={agentLink(agent.role).href}
-                  className="flex items-center justify-between rounded-xl px-4 py-3 border transition-colors hover:border-accent/40"
-                  style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span
-                      className="w-2 h-2 rounded-full flex-shrink-0"
-                      style={{ background: statusColor(agent.status) }}
-                    />
-                    <div>
-                      <div className="font-medium text-sm text-gray-200">{agent.name}</div>
-                      <div className="text-xs text-gray-600">{agent.role}</div>
-                    </div>
-                  </div>
-                  <div
-                    className="text-[11px] font-medium px-2 py-1 rounded-full flex-shrink-0"
-                    style={{
-                      color: statusColor(agent.status),
-                      background: `${statusColor(agent.status)}15`,
-                    }}
-                  >
-                    {statusLabel(agent.status)}
-                  </div>
-                </Link>
-              ))}
-            </div>
+          <DashboardWorkforceTile
+            agents={agents}
+            onRunTriage={runTriage}
+            onRunCalendar={runCalendar}
+          />
 
-            {/* Admin's one-shot actions — the only agent triggerable straight from the video wall */}
-            <div className="mt-2">
-              <ObjectivePicker
-                objectives={activeObjectives}
-                value={quickActionObjectiveId}
-                onChange={setQuickActionObjectiveId}
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={runTriage}
-                  className="flex-1 text-xs py-2 px-3 rounded-lg border border-border text-gray-500 hover:border-accent hover:text-accent transition-colors"
-                >
-                  Triage inbox
-                </button>
-                <button
-                  onClick={runCalendar}
-                  className="flex-1 text-xs py-2 px-3 rounded-lg border border-border text-gray-500 hover:border-accent hover:text-accent transition-colors"
-                >
-                  Review calendar
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Activity Feed */}
-          <div className="md:col-span-2">
-            <div className="text-sm font-semibold text-gray-300 mb-4">Activity</div>
-            <div
-              className="rounded-2xl border overflow-hidden"
-              style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
-            >
-              {activity.length === 0 ? (
-                <div className="p-8 text-center text-gray-600 text-sm">
-                  No activity yet. Run a task to get started.
-                </div>
-              ) : (
-                <div className="divide-y divide-border">
-                  {activity.map((item) => {
-                    const expandable = hasExpandableDetail(item.event);
-                    const expanded = expandable && expandedIds.has(item.id);
-                    return (
-                      <div key={item.id}>
-                        <div
-                          className={`px-5 py-3 flex items-start gap-4 ${expandable ? 'cursor-pointer hover:bg-white/5' : ''}`}
-                          onClick={expandable ? () => toggleExpanded(item.id) : undefined}
-                        >
-                          <div className="text-xs text-gray-600 mt-0.5 whitespace-nowrap">
-                            {item.time.toLocaleTimeString()}
-                          </div>
-                          <div
-                            className="text-xs tracking-widest mt-0.5 whitespace-nowrap"
-                            style={{
-                              color:
-                                {
-                                  queued: '#94a3b8',
-                                  task_started: '#4fc3f7',
-                                  task_complete: '#00ff9d',
-                                  task_failed: '#ef4444',
-                                  waiting_approval: '#ffb347',
-                                  triage_complete: '#4fc3f7',
-                                  calendar_review_complete: '#c084fc',
-                                  content_generated: '#ffb347',
-                                  content_approved: '#00ff9d',
-                                  content_plan_generated: '#ffb347',
-                                  post_scheduled: '#00ff9d',
-                                }[item.event] ?? '#475569',
-                            }}
-                          >
-                            {item.event.toUpperCase()}
-                          </div>
-                          <div className="text-sm text-gray-300 flex-1">
-                            {item.description}
-                            {expandable && (
-                              <span className="ml-2 text-xs opacity-40">
-                                {expanded ? '▾ hide details' : '▸ show details'}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {expanded && (
-                          <div className="px-5 pb-4 pl-24">
-                            <ActivityDetail event={item.event} payload={item.payload} />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
+          <DashboardActivityTile
+            activity={activity}
+            expandedIds={expandedIds}
+            onToggleExpanded={toggleExpanded}
+          />
         </div>
       </div>
     </div>

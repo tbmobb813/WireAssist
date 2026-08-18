@@ -1,6 +1,5 @@
 'use client';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import Link from 'next/link';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
 import { consumeOpsHandoff } from '@/lib/ops-handoff';
 import { ObjectivePicker, useActiveObjectives } from '../objective-picker';
@@ -305,13 +304,7 @@ export default function OpsPage() {
     });
 
   return (
-    <div className="min-h-screen p-8 max-w-3xl mx-auto">
-      <div className="mb-6">
-        <Link href="/" className="text-xs text-gray-600 hover:text-accent tracking-widest">
-          ← COMMAND CENTER
-        </Link>
-      </div>
-
+    <div className="p-8 max-w-3xl mx-auto">
       <div className="mb-8">
         <div className="text-xs tracking-widest text-accent mb-2">WIREASSIST // OPS</div>
         <h1 className="text-3xl font-black">NIXOPS</h1>

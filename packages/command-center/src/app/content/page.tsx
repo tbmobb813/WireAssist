@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
 import { consumeContentHandoff } from '@/lib/content-handoff';
 import { ObjectivePicker, useActiveObjectives } from '../objective-picker';
-import Link from 'next/link';
 
 const PLATFORMS = ['twitter', 'linkedin', 'instagram', 'threads'] as const;
 type Platform = (typeof PLATFORMS)[number];
@@ -293,13 +292,7 @@ export default function ContentPage() {
   );
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="mb-6">
-        <Link href="/" className="text-xs text-gray-600 hover:text-accent tracking-widest">
-          ← COMMAND CENTER
-        </Link>
-      </div>
-
+    <div className="p-8">
       <div className="mb-8">
         <div className="text-xs tracking-widest text-amber mb-2">WIREASSIST // CONTENT</div>
         <h1 className="text-3xl font-black">CONTENT AGENT</h1>
