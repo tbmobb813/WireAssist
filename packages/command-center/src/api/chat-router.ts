@@ -17,7 +17,8 @@ export type RouteDecision =
   | { kind: 'ops_freeform'; prompt: string }
   | { kind: 'ops_workflow'; workflow: string; brief: string }
   | { kind: 'gtm_freeform'; prompt: string }
-  | { kind: 'gtm_redirect' };
+  | { kind: 'gtm_redirect' }
+  | { kind: 'github_freeform'; prompt: string };
 
 export class RouterError extends Error {}
 
@@ -169,6 +170,16 @@ const TOOLS: Anthropic.Tool[] = [
       'User wants a full go-to-market strategy, launch plan, or psych-tactics set actually generated/built for a specific product. Use this only for a generate/build request — the full strategy needs a 16-field product form the chat cannot capture, so redirect to the wizard instead of trying to answer directly.',
     input_schema: { type: 'object', properties: {} },
   },
+  {
+    name: 'github_freeform',
+    description:
+      'Any question or action about a real GitHub repository, issue, or pull request — reading issues/PRs/code, commenting, labeling, or opening a draft PR. Route here instead of research_freeform even though it sounds like "look something up" — this has direct, authenticated access to the actual repo data, not a generic web search.',
+    input_schema: {
+      type: 'object',
+      properties: { prompt: { type: 'string' } },
+      required: ['prompt'],
+    },
+  },
 ];
 
 const SYSTEM_PROMPT = `You are a routing classifier for WireAssist's chat interface. Given a user's
@@ -181,6 +192,10 @@ Guidance:
   GTM question or discussion (pricing models, positioning angles, launch tactics) that isn't asking
   to generate one for a specific product routes to gtm_freeform instead.
 - Ambiguous, general-knowledge, or small-talk messages route to admin_freeform.
+- Anything about a specific GitHub repo, issue, or pull request — "what are the open issues
+  on X", "comment on PR #12", "what changed in the last commit" — routes to github_freeform,
+  never research_freeform or admin_freeform, even if phrased like a lookup question. Only use
+  research_freeform/research_topic for general web research with no direct repo access.
 - Only use ops_workflow when a specific, nameable workflow is clearly being requested;
   otherwise prefer ops_freeform.
 - Only use content_generate/content_plan when the user wants NEW content written; questions
@@ -262,6 +277,10 @@ export function buildDecision(name: string, input: unknown): RouteDecision {
     }
     case 'gtm_redirect':
       return { kind: 'gtm_redirect' };
+    case 'github_freeform': {
+      if (typeof i.prompt !== 'string') throw new RouterError('github_freeform missing prompt');
+      return { kind: 'github_freeform', prompt: i.prompt };
+    }
     default:
       throw new RouterError(`Unknown tool from classifier: ${name}`);
   }

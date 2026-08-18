@@ -723,6 +723,20 @@ app.post('/api/tasks/freeform', async (c) => {
         message:
           'GTM strategy needs more detail than chat can capture — 16 fields covering your product, market, and business. Head to the GTM wizard to build a full plan.',
       });
+    case 'github_freeform': {
+      if (!githubReady) {
+        return c.json(
+          {
+            error:
+              'GitHub agent not configured — see docs/SETUP.md\'s "GitHub Dev Agent" section to set up a Personal Access Token.',
+          },
+          503
+        );
+      }
+      const task = GitHubTasks.freeform(decision.prompt, history);
+      queueGithubTask(task);
+      return c.json({ taskId: task.id, status: 'queued' });
+    }
     case 'admin_freeform':
     default: {
       const task = AdminTasks.freeform(

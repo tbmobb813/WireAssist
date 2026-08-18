@@ -84,3 +84,20 @@ describe('buildDecision() — gtm_redirect still works alongside gtm_freeform', 
     expect(buildDecision('gtm_redirect', {})).toEqual({ kind: 'gtm_redirect' });
   });
 });
+
+describe('buildDecision() — github_freeform', () => {
+  it('builds a github_freeform decision from a prompt', () => {
+    expect(
+      buildDecision('github_freeform', {
+        prompt: 'what are the open issues on tbmobb813/WireAssist?',
+      })
+    ).toEqual({
+      kind: 'github_freeform',
+      prompt: 'what are the open issues on tbmobb813/WireAssist?',
+    });
+  });
+
+  it('throws when prompt is missing', () => {
+    expect(() => buildDecision('github_freeform', {})).toThrow(RouterError);
+  });
+});
