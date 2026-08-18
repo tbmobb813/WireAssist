@@ -28,6 +28,7 @@ const ROSTER: { role: AgentRole; name: string; href: string }[] = [
   { role: 'research', name: 'Research Agent', href: '/research' },
   { role: 'strategy', name: 'NixOps', href: '/ops' },
   { role: 'gtm', name: 'GTM Agent', href: '/gtm' },
+  { role: 'github', name: 'GitHub Dev Agent', href: '/github' },
 ];
 
 const rosterStatusColor = (s: RosterStatus) =>

@@ -48,6 +48,14 @@ describe('foldRoster', () => {
     expect(roster.admin.status).toBe('running');
   });
 
+  it('tracks the github role (previously silently dropped — missing from the roster union)', () => {
+    const roster = foldRoster([
+      evt('agent.task_started', { agentRole: 'github', description: 'open a PR' }),
+    ]);
+    expect(roster.github.status).toBe('running');
+    expect(roster.github.lastDescription).toBe('open a PR');
+  });
+
   it('ignores an event with no recognized agentRole', () => {
     const roster = foldRoster([evt('agent.task_started', { description: 'no role' })]);
     expect(Object.values(roster).every((r) => r.status === 'idle')).toBe(true);

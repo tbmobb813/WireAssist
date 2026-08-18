@@ -6,7 +6,7 @@
 // no React component test infra) gets real jest coverage.
 
 export type ObjectiveStatus = 'active' | 'paused' | 'completed';
-export type AgentRole = 'admin' | 'content' | 'research' | 'strategy' | 'gtm';
+export type AgentRole = 'admin' | 'content' | 'research' | 'strategy' | 'gtm' | 'github';
 export type RosterStatus = 'idle' | 'running' | 'waiting_approval' | 'error';
 
 export interface Objective {
@@ -39,6 +39,7 @@ export function emptyRoster(): Record<AgentRole, RosterEntry> {
     research: { status: 'idle', lastDescription: null, lastAt: null },
     strategy: { status: 'idle', lastDescription: null, lastAt: null },
     gtm: { status: 'idle', lastDescription: null, lastAt: null },
+    github: { status: 'idle', lastDescription: null, lastAt: null },
   };
 }
 
