@@ -214,6 +214,7 @@ export default function ContentPage() {
           weeksAhead,
           postsPerWeek,
           businessContext: businessContext.trim() || undefined,
+          objectiveId: objectiveId || undefined,
         }),
       });
       if (!res.ok) {
@@ -236,7 +237,10 @@ export default function ContentPage() {
       const res = await fetch('/api/tasks/content-freeform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: freeformPrompt.trim() }),
+        body: JSON.stringify({
+          prompt: freeformPrompt.trim(),
+          objectiveId: objectiveId || undefined,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -325,6 +329,17 @@ export default function ContentPage() {
         </div>
       )}
 
+      <div className="mb-6">
+        <label className="block text-xs text-gray-500 mb-1">
+          Tie generated content to an objective (optional) — applies to every action below.
+        </label>
+        <ObjectivePicker
+          objectives={activeObjectives}
+          value={objectiveId}
+          onChange={setObjectiveId}
+        />
+      </div>
+
       <div className="grid grid-cols-3 gap-6">
         {/* Left — Generator */}
         <div className="col-span-1 space-y-4">
@@ -361,11 +376,6 @@ export default function ContentPage() {
               rows={2}
               className="w-full rounded px-3 py-2 text-sm mb-3 outline-none resize-none"
               style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
-            />
-            <ObjectivePicker
-              objectives={activeObjectives}
-              value={objectiveId}
-              onChange={setObjectiveId}
             />
             <div className="flex gap-2 mb-3 flex-wrap">
               {PLATFORMS.map((p) => (
@@ -475,6 +485,10 @@ export default function ContentPage() {
             style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
           >
             <div className="text-xs tracking-widest text-gray-500 mb-3">ASK A QUESTION</div>
+            <p className="text-xs text-gray-600 mb-3">
+              General questions about your content strategy, past posts, or what to try next — not
+              for generating a new post (use Single Post above for that).
+            </p>
             <input
               type="text"
               value={freeformPrompt}

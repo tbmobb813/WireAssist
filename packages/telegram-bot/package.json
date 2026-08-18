@@ -10,7 +10,9 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@wireassist/core": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^20.19.24",
     "tsx": "^4.23.12",

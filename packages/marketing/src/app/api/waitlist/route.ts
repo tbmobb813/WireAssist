@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
-import { logger } from '@wireassist/core/logger';
+
+// Plain console, not @wireassist/core's logger — marketing is a standalone
+// Vercel deployment with no other need for core (which pulls in native
+// deps like better-sqlite3); not worth the dependency for two log calls.
+const logger = { info: console.log, error: console.error };
 
 // Lazy — never construct Resend at module scope. Next.js collects page data
 // at build time and must not require secrets to compile.

@@ -375,6 +375,10 @@ importers:
         version: 5.9.3
 
   packages/telegram-bot:
+    dependencies:
+      '@wireassist/core':
+        specifier: workspace:*
+        version: link:../../wireassist/core
     devDependencies:
       '@types/node':
         specifier: ^20.19.24

@@ -178,6 +178,17 @@ export default function ResearchPage() {
         </p>
       </div>
 
+      <div className="mb-5">
+        <label className="block text-xs text-gray-500 mb-1">
+          Tie this research to an objective (optional) — applies to every action below.
+        </label>
+        <ObjectivePicker
+          objectives={activeObjectives}
+          value={objectiveId}
+          onChange={setObjectiveId}
+        />
+      </div>
+
       <div
         className="rounded-lg border p-5 mb-5"
         style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
@@ -191,11 +202,6 @@ export default function ResearchPage() {
           placeholder="e.g. competitor pricing for AI agent platforms"
           className="w-full rounded px-3 py-2 text-sm mb-3 outline-none"
           style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
-        />
-        <ObjectivePicker
-          objectives={activeObjectives}
-          value={objectiveId}
-          onChange={setObjectiveId}
         />
         <div className="flex gap-2 mb-3">
           {(['quick', 'deep'] as const).map((d) => (
@@ -293,6 +299,10 @@ export default function ResearchPage() {
         style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
       >
         <div className="text-xs tracking-widest text-gray-500 mb-3">ASK A QUESTION</div>
+        <p className="text-xs text-gray-600 mb-3">
+          Open-ended questions about research already done, or general research strategy — for a new
+          web search, use Research a Topic above.
+        </p>
         <input
           type="text"
           value={freeformPrompt}

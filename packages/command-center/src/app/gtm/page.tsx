@@ -363,6 +363,17 @@ export default function GtmPage() {
         ))}
       </div>
 
+      <div className="mb-6">
+        <label className="block text-xs text-gray-500 mb-1">
+          Tie this to an objective (optional) — applies to the wizard and Ask a Question below.
+        </label>
+        <ObjectivePicker
+          objectives={activeObjectives}
+          value={objectiveId}
+          onChange={setObjectiveId}
+        />
+      </div>
+
       {error && (
         <div
           className="rounded-lg border p-3 mb-5 text-sm"
@@ -550,13 +561,6 @@ export default function GtmPage() {
               value={product.budget}
               onChange={(v) => set('budget', v)}
               placeholder="e.g. $0 for now"
-            />
-          </div>
-          <div className="mt-6">
-            <ObjectivePicker
-              objectives={activeObjectives}
-              value={objectiveId}
-              onChange={setObjectiveId}
             />
           </div>
           <label className="flex items-center gap-2 mb-3 text-xs text-gray-400 cursor-pointer">

@@ -47,6 +47,7 @@ export type {
 
 // NEW — WireAssist agent platform additions
 export * from './agents';
+export { logger } from './logger';
 export * from './memory';
 export * from './approval';
 export * from './mcp';

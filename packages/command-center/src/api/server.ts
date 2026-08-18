@@ -13,6 +13,7 @@ import {
   type AgentRole,
   type AgentTask,
 } from '@wireassist/core';
+import { logger } from '@wireassist/core/logger';
 import {
   AdminAgent,
   setupAdminMCP,
@@ -56,7 +57,6 @@ import { registerConversationRoutes } from './conversation-routes';
 import { routeChatMessage, type RouteDecision, type ChatHistoryMessage } from './chat-router';
 import { getLocation, setLocation, listNotes, addNote, deleteNote } from './dashboard-widgets';
 import { routeHandoffTask } from '../lib/route-handoff';
-import { logger } from '@wireassist/core/logger';
 
 const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
 const DB_PATH = path.join(HOME_PATH, '.wireassist', 'wireassist.db');

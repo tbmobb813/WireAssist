@@ -1,4 +1,5 @@
 import { MCPClient } from '@wireassist/core';
+import { logger } from '@wireassist/core/logger';
 import { GmailClient } from './gmail-client';
 import { CalendarClient } from './calendar-client';
 import { SheetsClient } from './sheets-client';
@@ -20,8 +21,6 @@ export async function setupAdminMCP(mcp: MCPClient): Promise<void> {
     if (!message.toLowerCase().includes('insufficient authentication scopes')) {
       throw error;
     }
-
-    import { logger } from '@wireassist/core/logger';
 
     logger.warn('\n⚠️  Calendar scope missing from token. Starting re-authorization...');
     await gmail.authenticate({ forceReauth: true });

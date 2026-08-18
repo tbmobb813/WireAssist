@@ -36,7 +36,10 @@ describe('routeHandoffTask()', () => {
 
     expect(routed).toBe(false);
     expect(content).not.toHaveBeenCalled();
-    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('gtm'));
+    // route-handoff.ts logs via @wireassist/core's logger, which prefixes
+    // every console.error call with a `[wireassist:error] <timestamp>`
+    // first argument — the actual message is the second argument.
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.anything(), expect.stringContaining('gtm'));
     consoleErrorSpy.mockRestore();
   });
 

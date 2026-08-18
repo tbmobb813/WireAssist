@@ -329,6 +329,17 @@ export default function OpsPage() {
         </div>
       )}
 
+      <div className="mb-5">
+        <label className="block text-xs text-gray-500 mb-1">
+          Tie this run to an objective (optional) — applies to every action below.
+        </label>
+        <ObjectivePicker
+          objectives={activeObjectives}
+          value={objectiveId}
+          onChange={setObjectiveId}
+        />
+      </div>
+
       <div
         className="rounded-lg border p-5 mb-5"
         style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
@@ -436,11 +447,6 @@ export default function OpsPage() {
             </select>
           </div>
         )}
-        <ObjectivePicker
-          objectives={activeObjectives}
-          value={objectiveId}
-          onChange={setObjectiveId}
-        />
         <textarea
           value={brief}
           onChange={(e) => setBrief(e.target.value)}
@@ -469,6 +475,10 @@ export default function OpsPage() {
         style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
       >
         <div className="text-xs tracking-widest text-gray-500 mb-3">ASK A QUESTION</div>
+        <p className="text-xs text-gray-600 mb-3">
+          General questions about the business or its workflows — to actually run a named workflow,
+          use Run Workflow above.
+        </p>
         <input
           type="text"
           value={freeformPrompt}
