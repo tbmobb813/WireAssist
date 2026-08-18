@@ -13,6 +13,70 @@ interface ApprovalRequest {
   createdAt: string;
 }
 
+// Renders the fields most payloads across agents already share as readable
+// text (mirrors what /content and /research already do inline for their own
+// pending-review lists) — anything not recognized still falls through to the
+// raw JSON block below, so this never hides information, only surfaces the
+// common case more clearly.
+function PayloadPreview({ payload }: { payload: Record<string, unknown> }) {
+  const text = typeof payload.content === 'string' ? payload.content : undefined;
+  const summary =
+    typeof payload.summary === 'string'
+      ? payload.summary
+      : typeof payload.synthesis === 'string'
+        ? payload.synthesis
+        : undefined;
+  const sources = Array.isArray(payload.sources)
+    ? payload.sources.filter((s): s is string => typeof s === 'string')
+    : undefined;
+  const analysis = payload.analysis as
+    | { score?: number; estimatedEngagement?: string; suggestion?: string }
+    | undefined;
+  const delegation =
+    typeof payload.targetRole === 'string' && typeof payload.prompt === 'string'
+      ? { targetRole: payload.targetRole, prompt: payload.prompt }
+      : undefined;
+
+  const recognized = text || summary || sources || analysis || delegation;
+  if (!recognized) return null;
+
+  return (
+    <div className="mb-4 space-y-3">
+      {(text || summary) && (
+        <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+          {text ?? summary}
+        </p>
+      )}
+      {delegation && (
+        <p className="text-sm text-gray-300">
+          → <span className="font-bold">{delegation.targetRole}</span>: {delegation.prompt}
+        </p>
+      )}
+      {analysis && (
+        <p className="text-xs text-gray-500">
+          {typeof analysis.score === 'number' && <>Score: {analysis.score} · </>}
+          {analysis.estimatedEngagement && <>Est. engagement: {analysis.estimatedEngagement}</>}
+        </p>
+      )}
+      {sources && sources.length > 0 && (
+        <div className="space-y-1">
+          {sources.map((s, i) => (
+            <a
+              key={i}
+              href={s}
+              target="_blank"
+              rel="noreferrer"
+              className="block text-xs text-gray-500 hover:text-accent truncate"
+            >
+              {s}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ApprovalsClient() {
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,14 +176,19 @@ export default function ApprovalsClient() {
                 <div className="text-xs tracking-widest text-gray-500 mb-2">PROPOSED ACTION</div>
                 <div className="text-sm font-bold mb-4">{approval.action}</div>
 
-                {/* Payload preview */}
-                <div className="text-xs tracking-widest text-gray-500 mb-2">PAYLOAD</div>
-                <pre
-                  className="text-xs text-gray-400 rounded p-3 overflow-x-auto"
-                  style={{ background: '#080810', border: '1px solid #1e2040' }}
-                >
-                  {JSON.stringify(approval.payload, null, 2)}
-                </pre>
+                <PayloadPreview payload={approval.payload} />
+
+                <details>
+                  <summary className="text-xs tracking-widest text-gray-500 mb-2 cursor-pointer hover:text-gray-400">
+                    RAW PAYLOAD
+                  </summary>
+                  <pre
+                    className="text-xs text-gray-400 rounded p-3 mt-2 overflow-x-auto"
+                    style={{ background: '#080810', border: '1px solid #1e2040' }}
+                  >
+                    {JSON.stringify(approval.payload, null, 2)}
+                  </pre>
+                </details>
               </div>
 
               {/* Actions */}
