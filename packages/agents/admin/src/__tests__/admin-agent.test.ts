@@ -320,6 +320,95 @@ describe('AdminAgent — chat tool-calling loop', () => {
   });
 });
 
+describe('AdminAgent — delegate_to_agent', () => {
+  it('proposes approval with a human-readable description before doing anything', async () => {
+    const deps = makeDeps();
+    const agent = new AdminAgent(deps);
+
+    await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'delegate_to_agent',
+      input: { targetRole: 'content', prompt: 'write a launch post about our new feature' },
+    });
+
+    expect(deps.approval.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: expect.stringContaining('Hand off to Content agent'),
+      })
+    );
+  });
+
+  it('on approval, emits agent:handoff_requested with a correctly-shaped task and returns a non-error result', async () => {
+    const deps = makeDeps();
+    const agent = new AdminAgent(deps);
+    const history = [{ role: 'user' as const, content: 'earlier turn' }];
+
+    const result = await (agent as any).executeToolCall(
+      makeTask({ input: { type: 'freeform', history }, objectiveId: 'obj-1' }),
+      {
+        id: 'c1',
+        name: 'delegate_to_agent',
+        input: { targetRole: 'content', prompt: 'write a launch post' },
+      }
+    );
+
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:handoff_requested',
+      expect.objectContaining({
+        task: expect.objectContaining({
+          agentRole: 'content',
+          input: { type: 'freeform', prompt: 'write a launch post', history },
+          objectiveId: 'obj-1',
+        }),
+      })
+    );
+    expect(result.isError).toBe(false);
+    expect(String(result.result)).toMatch(/Content agent/);
+  });
+
+  it('on decline, never emits a handoff and returns an error result', async () => {
+    const deps = makeDeps({ approval: { request: jest.fn().mockResolvedValue(false) } });
+    const agent = new AdminAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'delegate_to_agent',
+      input: { targetRole: 'research', prompt: 'find competitor pricing' },
+    });
+
+    expect(deps.events.emit).not.toHaveBeenCalledWith('agent:handoff_requested', expect.anything());
+    expect(result).toEqual({ result: 'User declined the handoff.', isError: true });
+  });
+
+  it('rejects an invalid targetRole without ever proposing approval', async () => {
+    const deps = makeDeps();
+    const agent = new AdminAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'delegate_to_agent',
+      input: { targetRole: 'admin', prompt: 'do something' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(deps.approval.request).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing/empty prompt without ever proposing approval', async () => {
+    const deps = makeDeps();
+    const agent = new AdminAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'delegate_to_agent',
+      input: { targetRole: 'content', prompt: '   ' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(deps.approval.request).not.toHaveBeenCalled();
+  });
+});
+
 describe('AdminAgent — composable skill-tools in the chat loop', () => {
   it('executeToolCall() dispatches email_triage_skill via invokeSkill(), never gating the outer call behind approval', async () => {
     const deps = makeDeps({

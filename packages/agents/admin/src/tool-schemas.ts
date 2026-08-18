@@ -307,12 +307,37 @@ export const ADMIN_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
       },
     },
   },
+  // ── Delegation (dispatched via a bespoke branch in
+  // AdminAgent.executeToolCall() — builds a task + emits
+  // agent:handoff_requested, never useTool()/MCP or invokeSkill()) ──
+  delegate_to_agent: {
+    name: 'delegate_to_agent',
+    description:
+      "Hand this request off to another WireAssist agent to actually produce the deliverable — a real post (Content), web research (Research), a business workflow run (NixOps), a go-to-market strategy (GTM), or GitHub repo work (GitHub Dev) — instead of just describing what could be done. Use this whenever fulfilling the request well needs that agent's own tools/skills. Requires human approval before the other agent starts. The target agent won't see this conversation, so give it a self-contained prompt.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        targetRole: {
+          type: 'string',
+          enum: ['content', 'research', 'strategy', 'gtm', 'github'],
+          description: 'Which agent to hand off to.',
+        },
+        prompt: { type: 'string', description: 'Self-contained instruction for the target agent.' },
+      },
+      required: ['targetRole', 'prompt'],
+    },
+  },
 };
 
 // Skill-tool names dispatched via invokeSkill() rather than useTool() — see
 // AdminAgent.executeToolCall(). Kept separate from READ_ONLY_ADMIN_TOOLS
 // since these are never valid useTool()/MCP calls.
 export const ADMIN_SKILL_TOOLS = new Set<string>(['email_triage_skill', 'calendar_review_skill']);
+
+// Delegation tool — kept separate from both ADMIN_SKILL_TOOLS and
+// READ_ONLY_ADMIN_TOOLS since it's dispatched through neither useTool()/MCP
+// nor invokeSkill(); see AdminAgent.executeToolCall().
+export const ADMIN_DELEGATION_TOOLS = new Set<string>(['delegate_to_agent']);
 
 // Tool names that only ever read data — safe to execute immediately in the
 // chat tool loop without going through the approval queue. Everything else

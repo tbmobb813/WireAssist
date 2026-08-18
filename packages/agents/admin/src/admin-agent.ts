@@ -6,9 +6,16 @@ import {
   type MCPClient,
   type EventBus,
   type ProviderToolCall,
+  type ProviderMessage,
 } from '@wireassist/core';
 import { BaseAgent } from './base-agent';
-import { ADMIN_TOOL_SCHEMAS, READ_ONLY_ADMIN_TOOLS, ADMIN_SKILL_TOOLS } from './tool-schemas';
+import {
+  ADMIN_TOOL_SCHEMAS,
+  READ_ONLY_ADMIN_TOOLS,
+  ADMIN_SKILL_TOOLS,
+  ADMIN_DELEGATION_TOOLS,
+} from './tool-schemas';
+import { buildDelegatedFreeformTask, isDelegatableRole, roleLabel } from './delegate';
 import {
   ADMIN_SKILLS,
   proposeOrAutoApprove,
@@ -81,7 +88,15 @@ you the same lesson twice.
 
 OUTPUT FORMAT:
 Always respond in structured JSON when processing emails or calendar data.
-Use plain English for explanations and recommendations.`;
+Use plain English for explanations and recommendations.
+
+DELEGATION:
+If fulfilling this well needs another agent's actual work — a written post (Content), web
+research (Research), running a business workflow (NixOps), a go-to-market strategy (GTM), or
+GitHub repo work (GitHub Dev) — propose delegating via delegate_to_agent instead of just
+describing what could be done or drafting a lesser version yourself. Give the target agent a
+self-contained prompt; they won't see this conversation. Never delegate something you can
+already do yourself with your own tools (email, calendar, sheets).`;
 
 // The agent's tool allowlist — the single source of truth for what's
 // callable (enforced in BaseAgent.useTool()). Every entry needs a matching
@@ -134,7 +149,7 @@ export class AdminAgent extends BaseAgent {
       // useTool()/MCP, so they have no business in the MCP authorization
       // list.
       toolSchemas: Object.fromEntries(
-        [...ADMIN_TOOLS, ...ADMIN_SKILL_TOOLS]
+        [...ADMIN_TOOLS, ...ADMIN_SKILL_TOOLS, ...ADMIN_DELEGATION_TOOLS]
           .filter((name) => name in ADMIN_TOOL_SCHEMAS)
           .map((name) => [name, ADMIN_TOOL_SCHEMAS[name]])
       ),
@@ -231,6 +246,36 @@ export class AdminAgent extends BaseAgent {
 
       if (this.isReadOnlyTool(call.name)) {
         return { result: await this.useTool(call.name, call.input), isError: false };
+      }
+
+      if (ADMIN_DELEGATION_TOOLS.has(call.name)) {
+        const { targetRole, prompt } = call.input as { targetRole?: unknown; prompt?: unknown };
+        if (!isDelegatableRole(targetRole) || typeof prompt !== 'string' || !prompt.trim()) {
+          return {
+            result: 'delegate_to_agent requires a valid targetRole and prompt.',
+            isError: true,
+          };
+        }
+        const approved = await this.proposeAction(
+          task,
+          `Hand off to ${roleLabel(targetRole)} agent: ${prompt.trim().slice(0, 100)}`,
+          { targetRole, prompt: prompt.trim() }
+        );
+        if (!approved) {
+          return { result: 'User declined the handoff.', isError: true };
+        }
+        const history = (task.input as { history?: ProviderMessage[] })?.history;
+        const delegatedTask = buildDelegatedFreeformTask(
+          targetRole,
+          prompt.trim(),
+          history,
+          task.objectiveId
+        );
+        this.events.emit('agent:handoff_requested', { task: delegatedTask });
+        return {
+          result: `Handed off to the ${roleLabel(targetRole)} agent (task ${delegatedTask.id}). They'll work on it separately — check their tab or Approvals for the result.`,
+          isError: false,
+        };
       }
 
       const action: ProposedAction = {
