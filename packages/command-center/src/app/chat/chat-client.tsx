@@ -143,6 +143,12 @@ export default function ChatClient() {
           markHandled(taskId, event);
           return true;
         }
+        case 'github_freeform_response': {
+          const p = payload as { response?: string };
+          addAgentMessage(p.response ?? '', taskId);
+          markHandled(taskId, event);
+          return true;
+        }
         case 'ops_stage_complete': {
           const p = payload as { stage?: string };
           const stageKey = p.stage ?? 'unknown';

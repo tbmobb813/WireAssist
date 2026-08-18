@@ -9,10 +9,22 @@ interface ActivityItem {
   payload: unknown;
 }
 
+// Every agent's freeform-chat reply lands under a different event name
+// (freeform_response, ops_freeform_response, github_freeform_response, ...)
+// but they all carry the same { response: string } shape — one check
+// instead of hand-listing every current and future agent's event name.
+function isFreeformResponseEvent(event: string): boolean {
+  return event === 'freeform_response' || event.endsWith('_freeform_response');
+}
+
 // Events whose payload carries more than the one-line summary shown in the
 // feed — the row can be expanded to see it instead of it being discarded.
 function hasExpandableDetail(event: string): boolean {
-  return event === 'triage_complete' || event === 'calendar_review_complete';
+  return (
+    event === 'triage_complete' ||
+    event === 'calendar_review_complete' ||
+    isFreeformResponseEvent(event)
+  );
 }
 
 function TriageDetail({ payload }: { payload: unknown }) {
@@ -157,9 +169,19 @@ function CalendarReviewDetail({ payload }: { payload: unknown }) {
   );
 }
 
+function FreeformResponseDetail({ payload }: { payload: unknown }) {
+  const p = payload as { response?: string };
+  return (
+    <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+      {p.response || '(No response text returned.)'}
+    </p>
+  );
+}
+
 function ActivityDetail({ event, payload }: { event: string; payload: unknown }) {
   if (event === 'triage_complete') return <TriageDetail payload={payload} />;
   if (event === 'calendar_review_complete') return <CalendarReviewDetail payload={payload} />;
+  if (isFreeformResponseEvent(event)) return <FreeformResponseDetail payload={payload} />;
   return null;
 }
 

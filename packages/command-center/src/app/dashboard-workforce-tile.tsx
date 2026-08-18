@@ -20,6 +20,8 @@ function agentLink(role: string): { href: string; label: string } {
       return { href: '/research', label: 'Open research' };
     case 'strategy':
       return { href: '/ops', label: 'Open ops' };
+    case 'github':
+      return { href: '/github', label: 'Open GitHub' };
     default:
       return { href: '/chat', label: 'Ask via chat' };
   }

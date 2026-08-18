@@ -196,6 +196,23 @@ function describeEvent(event: string, payload: unknown): { description: string; 
       const summary = typeof p.summary === 'string' ? p.summary.slice(0, 100) : '';
       return { description: `Research complete: ${summary}`.trim(), role: 'research' };
     }
+    // Every agent's freeform-chat reply carries the same { response: string }
+    // shape under a different event name — the one-line preview here is
+    // truncated the same way research_complete's summary is; the full text
+    // is available by expanding the row (see dashboard-activity-tile.tsx's
+    // isFreeformResponseEvent/FreeformResponseDetail).
+    case 'freeform_response': {
+      const response = typeof p.response === 'string' ? p.response.slice(0, 100) : '';
+      return { description: response || 'Freeform reply received', role: 'admin' };
+    }
+    case 'ops_freeform_response': {
+      const response = typeof p.response === 'string' ? p.response.slice(0, 100) : '';
+      return { description: response || 'Freeform reply received', role: 'strategy' };
+    }
+    case 'github_freeform_response': {
+      const response = typeof p.response === 'string' ? p.response.slice(0, 100) : '';
+      return { description: response || 'Freeform reply received', role: 'github' };
+    }
     case 'gtm_generated':
       return { description: 'GTM strategy generated — awaiting approval', role: 'gtm' };
     case 'gtm_psych_generated':
