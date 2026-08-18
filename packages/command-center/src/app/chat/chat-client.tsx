@@ -1,7 +1,6 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
-import Link from 'next/link';
 
 interface Message {
   id: string;
@@ -296,13 +295,7 @@ export default function ChatClient() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col p-8">
-      <div className="mb-6">
-        <Link href="/" className="text-xs text-gray-600 hover:text-accent tracking-widest">
-          ← COMMAND CENTER
-        </Link>
-      </div>
-
+    <div className="flex flex-col p-8">
       <div className="mb-6">
         <div className="text-xs tracking-widest text-accent mb-1">WIREASSIST // CHAT</div>
         <h1 className="text-2xl font-black">AGENT CHAT</h1>

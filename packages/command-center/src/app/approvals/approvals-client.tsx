@@ -53,13 +53,7 @@ export default function ApprovalsClient() {
   };
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="mb-8">
-        <Link href="/" className="text-xs text-gray-600 hover:text-accent tracking-widest">
-          ← COMMAND CENTER
-        </Link>
-      </div>
-
+    <div className="p-8">
       <div className="mb-8">
         <div className="text-xs tracking-widest text-amber mb-2">WIREASSIST // APPROVALS</div>
         <h1 className="text-3xl font-black">APPROVAL QUEUE</h1>

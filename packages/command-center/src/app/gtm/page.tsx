@@ -1,6 +1,5 @@
 'use client';
 import { useState, useCallback, useRef, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
 import { setContentHandoff } from '@/lib/content-handoff';
@@ -332,13 +331,7 @@ export default function GtmPage() {
   }
 
   return (
-    <div className="min-h-screen p-8 max-w-4xl mx-auto">
-      <div className="mb-6">
-        <Link href="/" className="text-xs text-gray-600 hover:text-accent tracking-widest">
-          ← COMMAND CENTER
-        </Link>
-      </div>
-
+    <div className="p-8 max-w-4xl mx-auto">
       <div className="mb-8">
         <div className="text-xs tracking-widest mb-2" style={{ color: '#ffb347' }}>
           WIREASSIST // GTM ENGINE

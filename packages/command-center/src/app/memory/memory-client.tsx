@@ -1,6 +1,5 @@
 'use client';
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 
 interface MemoryEntry {
   id: string;
@@ -36,13 +35,7 @@ export default function MemoryClient() {
     })[role] ?? '#475569';
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="mb-6">
-        <Link href="/" className="text-xs text-gray-600 hover:text-accent tracking-widest">
-          ← COMMAND CENTER
-        </Link>
-      </div>
-
+    <div className="p-8">
       <div className="mb-8">
         <div className="text-xs tracking-widest text-purple mb-2">WIREASSIST // MEMORY</div>
         <h1 className="text-3xl font-black">AGENT MEMORY</h1>

@@ -177,7 +177,7 @@ export default function ObjectiveDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen p-8 max-w-3xl mx-auto">
+      <div className="p-8 max-w-3xl mx-auto">
         <p className="text-xs text-gray-600">Loading...</p>
       </div>
     );
@@ -185,29 +185,14 @@ export default function ObjectiveDetailPage() {
 
   if (notFound || !objective) {
     return (
-      <div className="min-h-screen p-8 max-w-3xl mx-auto">
-        <Link
-          href="/objectives"
-          className="text-xs text-gray-600 hover:text-accent tracking-widest"
-        >
-          ← OBJECTIVES
-        </Link>
+      <div className="p-8 max-w-3xl mx-auto">
         <p className="text-sm text-gray-500 mt-6">Objective not found.</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen p-8 max-w-5xl mx-auto">
-      <div className="mb-6">
-        <Link
-          href="/objectives"
-          className="text-xs text-gray-600 hover:text-accent tracking-widest"
-        >
-          ← OBJECTIVES
-        </Link>
-      </div>
-
+    <div className="p-8 max-w-5xl mx-auto">
       <div className="mb-8">
         <div className="flex items-center justify-between gap-3 mb-2">
           <div className="text-xs tracking-widest text-accent">WIREASSIST // OBJECTIVE</div>
