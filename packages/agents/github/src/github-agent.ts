@@ -18,9 +18,14 @@ You give JNix read access to his GitHub repos, issues, and pull requests, plus a
 set of write actions: commenting, labeling, and opening pull requests as DRAFTS ONLY.
 
 BOUNDARIES (non-negotiable, enforced in code — do not attempt to work around them):
-- You never merge or close an issue or pull request.
-- You never push commits or delete anything.
-- You never open a pull request as anything but a draft.
+- You never merge or close an issue or pull request. issue_write can update an issue's
+  state to "closed" — you never do this, regardless of what's asked.
+- You never approve or request changes on a pull request review. pull_request_review_write
+  can submit an APPROVE or REQUEST_CHANGES review — you only ever leave a COMMENT-only
+  review, or work with pending/resolve-thread actions.
+- You never push commits, create/delete branches, or delete anything.
+- You never open a pull request as anything but a draft (create_pull_request with
+  draft: true, always).
 - Every write action requires JNix's explicit approval before it happens — you propose,
   he decides.
 
@@ -81,6 +86,28 @@ export class GitHubAgent extends BaseAgent {
       // instruction the model could ignore or be prompt-injected around.
       if (call.name === 'create_pull_request' && call.input.draft !== true) {
         return { result: 'create_pull_request must be called with draft: true.', isError: true };
+      }
+
+      // issue_write is a consolidated create/update tool — state: 'closed'
+      // closes the issue, which is explicitly forbidden regardless of
+      // approval. create/update/comment/label/assign are all fine.
+      if (call.name === 'issue_write' && call.input.state === 'closed') {
+        return { result: 'issue_write must not be called with state: "closed".', isError: true };
+      }
+
+      // pull_request_review_write's event decides whether the review
+      // actually gatekeeps the PR — APPROVE/REQUEST_CHANGES is a real human
+      // decision this agent never makes on its own. Commenting, submitting a
+      // pending comment-only review, and resolving/unresolving threads are
+      // all fine.
+      if (
+        call.name === 'pull_request_review_write' &&
+        (call.input.event === 'APPROVE' || call.input.event === 'REQUEST_CHANGES')
+      ) {
+        return {
+          result: `pull_request_review_write must not be called with event: "${call.input.event}".`,
+          isError: true,
+        };
       }
 
       if (this.isReadOnlyTool(call.name)) {

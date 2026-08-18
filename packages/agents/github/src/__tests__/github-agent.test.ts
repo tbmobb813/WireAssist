@@ -17,10 +17,20 @@ function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
 }
 
 const authorizedTools: RemoteToolDefinition[] = [
-  { name: 'get_issue', description: 'Get an issue', inputSchema: { type: 'object' } },
+  { name: 'issue_read', description: 'Get issue info', inputSchema: { type: 'object' } },
   {
     name: 'add_issue_comment',
     description: 'Comment on an issue',
+    inputSchema: { type: 'object' },
+  },
+  {
+    name: 'issue_write',
+    description: 'Create or update an issue',
+    inputSchema: { type: 'object' },
+  },
+  {
+    name: 'pull_request_review_write',
+    description: 'Review a pull request',
     inputSchema: { type: 'object' },
   },
   {
@@ -70,13 +80,16 @@ describe('GitHubAgent.executeToolCall', () => {
 
     const result = await (agent as any).executeToolCall(makeTask(), {
       id: 'c1',
-      name: 'get_issue',
-      input: { issue_number: 1 },
+      name: 'issue_read',
+      input: { issue_number: 1, method: 'get' },
     });
 
     expect(result).toEqual({ result: { ok: true }, isError: false });
     expect(deps.approval.request).not.toHaveBeenCalled();
-    expect(deps.githubClient.callTool).toHaveBeenCalledWith('get_issue', { issue_number: 1 });
+    expect(deps.githubClient.callTool).toHaveBeenCalledWith('issue_read', {
+      issue_number: 1,
+      method: 'get',
+    });
   });
 
   it('requires approval for a write tool, and executes it once approved', async () => {
@@ -118,7 +131,7 @@ describe('GitHubAgent.executeToolCall', () => {
     const result = await (agent as any).executeToolCall(makeTask(), {
       id: 'c4',
       name: 'merge_pull_request',
-      input: { pull_number: 1 },
+      input: { pullNumber: 1 },
     });
 
     expect(result.isError).toBe(true);
@@ -158,6 +171,87 @@ describe('GitHubAgent.executeToolCall', () => {
     expect(deps.approval.request).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ result: { ok: true }, isError: false });
   });
+
+  it('rejects issue_write when state is "closed", even with approval available', async () => {
+    const deps = makeDeps();
+    const agent = new GitHubAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c7',
+      name: 'issue_write',
+      input: { method: 'update', issue_number: 1, state: 'closed' },
+    });
+
+    expect(result).toEqual({
+      result: 'issue_write must not be called with state: "closed".',
+      isError: true,
+    });
+    expect(deps.approval.request).not.toHaveBeenCalled();
+    expect(deps.githubClient.callTool).not.toHaveBeenCalled();
+  });
+
+  it('allows issue_write for create/update/comment/label, still gated by approval', async () => {
+    const deps = makeDeps();
+    const agent = new GitHubAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c8',
+      name: 'issue_write',
+      input: { method: 'update', issue_number: 1, labels: ['bug'] },
+    });
+
+    expect(deps.approval.request).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ result: { ok: true }, isError: false });
+  });
+
+  it.each(['APPROVE', 'REQUEST_CHANGES'])(
+    'rejects pull_request_review_write when event is %s',
+    async (event) => {
+      const deps = makeDeps();
+      const agent = new GitHubAgent(deps);
+
+      const result = await (agent as any).executeToolCall(makeTask(), {
+        id: 'c9',
+        name: 'pull_request_review_write',
+        input: { method: 'create', pullNumber: 1, event },
+      });
+
+      expect(result).toEqual({
+        result: `pull_request_review_write must not be called with event: "${event}".`,
+        isError: true,
+      });
+      expect(deps.approval.request).not.toHaveBeenCalled();
+      expect(deps.githubClient.callTool).not.toHaveBeenCalled();
+    }
+  );
+
+  it('allows pull_request_review_write with event: COMMENT, still gated by approval', async () => {
+    const deps = makeDeps();
+    const agent = new GitHubAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c10',
+      name: 'pull_request_review_write',
+      input: { method: 'create', pullNumber: 1, event: 'COMMENT', body: 'looks fine' },
+    });
+
+    expect(deps.approval.request).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ result: { ok: true }, isError: false });
+  });
+
+  it('allows pull_request_review_write thread actions with no event, still gated by approval', async () => {
+    const deps = makeDeps();
+    const agent = new GitHubAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c11',
+      name: 'pull_request_review_write',
+      input: { method: 'resolve_thread', pullNumber: 1, threadId: 'PRRT_abc' },
+    });
+
+    expect(deps.approval.request).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ result: { ok: true }, isError: false });
+  });
 });
 
 describe('GitHubAgent config', () => {
@@ -167,7 +261,13 @@ describe('GitHubAgent config', () => {
     const toolSchemas = (agent as any).config.toolSchemas;
 
     expect(Object.keys(toolSchemas).sort()).toEqual(
-      ['add_issue_comment', 'create_pull_request', 'get_issue'].sort()
+      [
+        'add_issue_comment',
+        'create_pull_request',
+        'issue_read',
+        'issue_write',
+        'pull_request_review_write',
+      ].sort()
     );
   });
 

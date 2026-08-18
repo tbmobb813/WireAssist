@@ -11,20 +11,20 @@ function tool(name: string): RemoteToolDefinition {
 
 describe('resolveAuthorizedGithubTools', () => {
   it('intersects the live server tool list against the allowlist', () => {
-    const remoteTools = [tool('get_issue'), tool('add_issue_comment'), tool('merge_pull_request')];
+    const remoteTools = [tool('issue_read'), tool('add_issue_comment'), tool('merge_pull_request')];
     const authorized = resolveAuthorizedGithubTools(remoteTools);
     const names = authorized.map((t) => t.name);
 
-    expect(names).toContain('get_issue');
+    expect(names).toContain('issue_read');
     expect(names).toContain('add_issue_comment');
     expect(names).not.toContain('merge_pull_request');
   });
 
   it('warns (but does not throw) when an allowlisted tool is missing from the live server', () => {
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    const authorized = resolveAuthorizedGithubTools([tool('get_issue')]);
+    const authorized = resolveAuthorizedGithubTools([tool('issue_read')]);
 
-    expect(authorized.map((t) => t.name)).toEqual(['get_issue']);
+    expect(authorized.map((t) => t.name)).toEqual(['issue_read']);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
   });

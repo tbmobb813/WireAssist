@@ -6,44 +6,57 @@ import type { RemoteToolDefinition } from './github-client';
 // toolsets later; widening scope here is a deliberate decision, not a side
 // effect of an upstream catalog change.
 //
+// Verified against the live server's real tools/list() response (2026-08-18)
+// — GitHub's actual catalog consolidates many single-purpose tools the docs
+// implied into a handful of multi-method ones (issue_read/issue_write,
+// pull_request_read/pull_request_review_write, etc.), addressed with `method`
+// or `state`/`event` parameters rather than separate tool names. The
+// consolidated write tools can do more than this agent should ever do
+// unattended (issue_write can close an issue via state:'closed';
+// pull_request_review_write can submit an APPROVE/REQUEST_CHANGES review) —
+// see github-agent.ts's executeToolCall() for the code-level guards on those.
+//
 // Deliberately excluded regardless of what the server offers: merge_pull_request,
-// close_pull_request, close_issue (or any state-closing update_issue),
-// delete_file, delete_branch, push_files, create_branch, any org/repo-admin
-// or collaborator/team management tool, any secret/Actions-write tool, and
-// create_or_update_file (deferred — "never push code" makes this one
-// ambiguous enough to leave out of v1 entirely).
+// update_pull_request (can close a PR via state:'closed', or toggle draft
+// status — out of v1 scope entirely, not just the closing part),
+// label_write (manages the repo's label *definitions* — creating/renaming/
+// deleting label types — not applying a label to an issue, which is a
+// labels field on issue_write instead), create_or_update_file, delete_file,
+// create_branch, push_files, create_repository, fork_repository, and any
+// org/repo-admin, collaborator/team, or secret/Actions-write tool.
 export const READ_ONLY_GITHUB_TOOLS = new Set([
-  'get_issue',
+  'issue_read',
+  'pull_request_read',
   'list_issues',
   'search_issues',
-  'get_issue_comments',
-  'get_pull_request',
   'list_pull_requests',
   'search_pull_requests',
-  'get_pull_request_diff',
-  'get_pull_request_files',
-  'get_pull_request_status',
-  'get_pull_request_reviews',
-  'get_pull_request_comments',
   'get_file_contents',
   'search_code',
   'list_branches',
   'list_commits',
   'get_commit',
-  'list_labels',
+  'search_commits',
+  'get_label',
+  'list_label',
   'search_repositories',
-  'get_repository',
 ]);
 
 // Write tools — in the allowlist, but every call still goes through
-// BaseAgent.proposeAction() (the approval queue) before executing.
+// BaseAgent.proposeAction() (the approval queue) before executing. Two of
+// these also get an additional code-level guard in github-agent.ts because
+// the tool itself can do more than the allowlist alone can restrict:
+//   - issue_write: rejected if state === 'closed' (create/update/comment/
+//     label are all fine; closing is not).
+//   - pull_request_review_write: rejected if event is 'APPROVE' or
+//     'REQUEST_CHANGES' (a COMMENT-only review, or a pending/resolve-thread
+//     action, is fine; approving or blocking a PR is a human decision).
+//   - create_pull_request: rejected unless draft === true.
 const WRITE_GITHUB_TOOLS = new Set([
   'add_issue_comment',
-  'add_labels_to_issue',
-  'remove_labels_from_issue',
-  'add_pull_request_review_comment',
-  'create_pull_request_review',
-  'create_pull_request', // draft:true is enforced in code — see github-agent.ts
+  'issue_write',
+  'pull_request_review_write',
+  'create_pull_request',
 ]);
 
 export const GITHUB_TOOL_ALLOWLIST = new Set([...READ_ONLY_GITHUB_TOOLS, ...WRITE_GITHUB_TOOLS]);
