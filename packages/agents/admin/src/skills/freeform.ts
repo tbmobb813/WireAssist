@@ -20,6 +20,12 @@ export const freeformSkill: Skill<FreeformInput, void> = {
     const response = await agent.runToolLoop(task, prompt, {
       extraContext: context,
       priorMessages: input.history,
+      // Admin's skill-tools (email_triage_skill, calendar_review_skill) are
+      // each a full multi-step skill invocation that costs a single loop
+      // iteration but can itself run a whole approval flow internally —
+      // the default cap of 6 leaves too little room to also reason about
+      // the actual request (or delegate_to_agent) afterward.
+      maxIterations: 12,
     });
 
     agent.emit('agent:freeform_response', {
