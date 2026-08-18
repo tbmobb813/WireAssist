@@ -240,7 +240,7 @@ export default function DashboardActivityTile({
                     >
                       {item.event.toUpperCase()}
                     </div>
-                    <div className="text-sm text-gray-300 flex-1">
+                    <div className="text-sm text-gray-300 flex-1 min-w-0 break-words">
                       {item.description}
                       {expandable && (
                         <span className="ml-2 text-xs opacity-40">
