@@ -17,10 +17,19 @@
  *   /ask <prompt>        ask anything — routed to the right agent automatically
  *                        (admin, content, research, or ops; GTM requests get
  *                        pointed at the /gtm wizard instead of a direct answer)
+ *   /new                  start a fresh conversation (drops prior context)
  *   /reauth              get a tap-to-reauthorize link for Gmail/Calendar
  *                        (Testing-mode Google OAuth refresh tokens expire
  *                        every few days — same link also gets pushed here
  *                        automatically before that happens)
+ *
+ * A plain message with no leading `/` is treated the same as `/ask <text>` —
+ * this is a real conversation, not a command line. Every ask threads the
+ * last 20 turns of conversation history (same as the dashboard's /chat page)
+ * via the shared /api/conversations persistence API, so follow-up questions
+ * keep context. The conversation persists across bot restarts (its id is
+ * cached in a local file) and shows up in the dashboard's own conversation
+ * switcher too, since both write to the same store.
  *
  * Also subscribes to the command-center SSE feed and pushes back results from
  * whichever agent handled the request — admin, content, research, or ops —
@@ -35,6 +44,9 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const API_URL = process.env.WIREASSIST_API_URL ?? 'http://localhost:3002';
 
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { logger } from '@wireassist/core/logger';
 
 if (!BOT_TOKEN || !CHAT_ID) {
@@ -43,6 +55,11 @@ if (!BOT_TOKEN || !CHAT_ID) {
 }
 
 const TG = `https://api.telegram.org/bot${BOT_TOKEN}`;
+
+// Same base-directory convention gmail-token.json uses.
+const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
+const CONVERSATION_ID_PATH = path.join(HOME_PATH, '.wireassist', 'telegram-conversation-id');
+const MAX_HISTORY_MESSAGES = 20;
 
 async function send(text: string): Promise<void> {
   await fetch(`${TG}/sendMessage`, {
@@ -64,6 +81,104 @@ async function api(path: string, init?: RequestInit): Promise<unknown> {
   return body;
 }
 
+// ── Conversation continuity ─────────────────────────────────────────────────
+// This bot only ever serves one chat (CHAT_ID allowlist), so a single
+// module-level conversation id/pending-task-id — not a per-user map — is
+// correct here; updates are already processed one at a time in pollLoop().
+
+let conversationId: string | null = null;
+let pendingAskTaskId: string | null = null;
+
+async function createConversation(): Promise<string> {
+  const r = (await api('/api/conversations', {
+    method: 'POST',
+    body: JSON.stringify({ title: 'Telegram' }),
+  })) as { id: string };
+  fs.mkdirSync(path.dirname(CONVERSATION_ID_PATH), { recursive: true });
+  fs.writeFileSync(CONVERSATION_ID_PATH, r.id);
+  return r.id;
+}
+
+// Resolves the conversation to use, persisting it to disk so it survives a
+// bot restart — read once, cached in memory for the process lifetime. If
+// the persisted conversation was deleted (e.g. from the dashboard), falls
+// through to creating a new one instead of failing every ask.
+async function getConversationId(): Promise<string> {
+  if (conversationId) return conversationId;
+
+  const persisted = fs.existsSync(CONVERSATION_ID_PATH)
+    ? fs.readFileSync(CONVERSATION_ID_PATH, 'utf-8').trim()
+    : null;
+  if (persisted) {
+    try {
+      await api(`/api/conversations/${persisted}/messages`);
+      conversationId = persisted;
+      return conversationId;
+    } catch {
+      // Conversation no longer exists — fall through to creating a new one.
+    }
+  }
+
+  conversationId = await createConversation();
+  return conversationId;
+}
+
+async function fetchRecentHistory(
+  id: string
+): Promise<Array<{ role: 'user' | 'assistant'; content: string }>> {
+  const r = (await api(`/api/conversations/${id}/messages`)) as {
+    messages: Array<{ role: string; content: string }>;
+  };
+  return r.messages.slice(-MAX_HISTORY_MESSAGES).map((m) => ({
+    role: m.role === 'user' ? 'user' : 'assistant',
+    content: m.content,
+  }));
+}
+
+// Shared by the explicit `/ask <prompt>` command and any plain message with
+// no leading `/` — a real conversation, not a command line. Threads recent
+// history through the same smart router the Command Center chat page uses,
+// and persists both this message and (once notify() sees the matching
+// taskId) the eventual reply into the same conversation.
+async function handleAsk(prompt: string): Promise<string> {
+  const id = await getConversationId();
+  const history = await fetchRecentHistory(id);
+
+  api(`/api/conversations/${id}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ role: 'user', content: prompt }),
+  }).catch((err) => logger.warn('Failed to persist user message', err));
+
+  const r = (await api('/api/tasks/freeform', {
+    method: 'POST',
+    body: JSON.stringify({ instruction: prompt, history }),
+  })) as { taskId?: string; redirect?: string; message?: string };
+
+  if (r.redirect) {
+    return `${r.message ?? ''}\n\nOpen: ${r.redirect}`;
+  }
+  if (r.taskId) pendingAskTaskId = r.taskId;
+  return `🧠 Task queued (\`${r.taskId}\`) — answer will arrive here.`;
+}
+
+// Called from notify() for the two event kinds that represent a direct
+// answer to an ask. Only persists (and clears pendingAskTaskId) when the
+// event's taskId matches the ask currently in flight — every other event
+// still gets sent to Telegram exactly as before, just not persisted into
+// "the conversation" since it didn't originate from an ask in it.
+async function maybePersistAskResponse(taskId: unknown, response: string): Promise<void> {
+  if (typeof taskId !== 'string' || taskId !== pendingAskTaskId || !conversationId) return;
+  pendingAskTaskId = null;
+  try {
+    await api(`/api/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ role: 'assistant', content: response }),
+    });
+  } catch (err) {
+    logger.warn('Failed to persist assistant message', err);
+  }
+}
+
 // ── Command handlers ────────────────────────────────────────────────────────
 
 async function handleCommand(text: string): Promise<string> {
@@ -82,7 +197,10 @@ async function handleCommand(text: string): Promise<string> {
         '/workflows — NixOps workflows',
         '/run <workflow> <brief>',
         '/ask <prompt> — routed to the right agent automatically',
+        '/new — start a fresh conversation',
         '/reauth — get a Gmail/Calendar re-authorization link',
+        '',
+        'Or just send a plain message — same as /ask, and it remembers context.',
       ].join('\n');
 
     case '/status': {
@@ -160,18 +278,14 @@ async function handleCommand(text: string): Promise<string> {
       return `🔐 Tap to re-authorize Gmail/Calendar:\n${r.url}\n\n(Must be connected to Tailscale.)`;
     }
 
-    case '/ask': {
+    case '/ask':
       if (!args) return 'Usage: /ask <prompt>';
-      // Same smart router the Command Center chat page uses — one message in,
-      // dispatched to whichever agent (admin/content/research/ops) fits.
-      const r = (await api('/api/tasks/freeform', {
-        method: 'POST',
-        body: JSON.stringify({ instruction: args }),
-      })) as { taskId?: string; redirect?: string; message?: string };
-      if (r.redirect) {
-        return `${r.message ?? ''}\n\nOpen: ${r.redirect}`;
-      }
-      return `🧠 Task queued (\`${r.taskId}\`) — answer will arrive here.`;
+      return handleAsk(args);
+
+    case '/new': {
+      conversationId = await createConversation();
+      pendingAskTaskId = null;
+      return '🆕 Started a new conversation.';
     }
 
     default:
@@ -200,7 +314,10 @@ async function pollLoop(): Promise<never> {
         if (!msg?.text) continue;
         if (String(msg.chat.id) !== CHAT_ID) continue; // allowlist: owner only
         try {
-          await send(await handleCommand(msg.text));
+          const reply = msg.text.startsWith('/')
+            ? await handleCommand(msg.text)
+            : await handleAsk(msg.text);
+          await send(reply);
         } catch (err) {
           await send(`⚠️ ${err instanceof Error ? err.message : String(err)}`);
         }
@@ -270,11 +387,12 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
       await send(`✅ *Workflow ${p.workflow}* finished — ${p.approved ? 'approved' : 'rejected'}.`);
       break;
     case 'ops_freeform_response':
-      await send(`🧠 ${String(p.response ?? '').slice(0, 3500)}`);
+    case 'freeform_response': {
+      const response = String(p.response ?? '');
+      await send(`🧠 ${response.slice(0, 3500)}`);
+      await maybePersistAskResponse(p.taskId, response);
       break;
-    case 'freeform_response':
-      await send(`🧠 ${String(p.response ?? '').slice(0, 3500)}`);
-      break;
+    }
     case 'content_generated':
       await send(`✍️ *Generated ${p.platform} post:*\n\n${String(p.content ?? '').slice(0, 3500)}`);
       break;
