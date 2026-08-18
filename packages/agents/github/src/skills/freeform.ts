@@ -20,6 +20,11 @@ export const freeformSkill: Skill<FreeformInput, void> = {
     const response = await agent.runToolLoop(task, prompt, {
       extraContext: context,
       priorMessages: input.history,
+      // A single ask often needs several read calls chained together
+      // (search_repositories to find the repo, then list_issues/search_code/
+      // etc.) — confirmed hitting the default cap of 6 on a live delegated
+      // task (Content -> GitHub) before it ever produced a result.
+      maxIterations: 12,
     });
 
     agent.emit('agent:github_freeform_response', {
