@@ -21,7 +21,9 @@ export async function setupAdminMCP(mcp: MCPClient): Promise<void> {
       throw error;
     }
 
-    console.log('\n⚠️  Calendar scope missing from token. Starting re-authorization...');
+    import { logger } from '@wireassist/core/logger';
+
+    logger.warn('\n⚠️  Calendar scope missing from token. Starting re-authorization...');
     await gmail.authenticate({ forceReauth: true });
     cal = new CalendarClient();
   }

@@ -1,4 +1,5 @@
 import type { RemoteToolDefinition } from './github-client';
+import { logger } from '@wireassist/core/logger';
 
 // The actual safety boundary — a hardcoded allowlist independent of
 // whatever GitHub's MCP server advertises. This must never grow silently
@@ -76,7 +77,7 @@ export function resolveAuthorizedGithubTools(
     if (tool) {
       authorized.push(tool);
     } else {
-      console.warn(
+      logger.warn(
         `⚠️  GitHub MCP server did not advertise allowlisted tool "${name}" — ` +
           `likely a PAT scope gap or an upstream rename. This tool will be unavailable.`
       );

@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
 import type { AgentRole } from '../agents/types';
 import { embed, cosineSimilarity } from './embeddings';
+import { logger } from '../logger';
 
 export interface MemoryEntry {
   id: string;
@@ -78,7 +79,7 @@ export class MemoryStore {
       );
 
     this.backfillEmbedding(id, entry.content).catch((err) => {
-      console.warn(
+      logger.warn(
         '[MemoryStore] Background embedding failed for entry',
         id,
         err instanceof Error ? err.message : err
@@ -144,7 +145,7 @@ export class MemoryStore {
         this.cacheQueryVec(query, vec);
       })
       .catch((err) => {
-        console.warn(
+        logger.warn(
           '[MemoryStore] Query embedding cache-prime failed:',
           err instanceof Error ? err.message : err
         );

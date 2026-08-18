@@ -4,6 +4,7 @@ import { mkdirSync } from 'fs';
 import { dirname } from 'path';
 import type { Hono } from 'hono';
 import { ConversationStore, MessageStore } from '@wireassist/core';
+import { logger } from '@wireassist/core/logger';
 
 const DEFAULT_TITLE = 'New conversation';
 const PLACEHOLDER_PROVIDER = 'anthropic';
@@ -91,7 +92,7 @@ export function registerConversationRoutes(
       try {
         await conversations.update(id, { title: body.content.trim().slice(0, 50) });
       } catch (err) {
-        console.warn(`Failed to auto-title conversation ${id}`, err);
+        logger.warn(`Failed to auto-title conversation ${id}`, err);
       }
     }
 

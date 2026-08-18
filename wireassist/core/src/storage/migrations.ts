@@ -1,5 +1,6 @@
 // Database migrations
 import Database from 'better-sqlite3';
+import { logger } from '../logger';
 
 export interface Migration {
   version: number;
@@ -87,7 +88,7 @@ export function runMigrations(storagePath: string): void {
   // Run pending migrations
   for (const migration of migrations) {
     if (migration.version > version) {
-      console.log(`Running migration: ${migration.name}`);
+      logger.info(`Running migration: ${migration.name}`);
 
       try {
         migration.up(db);
@@ -98,9 +99,9 @@ export function runMigrations(storagePath: string): void {
           Date.now()
         );
 
-        console.log(`Migration ${migration.name} completed`);
+        logger.info(`Migration ${migration.name} completed`);
       } catch (error) {
-        console.error(`Migration ${migration.name} failed:`, error);
+        logger.error(`Migration ${migration.name} failed:`, error);
         throw error;
       }
     }

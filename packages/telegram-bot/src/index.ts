@@ -403,7 +403,7 @@ async function healthLoop(): Promise<never> {
   }
 }
 
-console.log(`WireAssist Telegram bot starting (API: ${API_URL})`);
+logger.info(`WireAssist Telegram bot starting (API: ${API_URL})`);
 void pollLoop();
 void sseLoop();
 void healthLoop();

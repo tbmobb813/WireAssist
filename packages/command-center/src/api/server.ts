@@ -56,6 +56,7 @@ import { registerConversationRoutes } from './conversation-routes';
 import { routeChatMessage, type RouteDecision, type ChatHistoryMessage } from './chat-router';
 import { getLocation, setLocation, listNotes, addNote, deleteNote } from './dashboard-widgets';
 import { routeHandoffTask } from '../lib/route-handoff';
+import { logger } from '@wireassist/core/logger';
 
 const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
 const DB_PATH = path.join(HOME_PATH, '.wireassist', 'wireassist.db');
@@ -96,12 +97,12 @@ function anthropicRequiredResponse() {
 function logAgentTaskError(err: unknown) {
   const message = err instanceof Error ? err.message : String(err);
   if (message.includes('Could not resolve authentication method')) {
-    console.error(
+    logger.error(
       '❌ Anthropic auth failed — set ANTHROPIC_API_KEY in the environment where you run pnpm dev:command-center'
     );
     return;
   }
-  console.error('❌ Agent task failed:', err);
+  logger.error('❌ Agent task failed:', err);
 }
 
 /** Run one admin task at a time so events and status stay coherent. */
@@ -170,7 +171,7 @@ let githubTaskChain: Promise<void> = Promise.resolve();
 
 function queueGithubTask(task: Parameters<GitHubAgent['run']>[0]) {
   if (!githubAgent) {
-    console.error(
+    logger.error(
       'GitHub task queued but the GitHub agent never connected — dropping task',
       task.id
     );
@@ -197,7 +198,7 @@ function openStores() {
     memory = new MemoryStore(DB_PATH);
     trendpostStorage = new TrendPostStorage(DB_PATH);
   } catch (err) {
-    console.error(`❌ ${sqliteSetupHint()}`);
+    logger.error(`❌ ${sqliteSetupHint()}`);
     throw err;
   }
 }
@@ -227,7 +228,7 @@ function broadcast(event: string, payload: unknown) {
   if (objectiveId) {
     objectiveStore
       .recordAgentEvent(`agent.${event}`, objectiveId, payload as Record<string, unknown>)
-      .catch(console.error);
+      .catch((e) => logger.error(e));
   }
 
   pushSSE(event, payload);
@@ -325,7 +326,7 @@ async function bootstrap() {
     githubAgent = new GitHubAgent({ approval, memory, mcp, events, githubClient, authorizedTools });
     githubReady = true;
   } catch (err) {
-    console.warn(
+    logger.warn(
       '⚠️  GitHub agent unavailable (credentials missing/invalid or MCP connection failed). Other agents still work.',
       err instanceof Error ? err.message : err
     );
@@ -339,7 +340,7 @@ async function bootstrap() {
     await setupAdminMCP(mcp);
     gmailReady = true;
   } catch (err) {
-    console.warn(
+    logger.warn(
       '⚠️  Gmail/Calendar tools unavailable (credentials missing or invalid). Chat still works; email/calendar tasks will fail until configured.',
       err instanceof Error ? err.message : err
     );
@@ -347,7 +348,7 @@ async function bootstrap() {
 
   agentReady = true;
   if (!anthropicConfigured()) {
-    console.warn(
+    logger.warn(
       '⚠️  ANTHROPIC_API_KEY is not set — dashboard loads, but triage/chat/calendar tasks will fail until you export it.'
     );
   }
@@ -355,7 +356,7 @@ async function bootstrap() {
   checkGmailReauthExpiry();
   setInterval(checkGmailReauthExpiry, GMAIL_REAUTH_CHECK_INTERVAL_MS);
 
-  console.log('✅ WireAssist API server ready');
+  logger.info('✅ WireAssist API server ready');
 }
 
 // Testing-mode Google OAuth refresh tokens die in days, not indefinitely
@@ -1006,18 +1007,18 @@ app.get('/api/admin/gmail/oauth-callback', async (c) => {
     return c.html('<h1>❌ WIREASSIST_OAUTH_REDIRECT_URI is not configured.</h1>', 500);
 
   try {
-    console.log(`[gmail-reauth] code received, exchanging (redirectUri=${redirectUri})`);
+    logger.info(`[gmail-reauth] code received, exchanging (redirectUri=${redirectUri})`);
     await new GmailClient().completeWebAuth(code, redirectUri);
-    console.log('[gmail-reauth] token exchange + save succeeded');
+    logger.info('[gmail-reauth] token exchange + save succeeded');
     // Rebuild Gmail/Calendar/Sheets clients and re-register their MCP tools
     // against the fresh token — same call bootstrap() makes at startup.
     await setupAdminMCP(mcp);
-    console.log('[gmail-reauth] setupAdminMCP re-registered tools; gmailReady = true');
+    logger.info('[gmail-reauth] setupAdminMCP re-registered tools; gmailReady = true');
     gmailReady = true;
     gmailReauthWarnedAt = null;
     return c.html('<h1>✅ WireAssist Gmail/Calendar re-authorized. You can close this tab.</h1>');
   } catch (err) {
-    console.error('[gmail-reauth] failed:', err);
+    logger.error('[gmail-reauth] failed:', err);
     return c.html(`<h1>❌ ${err instanceof Error ? err.message : String(err)}</h1>`, 500);
   }
 });
@@ -1304,16 +1305,16 @@ app.get('/api/events', (c) => {
 const API_PORT = Number(process.env.API_PORT ?? 3002);
 
 const server = serve({ fetch: app.fetch, port: API_PORT, hostname: '0.0.0.0' }, (info) => {
-  console.log(`🚀 API server running at http://localhost:${info.port}`);
+  logger.info(`🚀 API server running at http://localhost:${info.port}`);
   bootstrap().catch((err) => {
-    console.error('❌ Agent bootstrap failed:', err);
+    logger.error('❌ Agent bootstrap failed:', err);
     process.exit(1);
   });
 });
 
 server.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EADDRINUSE') {
-    console.error(
+    logger.error(
       `❌ Port ${API_PORT} is already in use.\n` +
         `   Stop the other process: fuser -k ${API_PORT}/tcp\n` +
         `   Or use another port: API_PORT=3003 pnpm dev:api`

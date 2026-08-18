@@ -1,4 +1,5 @@
 import type { AgentTask, AgentRole } from '@wireassist/core';
+import { logger } from '@wireassist/core/logger';
 
 export type HandoffQueues = Partial<Record<AgentRole, (task: AgentTask) => void>>;
 
@@ -8,7 +9,7 @@ export type HandoffQueues = Partial<Record<AgentRole, (task: AgentTask) => void>
 export function routeHandoffTask(task: AgentTask, queues: HandoffQueues): boolean {
   const queue = queues[task.agentRole];
   if (!queue) {
-    console.error(`agent:handoff_requested — unknown target role: ${task.agentRole}`);
+    logger.error(`agent:handoff_requested — unknown target role: ${task.agentRole}`);
     return false;
   }
   queue(task);

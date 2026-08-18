@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { logger } from '@wireassist/core/logger';
 
 // Lazy — never construct Resend at module scope. Next.js collects page data
 // at build time and must not require secrets to compile.
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest) {
 
   if (!process.env.RESEND_API_KEY) {
     // Dev fallback — log and return success so the UI works without a key
-    console.log('[waitlist] no RESEND_API_KEY set, skipping send. email:', email);
+    logger.info('[waitlist] no RESEND_API_KEY set, skipping send. email:', email);
     seenEmails.add(email.toLowerCase());
     return NextResponse.json({ ok: true });
   }
@@ -89,7 +90,7 @@ export async function POST(req: NextRequest) {
     seenEmails.add(email.toLowerCase());
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('[waitlist] resend error:', err);
+    logger.error('[waitlist] resend error:', err);
     return NextResponse.json({ error: 'Failed to add to waitlist' }, { status: 500 });
   }
 }

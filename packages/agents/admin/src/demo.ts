@@ -2,6 +2,7 @@
 
 import readline from 'readline';
 import { MemoryStore, MCPClient, EventBus, type IApprovalQueue } from '@wireassist/core';
+import { logger } from '@wireassist/core/logger';
 import { AdminAgent } from './admin-agent';
 import { setupAdminMCP } from './mcp-setup';
 import { AdminTasks } from './admin-tasks';
@@ -38,11 +39,11 @@ class CliApprovalQueue implements IApprovalQueue {
     payload: Record<string, unknown>;
   }): Promise<boolean> {
     return new Promise((resolve) => {
-      console.log('\n──────────────────────────────────────────────');
-      console.log(`[APPROVAL REQUEST] (${params.agentRole} :: ${params.taskId})`);
-      console.log(`Action: ${params.action}`);
-      console.log('Payload:', JSON.stringify(params.payload, null, 2));
-      console.log('Approve? [y/n]');
+      logger.info('\n──────────────────────────────────────────────');
+      logger.info(`[APPROVAL REQUEST] (${params.agentRole} :: ${params.taskId})`);
+      logger.info(`Action: ${params.action}`);
+      logger.debug('Payload:', JSON.stringify(params.payload, null, 2));
+      logger.info('Approve? [y/n]');
 
       const rl = readline.createInterface({
         input: process.stdin,
@@ -53,7 +54,7 @@ class CliApprovalQueue implements IApprovalQueue {
         rl.close();
         const normalized = answer.trim().toLowerCase();
         const approved = normalized === 'y' || normalized === 'yes';
-        console.log(approved ? '✅ Approved' : '❌ Rejected');
+        logger.info(approved ? '✅ Approved' : '❌ Rejected');
         resolve(approved);
       });
     });
@@ -61,8 +62,8 @@ class CliApprovalQueue implements IApprovalQueue {
 }
 
 async function runDemo(): Promise<void> {
-  console.log('=== WireAssist Admin Agent Demo ===');
-  console.log(
+  logger.info('=== WireAssist Admin Agent Demo ===');
+  logger.info(
     'This demo triages Gmail and reviews calendar; approvals are [y/n] in the terminal.\n'
   );
 
@@ -77,20 +78,20 @@ async function runDemo(): Promise<void> {
 
   // Basic logging so we can observe the agent behavior
   events.on('agent:task_started', (payload) => {
-    console.log('\n[EVENT] task_started:', payload);
+    logger.info('\n[EVENT] task_started:', payload);
   });
 
   events.on('agent:triage_complete', (payload) => {
-    console.log('\n[EVENT] triage_complete:');
-    console.dir(payload, { depth: null });
+    logger.info('\n[EVENT] triage_complete:');
+    logger.debug(payload);
   });
 
   events.on('agent:approval_resolved', (payload) => {
-    console.log('\n[EVENT] approval_resolved:', payload);
+    logger.info('\n[EVENT] approval_resolved:', payload);
   });
 
   events.on('agent:task_complete', (payload) => {
-    console.log('\n[EVENT] task_complete:', payload);
+    logger.info('\n[EVENT] task_complete:', payload);
   });
 
   // Create the Admin Agent
@@ -106,17 +107,16 @@ async function runDemo(): Promise<void> {
     maxEmails: 5,
   });
 
-  console.log('\nRunning email triage task...');
+  logger.info('\nRunning email triage task...');
   await agent.run(task);
 
-  console.log('\nRunning calendar review...');
+  logger.info('\nRunning calendar review...');
   const calTask = AdminTasks.reviewCalendar(7);
   await agent.run(calTask);
-
-  console.log('\nDemo complete. Press Ctrl+C to exit.');
+  logger.info('\nDemo complete. Press Ctrl+C to exit.');
 }
 
 runDemo().catch((err) => {
-  console.error('Demo failed:', err);
+  logger.error('Demo failed:', err);
   process.exitCode = 1;
 });

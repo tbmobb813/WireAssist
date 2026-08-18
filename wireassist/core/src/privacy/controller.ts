@@ -2,6 +2,7 @@
 
 import type { PrivacySettings, AIRequest, AuditLogOptions } from '../types';
 import { AuditLogger } from './audit';
+import { logger } from '../logger';
 
 export class PrivacyController {
   private settings: PrivacySettings;
@@ -30,7 +31,7 @@ export class PrivacyController {
     if (this.settings.neverSendPatterns) {
       for (const pattern of this.settings.neverSendPatterns) {
         if (new RegExp(pattern).test(prompt)) {
-          console.warn(`Prompt matches sensitive pattern: ${pattern}`);
+          logger.warn(`Prompt matches sensitive pattern: ${pattern}`);
           return true; // Force local processing
         }
       }
