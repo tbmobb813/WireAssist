@@ -213,14 +213,14 @@ export default function DashboardActivityTile({
               return (
                 <div key={item.id}>
                   <div
-                    className={`px-5 py-3 flex items-start gap-4 ${expandable ? 'cursor-pointer hover:bg-white/5' : ''}`}
+                    className={`px-5 py-3 flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-4 ${expandable ? 'cursor-pointer hover:bg-white/5' : ''}`}
                     onClick={expandable ? () => onToggleExpanded(item.id) : undefined}
                   >
-                    <div className="text-xs text-gray-600 mt-0.5 whitespace-nowrap">
+                    <div className="text-xs text-gray-600 whitespace-nowrap">
                       {item.time.toLocaleTimeString()}
                     </div>
                     <div
-                      className="text-xs tracking-widest mt-0.5 whitespace-nowrap"
+                      className="text-xs tracking-widest whitespace-nowrap"
                       style={{
                         color:
                           {
@@ -240,7 +240,7 @@ export default function DashboardActivityTile({
                     >
                       {item.event.toUpperCase()}
                     </div>
-                    <div className="text-sm text-gray-300 flex-1 min-w-0 break-words">
+                    <div className="text-sm text-gray-300 sm:flex-1 sm:min-w-0 break-words">
                       {item.description}
                       {expandable && (
                         <span className="ml-2 text-xs opacity-40">
