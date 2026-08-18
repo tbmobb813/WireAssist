@@ -20,6 +20,12 @@ export const freeformSkill: Skill<FreeformInput, void> = {
     const response = await agent.runToolLoop(task, prompt, {
       extraContext: context,
       priorMessages: input.history,
+      // A real freeform ask ("how did my recent posts do, what should I
+      // write next") plausibly chains several raw read calls
+      // (content_list_posts -> content_analyze -> content_list_ideas)
+      // before answering — same cap-exhaustion risk already confirmed live
+      // on Admin and GitHub's freeform loops.
+      maxIterations: 12,
     });
 
     agent.emit('agent:freeform_response', { taskId: task.id, response });
