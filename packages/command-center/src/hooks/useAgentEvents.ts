@@ -73,6 +73,10 @@ export type AgentEvent =
       payload: { agentRole: string; taskId: string; response: string };
     }
   | {
+      event: 'github_freeform_response';
+      payload: { taskId: string; response: string };
+    }
+  | {
       event: 'daily_briefing_complete';
       payload: { taskId: string; summary: string; triageSummary: string; calendarSummary: string };
     }

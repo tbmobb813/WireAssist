@@ -174,6 +174,7 @@ SQLite state for approvals and memory defaults to `~/.wireassist/wireassist.db`.
 - `/research` — Research agent
 - `/ops` — NixOps agent (workflows, trust stages)
 - `/gtm` — GTM agent (strategy + psych tactics wizard)
+- `/github` — GitHub Dev Agent (read repos/issues/PRs, comment/label/draft-PR with approval)
 - `/memory` — browse agent memory store
 - `/onboarding` — first-run setup helper
 
