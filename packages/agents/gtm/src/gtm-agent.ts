@@ -7,7 +7,7 @@ import {
   type EventBus,
   type ProviderToolCall,
 } from '@wireassist/core';
-import { BaseAgent } from '@wireassist/agent-admin';
+import { BaseAgent, buildDelegateToolSchema, DELEGATE_TOOL_NAME } from '@wireassist/agent-admin';
 import { GTM_SKILLS } from './skills';
 import { GTM_TOOL_SCHEMAS, READ_ONLY_GTM_TOOLS, GTM_SKILL_TOOLS } from './tool-schemas';
 
@@ -20,7 +20,13 @@ PRINCIPLES:
   actual competitors, actual buyer, and actual price given to you.
 - Output only what was asked for — valid JSON, no markdown fences, no preamble.
 - You never take real-world action (no posting, no sending) — you only generate
-  strategy and copy for the founder to review and use themselves.`;
+  strategy and copy for the founder to review and use themselves.
+
+DELEGATION:
+If the request needs something outside GTM strategy work — email/calendar (Admin), a written
+post (Content), web research (Research), a business workflow (NixOps), or GitHub repo work
+(GitHub Dev) — use delegate_to_agent instead of guessing or doing a worse version yourself.
+Never delegate something you can already do with your own tools.`;
 
 export class GtmAgent extends BaseAgent {
   constructor(deps: {
@@ -38,11 +44,14 @@ export class GtmAgent extends BaseAgent {
       // GTM has no raw MCP tools — every entry here is a skill-tool
       // (dispatched via invokeSkill(), never useTool()/MCP), so they're
       // deliberately not added to `tools` above.
-      toolSchemas: Object.fromEntries(
-        [...tools, ...GTM_SKILL_TOOLS]
-          .filter((name) => name in GTM_TOOL_SCHEMAS)
-          .map((name) => [name, GTM_TOOL_SCHEMAS[name]])
-      ),
+      toolSchemas: {
+        ...Object.fromEntries(
+          [...tools, ...GTM_SKILL_TOOLS]
+            .filter((name) => name in GTM_TOOL_SCHEMAS)
+            .map((name) => [name, GTM_TOOL_SCHEMAS[name]])
+        ),
+        [DELEGATE_TOOL_NAME]: buildDelegateToolSchema('gtm'),
+      },
       maxTokens: 4096,
     };
     super(config, deps);
@@ -64,6 +73,10 @@ export class GtmAgent extends BaseAgent {
     call: ProviderToolCall
   ): Promise<{ result: unknown; isError: boolean }> {
     try {
+      if (call.name === DELEGATE_TOOL_NAME) {
+        return this.executeDelegateToAgent(task, call);
+      }
+
       if (GTM_SKILL_TOOLS.has(call.name)) {
         // Both skill-tools only generate strategy/copy — GTM never takes a
         // real-world action (see system prompt) — so dispatch immediately

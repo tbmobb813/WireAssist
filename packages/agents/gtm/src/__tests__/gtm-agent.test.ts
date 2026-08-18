@@ -105,13 +105,33 @@ describe('GtmAgent — chat tool-calling loop', () => {
     const agent = new GtmAgent(makeDeps());
     const toolSchemas = (agent as any).config.toolSchemas;
     expect(Object.keys(toolSchemas).sort()).toEqual(
-      ['generate_gtm_skill', 'generate_psych_skill'].sort()
+      ['generate_gtm_skill', 'generate_psych_skill', 'delegate_to_agent'].sort()
     );
   });
 
   it('config.tools stays empty — GTM has no raw MCP tools, only skill-tools', () => {
     const agent = new GtmAgent(makeDeps());
     expect((agent as any).config.tools).toEqual([]);
+  });
+
+  it('delegate_to_agent dispatches to the shared BaseAgent handler (proposes approval, emits handoff)', async () => {
+    const deps = makeDeps();
+    const agent = new GtmAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'delegate_to_agent',
+      input: { targetRole: 'content', prompt: 'draft the launch post' },
+    });
+
+    expect(deps.approval.request).toHaveBeenCalledWith(
+      expect.objectContaining({ action: expect.stringContaining('Hand off to Content agent') })
+    );
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:handoff_requested',
+      expect.objectContaining({ task: expect.objectContaining({ agentRole: 'content' }) })
+    );
+    expect(result.isError).toBe(false);
   });
 
   it('freeform skill drives runToolLoop() and emits the result as agent:freeform_response', async () => {

@@ -19,6 +19,12 @@ import {
   SkillExecutor,
   ProviderFactory,
 } from '@wireassist/core';
+import {
+  isValidDelegationTarget,
+  delegationGuardError,
+  roleLabel,
+  buildDelegatedFreeformTask,
+} from './delegate';
 
 // Single place to move the fleet to a new provider (e.g. OpenRouter): set
 // WIREASSIST_PROVIDER in the environment, or pass `provider` in an
@@ -294,6 +300,48 @@ export abstract class BaseAgent {
   // Conservative default: nothing is read-only unless a subclass says so.
   protected isReadOnlyTool(_toolName: string): boolean {
     return false;
+  }
+
+  // Shared delegate_to_agent handler — every agent dispatches to this from
+  // its own executeToolCall() override before its tool-specific branches
+  // (see delegate.ts's DELEGATE_TOOL_NAME). Validates the target, applies
+  // the loop guard, proposes approval, then builds the delegated task and
+  // emits agent:handoff_requested — route-handoff.ts/server.ts's consumer
+  // (already generic across all six agent roles) takes it from there.
+  protected async executeDelegateToAgent(
+    task: AgentTask,
+    call: ProviderToolCall
+  ): Promise<{ result: unknown; isError: boolean }> {
+    const { targetRole, prompt } = call.input as { targetRole?: unknown; prompt?: unknown };
+    if (
+      !isValidDelegationTarget(targetRole, this.role) ||
+      typeof prompt !== 'string' ||
+      !prompt.trim()
+    ) {
+      return { result: 'delegate_to_agent requires a valid targetRole and prompt.', isError: true };
+    }
+
+    const guardError = delegationGuardError(task.delegationChain, targetRole);
+    if (guardError) {
+      return { result: guardError, isError: true };
+    }
+
+    const approved = await this.proposeAction(
+      task,
+      `Hand off to ${roleLabel(targetRole)} agent: ${prompt.trim().slice(0, 100)}`,
+      { targetRole, prompt: prompt.trim() }
+    );
+    if (!approved) {
+      return { result: 'User declined the handoff.', isError: true };
+    }
+
+    const history = (task.input as { history?: ProviderMessage[] } | undefined)?.history;
+    const delegatedTask = buildDelegatedFreeformTask(task, targetRole, prompt.trim(), history);
+    this.events.emit('agent:handoff_requested', { task: delegatedTask });
+    return {
+      result: `Handed off to the ${roleLabel(targetRole)} agent (task ${delegatedTask.id}). They'll work on it separately — check their tab or Approvals for the result.`,
+      isError: false,
+    };
   }
 
   // Invokes one of this agent's own registered Skills — or SkillChains — as

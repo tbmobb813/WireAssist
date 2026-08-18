@@ -8,7 +8,7 @@ import {
   type ProviderMessage,
   type ProviderToolCall,
 } from '@wireassist/core';
-import { BaseAgent } from '@wireassist/agent-admin';
+import { BaseAgent, buildDelegateToolSchema, DELEGATE_TOOL_NAME } from '@wireassist/agent-admin';
 import { loadOpsContext, listWorkflows } from './context-loader';
 import { OPS_SKILLS } from './skills';
 import { OPS_TOOL_SCHEMAS, READ_ONLY_OPS_TOOLS, OPS_SKILL_TOOLS } from './tool-schemas';
@@ -55,17 +55,29 @@ export class NixOpsAgent extends BaseAgent {
       // 'strategy' is the unclaimed slot in the core role union; NixOps owns it.
       role: 'strategy',
       name: 'NixOps',
-      systemPrompt: [ctx.soul, ctx.identity, ctx.user].join('\n\n---\n\n'),
+      systemPrompt: [
+        ctx.soul,
+        ctx.identity,
+        ctx.user,
+        `DELEGATION:
+If the request needs something outside ops/workflow work — email/calendar (Admin), a written
+post (Content), web research (Research), a go-to-market strategy (GTM), or GitHub repo work
+(GitHub Dev) — use delegate_to_agent instead of guessing or doing a worse version yourself.
+Never delegate something you can already do with your own tools.`,
+      ].join('\n\n---\n\n'),
       tools,
       // Skill-tools (run_workflow_skill) are added to the model-facing
       // schema list here but deliberately NOT to `tools` above — they're
       // dispatched via invokeSkill(), never useTool()/MCP, so they have no
       // business in the MCP authorization list.
-      toolSchemas: Object.fromEntries(
-        [...tools, ...OPS_SKILL_TOOLS]
-          .filter((name) => name in OPS_TOOL_SCHEMAS)
-          .map((name) => [name, OPS_TOOL_SCHEMAS[name]])
-      ),
+      toolSchemas: {
+        ...Object.fromEntries(
+          [...tools, ...OPS_SKILL_TOOLS]
+            .filter((name) => name in OPS_TOOL_SCHEMAS)
+            .map((name) => [name, OPS_TOOL_SCHEMAS[name]])
+        ),
+        [DELEGATE_TOOL_NAME]: buildDelegateToolSchema('strategy'),
+      },
       maxTokens: 8192,
     };
     super(config, deps);
@@ -91,6 +103,10 @@ export class NixOpsAgent extends BaseAgent {
     call: ProviderToolCall
   ): Promise<{ result: unknown; isError: boolean }> {
     try {
+      if (call.name === DELEGATE_TOOL_NAME) {
+        return this.executeDelegateToAgent(task, call);
+      }
+
       if (OPS_SKILL_TOOLS.has(call.name)) {
         // Skill-tools self-gate their own mutations via internal
         // proposeAction() calls (run_workflow does, for its final delivery

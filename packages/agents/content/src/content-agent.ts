@@ -7,7 +7,7 @@ import {
   type EventBus,
   type ProviderToolCall,
 } from '@wireassist/core';
-import { BaseAgent } from '@wireassist/agent-admin';
+import { BaseAgent, buildDelegateToolSchema, DELEGATE_TOOL_NAME } from '@wireassist/agent-admin';
 import { CONTENT_SKILLS } from './skills';
 import { CONTENT_TOOL_SCHEMAS, READ_ONLY_CONTENT_TOOLS, CONTENT_SKILL_TOOLS } from './tool-schemas';
 
@@ -26,7 +26,13 @@ YOUR CAPABILITIES:
 - Create weekly content plans
 - Analyze and improve existing content
 - Schedule approved posts
-- Track what's been posted and what's coming up`;
+- Track what's been posted and what's coming up
+
+DELEGATION:
+If the request needs something outside content work — email/calendar (Admin), web research
+(Research), a business workflow (NixOps), a go-to-market strategy (GTM), or GitHub repo work
+(GitHub Dev) — use delegate_to_agent instead of guessing or doing a worse version yourself.
+Never delegate something you can already do with your own tools.`;
 
 const CONTENT_TOOLS = [
   'content_generate',
@@ -62,11 +68,14 @@ export class ContentAgent extends BaseAgent {
       // schema list here but deliberately NOT to `tools` above — they're
       // dispatched via invokeSkill(), never useTool()/MCP, so they have no
       // business in the MCP authorization list.
-      toolSchemas: Object.fromEntries(
-        [...CONTENT_TOOLS, ...CONTENT_SKILL_TOOLS]
-          .filter((name) => name in CONTENT_TOOL_SCHEMAS)
-          .map((name) => [name, CONTENT_TOOL_SCHEMAS[name]])
-      ),
+      toolSchemas: {
+        ...Object.fromEntries(
+          [...CONTENT_TOOLS, ...CONTENT_SKILL_TOOLS]
+            .filter((name) => name in CONTENT_TOOL_SCHEMAS)
+            .map((name) => [name, CONTENT_TOOL_SCHEMAS[name]])
+        ),
+        [DELEGATE_TOOL_NAME]: buildDelegateToolSchema('content'),
+      },
       maxTokens: 4096,
     };
     super(config, deps);
@@ -88,6 +97,10 @@ export class ContentAgent extends BaseAgent {
     call: ProviderToolCall
   ): Promise<{ result: unknown; isError: boolean }> {
     try {
+      if (call.name === DELEGATE_TOOL_NAME) {
+        return this.executeDelegateToAgent(task, call);
+      }
+
       if (CONTENT_SKILL_TOOLS.has(call.name)) {
         // Skill-tools self-gate their own mutations via internal
         // proposeAction() calls — dispatch immediately rather than

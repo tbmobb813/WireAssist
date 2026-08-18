@@ -75,6 +75,7 @@ describe('ContentAgent — chat tool-calling loop', () => {
         'schedule_post_skill',
         'analyze_post_skill',
         'list_scheduled_skill',
+        'delegate_to_agent',
       ].sort()
     );
   });
@@ -92,6 +93,26 @@ describe('ContentAgent — chat tool-calling loop', () => {
     const toolSchemas = (agent as any).config.toolSchemas;
     expect(tools).toContain('content_publish_post');
     expect(toolSchemas).not.toHaveProperty('content_publish_post');
+  });
+
+  it('delegate_to_agent dispatches to the shared BaseAgent handler (proposes approval, emits handoff)', async () => {
+    const deps = makeDeps();
+    const agent = new ContentAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'delegate_to_agent',
+      input: { targetRole: 'research', prompt: 'find competitor pricing' },
+    });
+
+    expect(deps.approval.request).toHaveBeenCalledWith(
+      expect.objectContaining({ action: expect.stringContaining('Hand off to Research agent') })
+    );
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:handoff_requested',
+      expect.objectContaining({ task: expect.objectContaining({ agentRole: 'research' }) })
+    );
+    expect(result.isError).toBe(false);
   });
 
   it('executeToolCall() runs a read-only tool immediately, with no approval', async () => {

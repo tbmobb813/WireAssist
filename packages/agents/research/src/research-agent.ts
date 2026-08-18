@@ -1,4 +1,4 @@
-import { BaseAgent } from '@wireassist/agent-admin';
+import { BaseAgent, buildDelegateToolSchema, DELEGATE_TOOL_NAME } from '@wireassist/agent-admin';
 import type {
   AgentConfig,
   AgentTask,
@@ -31,7 +31,13 @@ Principles:
   plainly instead of stretching them into a confident-sounding summary. "I couldn't find
   reliable information on X" is a valid and useful finding.
 - Be direct — no filler, no padding.
-- Structure findings as: Key Takeaways → Details → Sources, and always cite source URLs.`;
+- Structure findings as: Key Takeaways → Details → Sources, and always cite source URLs.
+
+DELEGATION:
+If the request needs something outside research work — email/calendar (Admin), a written post
+(Content), a business workflow (NixOps), a go-to-market strategy (GTM), or GitHub repo work
+(GitHub Dev) — use delegate_to_agent instead of guessing or doing a worse version yourself.
+Never delegate something you can already do with your own tools.`;
 
 const RESEARCH_TOOLS = ['brave_search'];
 
@@ -44,11 +50,14 @@ const DEFAULT_CONFIG: AgentConfig = {
   // to the model-facing schema list here but deliberately NOT to `tools`
   // above — they're dispatched via invokeSkill(), never useTool()/MCP, so
   // they have no business in the MCP authorization list.
-  toolSchemas: Object.fromEntries(
-    [...RESEARCH_TOOLS, ...RESEARCH_SKILL_TOOLS]
-      .filter((name) => name in RESEARCH_TOOL_SCHEMAS)
-      .map((name) => [name, RESEARCH_TOOL_SCHEMAS[name]])
-  ),
+  toolSchemas: {
+    ...Object.fromEntries(
+      [...RESEARCH_TOOLS, ...RESEARCH_SKILL_TOOLS]
+        .filter((name) => name in RESEARCH_TOOL_SCHEMAS)
+        .map((name) => [name, RESEARCH_TOOL_SCHEMAS[name]])
+    ),
+    [DELEGATE_TOOL_NAME]: buildDelegateToolSchema('research'),
+  },
   maxTokens: 2048,
 };
 
@@ -79,6 +88,10 @@ export class ResearchAgent extends BaseAgent {
     call: ProviderToolCall
   ): Promise<{ result: unknown; isError: boolean }> {
     try {
+      if (call.name === DELEGATE_TOOL_NAME) {
+        return this.executeDelegateToAgent(task, call);
+      }
+
       if (RESEARCH_SKILL_TOOLS.has(call.name)) {
         // Skill-tools self-gate their own mutations via internal
         // proposeAction() calls — dispatch immediately rather than

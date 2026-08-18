@@ -46,4 +46,9 @@ export interface AgentTask {
   // wireassist/core/src/objectives/store.ts). Purely a coordination/tracking
   // tag — never required, never enforced.
   objectiveId?: string;
+  // Chain of agent roles this task has already passed through via
+  // delegate_to_agent, oldest first — used only to cap/guard chain depth so
+  // a delegation chain can't ping-pong forever. Never required, never
+  // enforced outside the delegation path itself.
+  delegationChain?: AgentRole[];
 }

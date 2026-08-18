@@ -7,7 +7,7 @@ import {
   type EventBus,
   type ProviderToolCall,
 } from '@wireassist/core';
-import { BaseAgent } from '@wireassist/agent-admin';
+import { BaseAgent, buildDelegateToolSchema, DELEGATE_TOOL_NAME } from '@wireassist/agent-admin';
 import { GITHUB_SKILLS } from './skills';
 import { GITHUB_TOOL_ALLOWLIST, READ_ONLY_GITHUB_TOOLS } from './tool-policy';
 import { buildGithubToolSchemas } from './tool-schemas';
@@ -31,7 +31,13 @@ BOUNDARIES (non-negotiable, enforced in code — do not attempt to work around t
 
 Read tools execute immediately since they can't change anything. Write tools always wait
 for approval, even for something that seems obviously fine — there is no "auto-approve"
-exception for this agent.`;
+exception for this agent.
+
+DELEGATION:
+If the request needs something outside GitHub repo work — email/calendar (Admin), a written
+post (Content), web research (Research), a business workflow (NixOps), or a go-to-market
+strategy (GTM) — use delegate_to_agent instead of guessing or doing a worse version yourself.
+Never delegate something you can already do with your own tools.`;
 
 export class GitHubAgent extends BaseAgent {
   private githubClient: GitHubMcpClient;
@@ -53,7 +59,10 @@ export class GitHubAgent extends BaseAgent {
       // entirely. `tools` only gates the old registry, so it has nothing to
       // authorize here.
       tools: [],
-      toolSchemas: buildGithubToolSchemas(deps.authorizedTools),
+      toolSchemas: {
+        ...buildGithubToolSchemas(deps.authorizedTools),
+        [DELEGATE_TOOL_NAME]: buildDelegateToolSchema('github'),
+      },
       maxTokens: 4096,
     };
     super(config, deps);
@@ -70,11 +79,16 @@ export class GitHubAgent extends BaseAgent {
     call: ProviderToolCall
   ): Promise<{ result: unknown; isError: boolean }> {
     try {
+      if (call.name === DELEGATE_TOOL_NAME) {
+        return this.executeDelegateToAgent(task, call);
+      }
+
       // Defense-in-depth — toolSchemas should already only ever contain
       // allowlisted names (built from resolveAuthorizedGithubTools()'s
-      // intersection), so the model should never see anything else. This
-      // guard protects against a future refactor accidentally widening
-      // exposure, not against a normal code path.
+      // intersection) plus delegate_to_agent (handled above), so the model
+      // should never see anything else. This guard protects against a
+      // future refactor accidentally widening exposure, not against a
+      // normal code path.
       if (!GITHUB_TOOL_ALLOWLIST.has(call.name)) {
         return {
           result: `Tool "${call.name}" is outside this agent's allowed scope.`,

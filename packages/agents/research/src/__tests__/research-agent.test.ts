@@ -276,6 +276,26 @@ describe('ResearchAgent — freeform chat loop', () => {
 });
 
 describe('ResearchAgent — composable skill-tools in the chat loop', () => {
+  it('delegate_to_agent dispatches to the shared BaseAgent handler (proposes approval, emits handoff)', async () => {
+    const deps = makeDeps();
+    const agent = new ResearchAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'delegate_to_agent',
+      input: { targetRole: 'content', prompt: 'draft a launch post' },
+    });
+
+    expect(deps.approval.request).toHaveBeenCalledWith(
+      expect.objectContaining({ action: expect.stringContaining('Hand off to Content agent') })
+    );
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:handoff_requested',
+      expect.objectContaining({ task: expect.objectContaining({ agentRole: 'content' }) })
+    );
+    expect(result.isError).toBe(false);
+  });
+
   it('executeToolCall() runs brave_search immediately, with no approval', async () => {
     const deps = makeDeps();
     const agent = new ResearchAgent(deps);
