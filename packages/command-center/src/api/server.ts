@@ -1026,6 +1026,20 @@ app.post('/api/tasks/gtm/psych', async (c) => {
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
+app.post('/api/tasks/gtm-freeform', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const { prompt, objectiveId } = await c.req.json();
+  if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
+  const task = GtmTasks.freeform(
+    prompt,
+    undefined,
+    typeof objectiveId === 'string' ? objectiveId : undefined
+  );
+  queueGtmTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
 // Best-effort pre-fill for the GTM wizard: name always; category/problem/benefit/
 // differentiator only if the focused (or first active) project has a repoPath
 // in its metadata pointing at a repo with a README.md/STATUS.md.
