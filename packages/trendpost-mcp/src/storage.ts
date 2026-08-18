@@ -238,8 +238,8 @@ export class TrendPostStorage {
 
   listIdeas(status?: string): ContentIdea[] {
     const sql = status
-      ? 'SELECT * FROM content_ideas WHERE status = ? ORDER BY created_at DESC'
-      : 'SELECT * FROM content_ideas ORDER BY created_at DESC';
+      ? 'SELECT * FROM content_ideas WHERE status = ? ORDER BY created_at DESC, rowid DESC'
+      : 'SELECT * FROM content_ideas ORDER BY created_at DESC, rowid DESC';
     const rows = this.db.prepare(sql).all(...(status ? [status] : [])) as Record<string, unknown>[];
     return rows.map((r) => this.mapIdea(r));
   }
@@ -263,7 +263,7 @@ export class TrendPostStorage {
 
   listCampaigns(): Campaign[] {
     const rows = this.db
-      .prepare('SELECT * FROM campaigns ORDER BY created_at DESC')
+      .prepare('SELECT * FROM campaigns ORDER BY created_at DESC, rowid DESC')
       .all() as Record<string, unknown>[];
     return rows.map((r) => ({
       id: r.id as string,
