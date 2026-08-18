@@ -1,6 +1,7 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
+import { ObjectivePicker, useActiveObjectives } from '../objective-picker';
 
 interface Message {
   id: string;
@@ -62,6 +63,8 @@ export default function ChatClient() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversationList, setConversationList] = useState<ConversationSummary[]>([]);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [objectiveId, setObjectiveId] = useState('');
+  const objectives = useActiveObjectives();
   const bottomRef = useRef<HTMLDivElement>(null);
   const pendingTaskId = useRef<string | null>(null);
   const handledEvents = useRef(new Set<string>());
@@ -169,6 +172,7 @@ export default function ChatClient() {
       setMessages([WELCOME_MESSAGE]);
       pendingTaskId.current = null;
       setSending(false);
+      setObjectiveId('');
       void refreshConversationList();
     } catch (err) {
       console.warn('Failed to start a new conversation', err);
@@ -436,7 +440,7 @@ export default function ChatClient() {
       const res = await fetch('/api/tasks/freeform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instruction: text, history }),
+        body: JSON.stringify({ instruction: text, history, objectiveId: objectiveId || undefined }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -533,6 +537,14 @@ export default function ChatClient() {
             </>
           )}
         </div>
+      </div>
+
+      <div className="mb-2">
+        <label className="block text-xs text-gray-500 mb-1">
+          Tie this conversation to an objective (optional) — links every agent task it produces,
+          including any handoffs, to that objective's board.
+        </label>
+        <ObjectivePicker objectives={objectives} value={objectiveId} onChange={setObjectiveId} />
       </div>
 
       <div

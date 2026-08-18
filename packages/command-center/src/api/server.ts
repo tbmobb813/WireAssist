@@ -648,9 +648,11 @@ function sanitizeHistory(raw: unknown): ChatHistoryMessage[] | undefined {
 app.post('/api/tasks/freeform', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const { instruction, history: rawHistory } = await c.req.json();
+  const { instruction, history: rawHistory, objectiveId: rawObjectiveId } = await c.req.json();
   if (!instruction) return c.json({ error: 'instruction required' }, 400);
   const history = sanitizeHistory(rawHistory);
+  const objectiveId =
+    typeof rawObjectiveId === 'string' && rawObjectiveId ? rawObjectiveId : undefined;
 
   let decision: RouteDecision;
   try {
@@ -662,18 +664,23 @@ app.post('/api/tasks/freeform', async (c) => {
   switch (decision.kind) {
     case 'admin_triage': {
       if (!gmailReady) return c.json(gmailRequired(), 503);
-      const task = AdminTasks.triageEmail(20);
+      const task = AdminTasks.triageEmail(20, objectiveId);
       queueAgentTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'admin_calendar': {
       if (!gmailReady) return c.json(gmailRequired(), 503);
-      const task = AdminTasks.reviewCalendar(decision.daysAhead ?? 7);
+      const task = AdminTasks.reviewCalendar(decision.daysAhead ?? 7, objectiveId);
       queueAgentTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'content_generate': {
-      const task = ContentTasks.generatePost(decision.topic, decision.platform, decision.tone);
+      const task = ContentTasks.generatePost(
+        decision.topic,
+        decision.platform,
+        decision.tone,
+        objectiveId
+      );
       queueContentTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
@@ -681,28 +688,38 @@ app.post('/api/tasks/freeform', async (c) => {
       const task = ContentTasks.generatePlan(
         decision.platforms ?? ['linkedin', 'twitter'],
         decision.weeksAhead ?? 1,
-        decision.postsPerWeek ?? 3
+        decision.postsPerWeek ?? 3,
+        objectiveId
       );
       queueContentTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'content_freeform': {
-      const task = ContentTasks.freeform(decision.prompt, history);
+      const task = ContentTasks.freeform(decision.prompt, history, objectiveId);
       queueContentTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'research_topic': {
-      const task = ResearchTasks.researchTopic(decision.query, decision.depth ?? 'quick');
+      const task = ResearchTasks.researchTopic(
+        decision.query,
+        decision.depth ?? 'quick',
+        undefined,
+        objectiveId
+      );
       queueResearchTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'research_freeform': {
-      const task = ResearchTasks.freeform(decision.prompt, history);
+      const task = ResearchTasks.freeform(decision.prompt, history, objectiveId);
       queueResearchTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'ops_freeform': {
-      const task = OpsTasks.createOpsFreeformTask({ prompt: decision.prompt, history });
+      const task = OpsTasks.createOpsFreeformTask({
+        prompt: decision.prompt,
+        history,
+        objectiveId,
+      });
       queueOpsTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
@@ -710,12 +727,13 @@ app.post('/api/tasks/freeform', async (c) => {
       const task = OpsTasks.createWorkflowRunTask({
         workflow: decision.workflow,
         brief: decision.brief,
+        objectiveId,
       });
       queueOpsTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'gtm_freeform': {
-      const task = GtmTasks.freeform(decision.prompt, history);
+      const task = GtmTasks.freeform(decision.prompt, history, objectiveId);
       queueGtmTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
@@ -735,7 +753,7 @@ app.post('/api/tasks/freeform', async (c) => {
           503
         );
       }
-      const task = GitHubTasks.freeform(decision.prompt, history);
+      const task = GitHubTasks.freeform(decision.prompt, history, objectiveId);
       queueGithubTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
@@ -743,7 +761,8 @@ app.post('/api/tasks/freeform', async (c) => {
     default: {
       const task = AdminTasks.freeform(
         decision.kind === 'admin_freeform' ? decision.prompt : instruction,
-        history
+        history,
+        objectiveId
       );
       queueAgentTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
