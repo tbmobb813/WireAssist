@@ -12,7 +12,7 @@ export type RouteDecision =
   | { kind: 'content_generate'; topic: string; platform: Platform; tone?: string }
   | { kind: 'content_plan'; platforms?: Platform[]; weeksAhead?: number; postsPerWeek?: number }
   | { kind: 'content_freeform'; prompt: string }
-  | { kind: 'research_topic'; query: string; depth?: 'quick' | 'deep' }
+  | { kind: 'research_topic'; query: string; depth?: 'quick' | 'deep'; offerOpsWorkflow?: string }
   | { kind: 'research_freeform'; prompt: string }
   | { kind: 'ops_freeform'; prompt: string }
   | { kind: 'ops_workflow'; workflow: string; brief: string }
@@ -119,6 +119,16 @@ const TOOLS: Anthropic.Tool[] = [
       properties: {
         query: { type: 'string', description: 'What to research.' },
         depth: { type: 'string', enum: ['quick', 'deep'] },
+        offerOpsWorkflow: {
+          type: 'string',
+          enum: ['nixlevel-listing'],
+          description:
+            'Set this ONLY when the research is clearly in service of building product ' +
+            'listing(s) to sell (e.g. "research trending back-to-school items to sell on Etsy") ' +
+            '— triggers an automatic (still approval-gated) handoff to NixOps after the research ' +
+            'completes. Leave unset for general/informational research with no clear intent to ' +
+            'turn it into a listing.',
+        },
       },
       required: ['query'],
     },
@@ -206,6 +216,9 @@ Guidance:
   research_freeform/research_topic for general web research with no direct repo access.
 - Only use ops_workflow when a specific, nameable workflow is clearly being requested;
   otherwise prefer ops_freeform.
+- When a research request is clearly meant to produce product listing(s) to sell (mentions
+  selling, Etsy, a shop, or similar intent on top of the research ask), route to research_topic
+  and set offerOpsWorkflow to 'nixlevel-listing' rather than leaving it unset.
 - Only use content_generate/content_plan when the user wants NEW content written; questions
   about existing posts/ideas, or general content strategy chat, route to content_freeform.
 - Compound or multi-part requests — multiple distinct asks joined by "and"/"then"/"also", or a
@@ -263,7 +276,9 @@ export function buildDecision(name: string, input: unknown): RouteDecision {
     case 'research_topic': {
       if (typeof i.query !== 'string') throw new RouterError('research_topic missing query');
       const depth = i.depth === 'deep' ? 'deep' : i.depth === 'quick' ? 'quick' : undefined;
-      return { kind: 'research_topic', query: i.query, depth };
+      const offerOpsWorkflow =
+        i.offerOpsWorkflow === 'nixlevel-listing' ? i.offerOpsWorkflow : undefined;
+      return { kind: 'research_topic', query: i.query, depth, offerOpsWorkflow };
     }
     case 'research_freeform': {
       if (typeof i.prompt !== 'string') throw new RouterError('research_freeform missing prompt');

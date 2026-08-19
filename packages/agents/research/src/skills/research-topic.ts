@@ -1,5 +1,6 @@
 import type { Skill } from '@wireassist/core';
 import { ContentTasks } from '@wireassist/agent-content';
+import { OpsTasks } from '@wireassist/agent-ops';
 import type { Platform } from '@wireassist/trendpost-mcp';
 
 interface BraveResult {
@@ -12,6 +13,7 @@ export interface ResearchTopicInput {
   query: string;
   resultCount?: number;
   offerContentDraft?: { platform: Platform; tone?: string };
+  offerOpsHandoff?: { workflow: string };
 }
 
 export const researchTopicSkill: Skill<ResearchTopicInput, void> = {
@@ -22,7 +24,7 @@ export const researchTopicSkill: Skill<ResearchTopicInput, void> = {
 
   async execute({ agent, task, input }) {
     // Brave's own API default and max are both 20 (Web Search API docs).
-    const { query, resultCount = 20, offerContentDraft } = input;
+    const { query, resultCount = 20, offerContentDraft, offerOpsHandoff } = input;
 
     const context = await agent.loadContext(query);
 
@@ -91,6 +93,34 @@ export const researchTopicSkill: Skill<ResearchTopicInput, void> = {
           summary,
           task.objectiveId
         );
+        agent.emit('agent:handoff_requested', { task: handoffTask });
+      }
+    }
+
+    // Same shape as the Content handoff above, pointed at NixOps instead —
+    // still gated behind its own approval here, and the resulting workflow
+    // run goes through run-workflow.ts's own delivery approval before
+    // anything is ever "done."
+    if (offerOpsHandoff) {
+      const { workflow } = offerOpsHandoff;
+      const handoffApproved = await agent.proposeAction(
+        task,
+        `Turn this research into a "${workflow}" NixOps run?`,
+        { query, workflow }
+      );
+      if (handoffApproved) {
+        const handoffTask = OpsTasks.createWorkflowRunTask({
+          workflow,
+          brief:
+            `Use this research to identify every distinct, sellable, specific product concept ` +
+            `(not vague categories) it points to, and write one numbered product entry per ` +
+            `concept so this run can batch-generate a listing for each. If only one clear ` +
+            `candidate emerges, that's fine — one numbered entry is still valid. Do not ask a ` +
+            `follow-up question; this is a one-shot handoff with no way to hear a reply, so pick ` +
+            `the strongest candidates and proceed.\n\nRESEARCH ON "${query}":\n${summary}`,
+          description: `NixOps run from research: ${query}`,
+          objectiveId: task.objectiveId,
+        });
         agent.emit('agent:handoff_requested', { task: handoffTask });
       }
     }

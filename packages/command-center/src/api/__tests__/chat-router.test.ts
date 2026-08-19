@@ -62,6 +62,28 @@ describe('buildDecision() — research_topic still works alongside research_free
       depth: 'deep',
     });
   });
+
+  it('passes through offerOpsWorkflow when it is the allowed value', () => {
+    expect(
+      buildDecision('research_topic', {
+        query: 'back to school trends',
+        offerOpsWorkflow: 'nixlevel-listing',
+      })
+    ).toEqual({
+      kind: 'research_topic',
+      query: 'back to school trends',
+      depth: undefined,
+      offerOpsWorkflow: 'nixlevel-listing',
+    });
+  });
+
+  it('drops offerOpsWorkflow if it is not the allowed value', () => {
+    const decision = buildDecision('research_topic', {
+      query: 'AI trends',
+      offerOpsWorkflow: 'some-other-workflow',
+    });
+    expect(decision).toEqual({ kind: 'research_topic', query: 'AI trends', depth: undefined });
+  });
 });
 
 describe('buildDecision() — gtm_freeform', () => {

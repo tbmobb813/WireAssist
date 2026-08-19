@@ -7,7 +7,8 @@ export const ResearchTasks = {
     query: string,
     depth: 'quick' | 'deep' = 'quick',
     offerContentDraft?: { platform: Platform; tone?: string },
-    objectiveId?: string
+    objectiveId?: string,
+    offerOpsHandoff?: { workflow: string }
   ): AgentTask {
     return {
       id: randomUUID(),
@@ -22,6 +23,7 @@ export const ResearchTasks = {
         depth,
         resultCount: depth === 'deep' ? 10 : 5,
         offerContentDraft,
+        offerOpsHandoff,
       },
       approvalRequired: true,
       objectiveId,

@@ -211,6 +211,9 @@ importers:
       '@wireassist/agent-content':
         specifier: workspace:*
         version: link:../content
+      '@wireassist/agent-ops':
+        specifier: workspace:*
+        version: link:../ops
       '@wireassist/core':
         specifier: workspace:*
         version: link:../../../wireassist/core

@@ -782,7 +782,8 @@ app.post('/api/tasks/freeform', async (c) => {
         decision.query,
         decision.depth ?? 'quick',
         undefined,
-        objectiveId
+        objectiveId,
+        decision.offerOpsWorkflow ? { workflow: decision.offerOpsWorkflow } : undefined
       );
       queueResearchTask(task);
       return c.json({ taskId: task.id, status: 'queued' });

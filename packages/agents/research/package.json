@@ -14,6 +14,7 @@
     "@anthropic-ai/sdk": "^0.27.0",
     "@wireassist/agent-admin": "workspace:*",
     "@wireassist/agent-content": "workspace:*",
+    "@wireassist/agent-ops": "workspace:*",
     "@wireassist/core": "workspace:*",
     "@wireassist/trendpost-mcp": "workspace:*"
   },
