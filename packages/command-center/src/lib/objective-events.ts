@@ -92,6 +92,9 @@ export function describeEvent(e: ObjectiveEvent): string {
     action?: string;
     to?: string;
     text?: string;
+    platform?: string;
+    status?: string;
+    errorMessage?: string;
   } | null;
   switch (e.type) {
     case 'objective.created':
@@ -114,6 +117,10 @@ export function describeEvent(e: ObjectiveEvent): string {
       return `${payload?.agentRole ?? 'agent'} waiting on approval: ${payload?.action ?? ''}`;
     case 'approval_resolved':
       return `${payload?.agentRole ?? 'agent'} approval resolved`;
+    case 'post_published':
+      return payload?.status === 'published'
+        ? `Published ${payload?.platform ?? ''} post`
+        : `Failed to publish ${payload?.platform ?? ''} post: ${payload?.errorMessage ?? ''}`;
     default:
       return type;
   }
@@ -174,6 +181,36 @@ export function foldTasks(events: ObjectiveEvent[]): KanbanCard[] {
       const existing = manualCards.get(payload.cardId);
       if (!existing) continue;
       manualCards.set(payload.cardId, { ...existing, column: payload.to, updatedAt: e.createdAt });
+      continue;
+    }
+
+    if (e.type === 'agent.post_published') {
+      // Not keyed by taskId — the task that publishes a post (a cron sweep
+      // spanning many objectives at once) is never the task the user tagged
+      // with this objectiveId (that was schedulePostSkill, at schedule
+      // time). Keyed by postId instead, as a standalone card: a publish
+      // outcome is discovered in one shot, with no earlier lifecycle stage
+      // to show.
+      const payload = e.payload as {
+        postId?: string;
+        platform?: string;
+        status?: string;
+        errorMessage?: string;
+      } | null;
+      if (!payload?.postId) continue;
+      const errored = payload.status !== 'published';
+      agentTasks.set(payload.postId, {
+        kind: 'agent',
+        taskId: payload.postId,
+        agentRole: 'content',
+        description: errored
+          ? `Failed to publish ${payload.platform ?? ''} post`
+          : `Published ${payload.platform ?? ''} post`,
+        column: 'done',
+        errored,
+        error: errored ? payload.errorMessage : undefined,
+        updatedAt: e.createdAt,
+      });
       continue;
     }
 

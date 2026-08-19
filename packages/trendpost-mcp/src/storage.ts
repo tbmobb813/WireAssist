@@ -18,6 +18,7 @@ export interface ScheduledPost {
   tags: string[];
   campaignId?: string;
   platformPostId?: string;
+  objectiveId?: string;
 }
 
 export interface ContentIdea {
@@ -95,6 +96,7 @@ export class TrendPostStorage {
     this.addColumnIfMissing('content_ideas', 'scheduled_for', 'TEXT');
     this.addColumnIfMissing('content_ideas', 'campaign_id', 'TEXT');
     this.addColumnIfMissing('scheduled_posts', 'platform_post_id', 'TEXT');
+    this.addColumnIfMissing('scheduled_posts', 'objective_id', 'TEXT');
   }
 
   private addColumnIfMissing(table: string, column: string, type: string): void {
@@ -111,6 +113,7 @@ export class TrendPostStorage {
     scheduledAt: Date;
     tags?: string[];
     campaignId?: string;
+    objectiveId?: string;
   }): ScheduledPost {
     const id = randomUUID();
     const now = new Date();
@@ -121,8 +124,8 @@ export class TrendPostStorage {
     this.db
       .prepare(
         `
-      INSERT INTO scheduled_posts (id, content, platform, scheduled_at, status, created_at, tags, campaign_id)
-      VALUES (?, ?, ?, ?, 'scheduled', ?, ?, ?)
+      INSERT INTO scheduled_posts (id, content, platform, scheduled_at, status, created_at, tags, campaign_id, objective_id)
+      VALUES (?, ?, ?, ?, 'scheduled', ?, ?, ?, ?)
     `
       )
       .run(
@@ -132,7 +135,8 @@ export class TrendPostStorage {
         params.scheduledAt.toISOString(),
         now.toISOString(),
         JSON.stringify(params.tags ?? []),
-        params.campaignId ?? null
+        params.campaignId ?? null,
+        params.objectiveId ?? null
       );
 
     return this.getPost(id)!;
@@ -290,6 +294,7 @@ export class TrendPostStorage {
       tags: JSON.parse(r.tags as string),
       campaignId: (r.campaign_id as string | null) ?? undefined,
       platformPostId: (r.platform_post_id as string | null) ?? undefined,
+      objectiveId: (r.objective_id as string | null) ?? undefined,
     };
   }
 

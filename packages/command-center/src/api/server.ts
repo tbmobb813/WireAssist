@@ -329,6 +329,7 @@ events.on('agent:proactive_insights_complete', (p) => broadcast('proactive_insig
 events.on('agent:budget_warning_complete', (p) => broadcast('budget_warning_complete', p));
 events.on('agent:stale_approvals_complete', (p) => broadcast('stale_approvals_complete', p));
 events.on('agent:publish_due_posts_complete', (p) => broadcast('publish_due_posts_complete', p));
+events.on('agent:post_published', (p) => broadcast('post_published', p));
 
 // Agent-to-agent handoff: a skill (e.g. Research's research_topic, once its
 // own approval for the handoff is granted) hands a fully-formed AgentTask
