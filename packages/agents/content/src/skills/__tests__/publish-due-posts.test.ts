@@ -82,6 +82,62 @@ describe('publishDuePostsSkill', () => {
     );
   });
 
+  it('emits agent:post_published for a published post that has an objectiveId', async () => {
+    const duePost = post({ id: 'post-1', objectiveId: 'obj-1' });
+    const publishedPost = post({
+      id: 'post-1',
+      status: 'published',
+      platform: 'twitter',
+      objectiveId: 'obj-1',
+    });
+    const useTool = jest.fn().mockResolvedValueOnce([duePost]).mockResolvedValueOnce(publishedPost);
+    const agent = makeAgentHandle({ useTool });
+
+    await publishDuePostsSkill.execute({ agent, task: makeTask(), input: {} });
+
+    expect(agent.emit).toHaveBeenCalledWith('agent:post_published', {
+      objectiveId: 'obj-1',
+      postId: 'post-1',
+      platform: 'twitter',
+      status: 'published',
+      errorMessage: undefined,
+    });
+  });
+
+  it('emits agent:post_published for a failed post that has an objectiveId', async () => {
+    const duePost = post({ id: 'post-1', objectiveId: 'obj-1' });
+    const failedPost = post({
+      id: 'post-1',
+      status: 'failed',
+      platform: 'twitter',
+      objectiveId: 'obj-1',
+      errorMessage: 'rate limited',
+    });
+    const useTool = jest.fn().mockResolvedValueOnce([duePost]).mockResolvedValueOnce(failedPost);
+    const agent = makeAgentHandle({ useTool });
+
+    await publishDuePostsSkill.execute({ agent, task: makeTask(), input: {} });
+
+    expect(agent.emit).toHaveBeenCalledWith('agent:post_published', {
+      objectiveId: 'obj-1',
+      postId: 'post-1',
+      platform: 'twitter',
+      status: 'failed',
+      errorMessage: 'rate limited',
+    });
+  });
+
+  it('never emits agent:post_published for a post with no objectiveId', async () => {
+    const duePost = post({ id: 'post-1' });
+    const publishedPost = post({ id: 'post-1', status: 'published' });
+    const useTool = jest.fn().mockResolvedValueOnce([duePost]).mockResolvedValueOnce(publishedPost);
+    const agent = makeAgentHandle({ useTool });
+
+    await publishDuePostsSkill.execute({ agent, task: makeTask(), input: {} });
+
+    expect(agent.emit).not.toHaveBeenCalledWith('agent:post_published', expect.anything());
+  });
+
   it('reports a failed post without throwing, and still attempts the next due post in the batch', async () => {
     const postA = post({ id: 'post-a', platform: 'instagram' });
     const postB = post({ id: 'post-b', platform: 'twitter' });
