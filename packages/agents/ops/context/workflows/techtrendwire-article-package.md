@@ -21,9 +21,9 @@ An article is DONE when all of these exist in `output/techtrendwire/<article-slu
 ## Inputs (Camcorder Method — fill from a recorded run)
 
 - News topic + source article(s)/links from JNix
-- Target community/subreddit(s) for the crosspost summary: _TODO: JNix pastes current go-to communities_
-- House style guide or 2-3 example past articles to mirror: _TODO: JNix pastes link or examples_
-- Byline / author attribution to use: _TODO: JNix confirms current byline_
+- Target community/subreddit(s) for the crosspost summary: _SETTING: JNix pastes current go-to communities_
+- House style guide or 2-3 example past articles to mirror: _SETTING: JNix pastes link or examples_
+- Byline / author attribution to use: _SETTING: JNix confirms current byline_
 
 ## DATA loop specifics
 

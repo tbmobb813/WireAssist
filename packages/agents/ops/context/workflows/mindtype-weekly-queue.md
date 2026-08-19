@@ -21,8 +21,8 @@ A week's queue is DONE when all of these exist in `output/mindtype/<week-slug>/`
 ## Inputs (Camcorder Method — fill from a recorded run)
 
 - Weekly theme / emotional focus from JNix (e.g. "boundaries," "rest as productivity")
-- Brand voice examples — 2-3 best-performing past posts to mirror: _TODO: JNix pastes examples_
-- Current hashtag bank (not a stale saved set): _TODO: JNix pastes current hashtags_
+- Brand voice examples — 2-3 best-performing past posts to mirror: _SETTING: JNix pastes examples_
+- Current hashtag bank (not a stale saved set): _SETTING: JNix pastes current hashtags_
 - Any current campaign or launch to tie into, if applicable: _TODO: JNix notes it here, or leaves blank if none_
 
 ## DATA loop specifics

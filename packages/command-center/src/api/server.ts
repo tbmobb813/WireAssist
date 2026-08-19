@@ -33,6 +33,8 @@ import {
   setTrustStage,
   MIN_TRUST_STAGE,
   MAX_TRUST_STAGE,
+  getWorkflowSettings,
+  setWorkflowSettings,
   setupOpsMCP,
   registerWordPressTools,
   registerImageTools,
@@ -1035,6 +1037,28 @@ app.post('/api/ops/trust/:workflow', async (c) => {
   const workflow = c.req.param('workflow');
   const saved = setTrustStage(workflow, stage);
   return c.json({ workflow, stage: saved });
+});
+
+// Shop-level constants a workflow needs (variant naming, cost sheets, style
+// guides) — filled once here instead of re-typed on every run. Saving also
+// rewrites the workflow file's own "_SETTING:_" placeholders with the real
+// value (see workflow-settings.ts), so the DATA loop's Diagnose stage picks
+// them up automatically with no other code changes.
+app.get('/api/ops/settings/:workflow', (c) => {
+  return c.json({
+    workflow: c.req.param('workflow'),
+    settings: getWorkflowSettings(c.req.param('workflow')),
+  });
+});
+
+app.post('/api/ops/settings/:workflow', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  if (!body.values || typeof body.values !== 'object' || Array.isArray(body.values)) {
+    return c.json({ error: 'values object required' }, 400);
+  }
+  const workflow = c.req.param('workflow');
+  setWorkflowSettings(workflow, body.values);
+  return c.json({ workflow, settings: getWorkflowSettings(workflow) });
 });
 
 // Admin Agent's narrow auto-approval policy — which senders have earned

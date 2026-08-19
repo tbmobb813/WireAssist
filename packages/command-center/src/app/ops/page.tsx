@@ -30,6 +30,22 @@ function parseWorkflowTodos(markdown: string | null): WorkflowTodo[] {
   return todos;
 }
 
+// Shop-level constants (variant naming, cost sheets, style guides) marked
+// `- Label: _SETTING: instruction_` — set once via the settings panel below,
+// not re-typed on every run. See workflow-settings.ts for how a saved value
+// gets synced back into the workflow file itself, which is what makes the
+// placeholder disappear from this parse on the next load.
+function parseWorkflowSettings(markdown: string | null): WorkflowTodo[] {
+  if (!markdown) return [];
+  const settings: WorkflowTodo[] = [];
+  const re = /^-\s*(.+?):\s*_SETTING:\s*(.+?)_\s*$/gm;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(markdown)) !== null) {
+    settings.push({ label: match[1].trim(), instruction: match[2].trim() });
+  }
+  return settings;
+}
+
 interface PastRun {
   id: string;
   content: string;
@@ -63,6 +79,10 @@ export default function OpsPage() {
   const [savingTrustStage, setSavingTrustStage] = useState(false);
   const [brief, setBrief] = useState('');
   const [todoValues, setTodoValues] = useState<Record<string, string>>({});
+  const [savedSettings, setSavedSettings] = useState<Record<string, string>>({});
+  const [settingDrafts, setSettingDrafts] = useState<Record<string, string>>({});
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsSavedNotice, setSettingsSavedNotice] = useState(false);
   const [freeformPrompt, setFreeformPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
   const [stages, setStages] = useState<string[]>([]);
@@ -138,6 +158,58 @@ export default function OpsPage() {
   }, [selectedWorkflow]);
 
   const workflowTodos = useMemo(() => parseWorkflowTodos(workflowPreview), [workflowPreview]);
+  const parsedSettings = useMemo(() => parseWorkflowSettings(workflowPreview), [workflowPreview]);
+  // Union of still-unfilled `_SETTING:_` placeholders (from the file) and
+  // already-filled ones (from the saved store, which is the only place a
+  // filled setting's label survives once it's synced out of the markdown).
+  const settingFields = useMemo(() => {
+    const byLabel = new Map<string, string>();
+    for (const s of parsedSettings) byLabel.set(s.label, s.instruction);
+    for (const label of Object.keys(savedSettings)) {
+      if (!byLabel.has(label)) byLabel.set(label, '(already set — edit to change)');
+    }
+    return Array.from(byLabel, ([label, instruction]) => ({ label, instruction }));
+  }, [parsedSettings, savedSettings]);
+
+  useEffect(() => {
+    if (!selectedWorkflow) return;
+    setSettingsSavedNotice(false);
+    fetch(`/api/ops/settings/${encodeURIComponent(selectedWorkflow)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const settings = d.settings ?? {};
+        setSavedSettings(settings);
+        setSettingDrafts(settings);
+      })
+      .catch(() => {
+        setSavedSettings({});
+        setSettingDrafts({});
+      });
+  }, [selectedWorkflow]);
+
+  async function saveSettings() {
+    if (!selectedWorkflow) return;
+    setSavingSettings(true);
+    setSettingsSavedNotice(false);
+    try {
+      const res = await fetch(`/api/ops/settings/${encodeURIComponent(selectedWorkflow)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: settingDrafts }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.settings) setSavedSettings(data.settings);
+      // Placeholders just got rewritten in the workflow file — refetch so
+      // workflowTodos/settingFields reflect the file as it now stands.
+      const preview = await fetch(
+        `/api/ops/workflows/${encodeURIComponent(selectedWorkflow)}`
+      ).then((r) => r.json());
+      if (typeof preview.content === 'string') setWorkflowPreview(preview.content);
+      setSettingsSavedNotice(true);
+    } finally {
+      setSavingSettings(false);
+    }
+  }
 
   useEffect(() => {
     if (!selectedWorkflow) return;
@@ -375,6 +447,52 @@ export default function OpsPage() {
                 style={{ background: '#080810', border: '1px solid #1e2040' }}
               >
                 {workflowPreview ?? 'Loading...'}
+              </div>
+            )}
+          </div>
+        )}
+        {settingFields.length > 0 && (
+          <div
+            className="rounded p-3 mb-3"
+            style={{ background: '#080810', border: '1px solid #1e2040' }}
+          >
+            <div className="text-xs tracking-widest text-gray-500 mb-2">
+              WORKFLOW SETTINGS (SET ONCE)
+            </div>
+            <div className="space-y-2">
+              {settingFields.map((s) => (
+                <div key={s.label}>
+                  <label className="text-xs text-gray-400 block mb-1">{s.label}</label>
+                  <textarea
+                    value={settingDrafts[s.label] ?? ''}
+                    onChange={(e) =>
+                      setSettingDrafts((prev) => ({ ...prev, [s.label]: e.target.value }))
+                    }
+                    placeholder={s.instruction}
+                    rows={2}
+                    className="w-full rounded px-3 py-2 text-xs outline-none resize-none"
+                    style={{ background: '#0d0d1a', border: '1px solid #1e2040', color: '#e2e8f0' }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 flex items-center gap-3">
+              <button
+                onClick={saveSettings}
+                disabled={savingSettings}
+                className="rounded px-3 py-1.5 text-xs font-bold disabled:opacity-50"
+                style={{ background: '#4fc3f7', color: '#080810' }}
+              >
+                {savingSettings ? 'Saving…' : 'Save settings'}
+              </button>
+              <div className="text-xs text-gray-600">
+                Saved once, reused on every run — this is shop-level info, not something a run needs
+                told to it each time.
+              </div>
+            </div>
+            {settingsSavedNotice && (
+              <div className="text-xs mt-2" style={{ color: '#4fc3f7' }}>
+                Saved.
               </div>
             )}
           </div>

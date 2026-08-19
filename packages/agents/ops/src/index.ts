@@ -21,6 +21,7 @@ export {
   MIN_TRUST_STAGE,
   MAX_TRUST_STAGE,
 } from './trust-stage';
+export { getWorkflowSettings, setWorkflowSettings } from './workflow-settings';
 export { logRun } from './run-log';
 export { registerWordPressTools } from './wordpress-tools';
 export {

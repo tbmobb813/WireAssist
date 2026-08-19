@@ -21,9 +21,9 @@ A weekend's routes are DONE when all of these exist in `output/courier/<week-slu
 ## Inputs (Camcorder Method — fill from a recorded run)
 
 - Raw route notes/receipts from JNix (photos, text, or verbal recap) for the weekend being logged
-- Routes sheet reference: _TODO: JNix pastes the spreadsheet and tab so Diagnose can pull current state and avoid duplicate rows — see the NixLevel listing workflow for how a Sheet input is wired up_
-- Standard per-mile / per-stop rate card: _TODO: JNix pastes current rates_
-- Fuel cost basis (e.g. $/gallon, mpg estimate): _TODO: JNix confirms current fuel assumptions_
+- Routes sheet reference: _SETTING: JNix pastes the spreadsheet and tab so Diagnose can pull current state and avoid duplicate rows — a future upgrade is wiring this as a live "**Sheet:**" read (see context-loader.ts's parseSheetRef) once this is set_
+- Standard per-mile / per-stop rate card: _SETTING: JNix pastes current rates_
+- Fuel cost basis (e.g. $/gallon, mpg estimate): _SETTING: JNix confirms current fuel assumptions_
 
 ## DATA loop specifics
 

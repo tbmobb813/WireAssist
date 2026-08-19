@@ -23,9 +23,9 @@ A listing is DONE when all of these exist in `output/nixlevel/<product-slug>/`:
 ## Inputs (Camcorder Method — fill from a recorded run)
 
 - Product concept + design description from JNix
-- Existing listing example to mirror: _TODO: JNix pastes one best-performing listing here_
-- Variant naming convention: _TODO: JNix pastes current convention here_
-- Printify base costs: _TODO: link or paste current cost sheet_
+- Existing listing example to mirror: _SETTING: JNix pastes one best-performing listing here_
+- Variant naming convention: _SETTING: JNix pastes current convention here_
+- Printify base costs: _SETTING: link or paste current cost sheet_
 
 ## DATA loop specifics
 

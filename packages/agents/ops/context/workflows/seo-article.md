@@ -24,9 +24,9 @@ An SEO article package is DONE when all of these exist in `output/seo-articles/<
 ## Inputs (Camcorder Method — fill from a recorded run)
 
 - Topic or seed keyword from JNix
-- Target audience and tone, if not obvious from the topic: _TODO: JNix confirms per-run, or fill a default here once established_
-- House style guide or 2-3 example past articles to mirror: _TODO: JNix pastes link or examples_
-- Site/brand this article is for (affects internal link targets and voice — e.g. TechTrendWire vs. another property): _TODO: JNix confirms per-run_
+- Target audience and tone, if not obvious from the topic: _SETTING: JNix fills a default here once established — still overridable per-run in the brief if a specific article needs something different_
+- House style guide or 2-3 example past articles to mirror: _SETTING: JNix pastes link or examples_
+- Site/brand this article is for (affects internal link targets and voice — e.g. TechTrendWire vs. another property): _SETTING: JNix confirms the default property — override per-run in the brief if writing for a different one_
 
 ## DATA loop specifics
 
