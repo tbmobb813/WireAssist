@@ -1,9 +1,10 @@
-import type { ProviderMessage, Skill } from '@wireassist/core';
+import type { ImageAttachment, ProviderMessage, Skill } from '@wireassist/core';
 
 export interface FreeformInput {
   type?: string;
   prompt?: string;
   history?: ProviderMessage[];
+  images?: ImageAttachment[];
 }
 
 export const freeformSkill: Skill<FreeformInput, void> = {
@@ -20,6 +21,7 @@ export const freeformSkill: Skill<FreeformInput, void> = {
     const response = await agent.runToolLoop(task, prompt, {
       extraContext: context,
       priorMessages: input.history,
+      images: input.images,
       // A real freeform ask ("how did my recent posts do, what should I
       // write next") plausibly chains several raw read calls
       // (content_list_posts -> content_analyze -> content_list_ideas)

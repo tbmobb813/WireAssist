@@ -1,9 +1,10 @@
-import type { ProviderMessage, Skill } from '@wireassist/core';
+import type { ImageAttachment, ProviderMessage, Skill } from '@wireassist/core';
 
 export interface FreeformInput {
   type?: string;
   prompt?: string;
   history?: ProviderMessage[];
+  images?: ImageAttachment[];
 }
 
 export const freeformSkill: Skill<FreeformInput, void> = {
@@ -20,6 +21,7 @@ export const freeformSkill: Skill<FreeformInput, void> = {
     const response = await agent.runToolLoop(task, prompt, {
       extraContext: context,
       priorMessages: input.history,
+      images: input.images,
       // A single ask often needs several read calls chained together
       // (search_repositories to find the repo, then list_issues/search_code/
       // etc.) — confirmed hitting the default cap of 6 on a live delegated

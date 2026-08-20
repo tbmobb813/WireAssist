@@ -276,6 +276,24 @@ describe('AdminAgent — chat tool-calling loop', () => {
     );
   });
 
+  it('passes task.input.images through to runToolLoop', async () => {
+    const deps = makeDeps();
+    const agent = new AdminAgent(deps);
+    const runToolLoopSpy = jest.spyOn(agent as any, 'runToolLoop').mockResolvedValue('answer');
+    const images = [{ mediaType: 'image/png', data: 'base64data' }];
+
+    const task = makeTask({
+      input: { type: 'freeform', prompt: "what's this?", images },
+    });
+    await agent.handleFreeform(task);
+
+    expect(runToolLoopSpy).toHaveBeenCalledWith(
+      task,
+      "what's this?",
+      expect.objectContaining({ images })
+    );
+  });
+
   it('executeToolCall() runs a read-only tool immediately, with no approval', async () => {
     const deps = makeDeps({ mcp: { call: jest.fn().mockResolvedValue([{ id: 't1' }]) } });
     const agent = new AdminAgent(deps);

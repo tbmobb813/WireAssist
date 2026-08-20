@@ -140,6 +140,24 @@ describe('NixOpsAgent — chat tool-calling loop', () => {
       expect.objectContaining({ priorMessages: history })
     );
   });
+
+  it('passes input.images through to runToolLoop', async () => {
+    const deps = makeDeps();
+    const agent = new NixOpsAgent(deps);
+    const runToolLoopSpy = jest.spyOn(agent as any, 'runToolLoop').mockResolvedValue('answer');
+    const images = [{ mediaType: 'image/png', data: 'base64data' }];
+
+    const task = makeTask({
+      input: { type: 'freeform', prompt: "what's this?", images },
+    });
+    await agent.run(task);
+
+    expect(runToolLoopSpy).toHaveBeenCalledWith(
+      task,
+      "what's this?",
+      expect.objectContaining({ images })
+    );
+  });
 });
 
 describe('NixOpsAgent — composable skill-tools in the chat loop', () => {

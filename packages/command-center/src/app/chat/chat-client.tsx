@@ -9,6 +9,16 @@ interface Message {
   content: string;
   time: Date;
   taskId?: string;
+  // Client-side/in-memory only — never persisted (conversation history stays
+  // text-only), so attachments don't survive a page reload or conversation
+  // switch. See PendingImage below for the shape before it's sent.
+  attachments?: { previewUrl: string }[];
+}
+
+interface PendingImage {
+  mediaType: string;
+  data: string; // raw base64, no `data:` URI prefix — what the API expects
+  previewUrl: string; // full `data:` URI — what <img src> needs
 }
 
 interface ActivityRecord {
@@ -56,6 +66,26 @@ function formatRelativeTime(ms: number): string {
 // trimming client-side too avoids sending a payload that's just discarded anyway.
 const MAX_HISTORY_MESSAGES = 20;
 
+// Kept in sync with sanitizeImages()'s caps in server.ts. The raw-file cap is
+// set below the server's 9 MB base64 cap to leave headroom for base64's ~33%
+// size overhead, so a file that passes this check never gets rejected server-side.
+const MAX_IMAGES = 4;
+const MAX_IMAGE_FILE_BYTES = 6 * 1024 * 1024;
+const ACCEPTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+
+function readImageFile(file: File): Promise<PendingImage> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
+    reader.onload = () => {
+      const previewUrl = reader.result as string;
+      const data = previewUrl.slice(previewUrl.indexOf(',') + 1);
+      resolve({ mediaType: file.type, data, previewUrl });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState('');
@@ -64,10 +94,13 @@ export default function ChatClient() {
   const [conversationList, setConversationList] = useState<ConversationSummary[]>([]);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [objectiveId, setObjectiveId] = useState('');
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+  const [imageError, setImageError] = useState<string | null>(null);
   const objectives = useActiveObjectives();
   const bottomRef = useRef<HTMLDivElement>(null);
   const pendingTaskId = useRef<string | null>(null);
   const handledEvents = useRef(new Set<string>());
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -405,9 +438,57 @@ export default function ChatClient() {
     )
   );
 
+  const addImageFiles = useCallback(
+    async (files: File[]) => {
+      setImageError(null);
+      const room = MAX_IMAGES - pendingImages.length;
+      if (room <= 0) {
+        setImageError(`You can attach up to ${MAX_IMAGES} images.`);
+        return;
+      }
+      const accepted: File[] = [];
+      let rejectedType = false;
+      let rejectedSize = false;
+      for (const file of files.slice(0, room)) {
+        if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
+          rejectedType = true;
+          continue;
+        }
+        if (file.size > MAX_IMAGE_FILE_BYTES) {
+          rejectedSize = true;
+          continue;
+        }
+        accepted.push(file);
+      }
+      if (files.length > room) {
+        setImageError(`Only ${room} more image(s) can be attached (max ${MAX_IMAGES}).`);
+      } else if (rejectedSize) {
+        setImageError('One or more images were too large (max 6 MB each) and were skipped.');
+      } else if (rejectedType) {
+        setImageError('Only JPEG, PNG, GIF, and WebP images are supported.');
+      }
+      if (accepted.length === 0) return;
+      try {
+        const read = await Promise.all(accepted.map(readImageFile));
+        setPendingImages((prev) => [...prev, ...read]);
+      } catch (err) {
+        setImageError(err instanceof Error ? err.message : 'Failed to read image file');
+      }
+    },
+    [pendingImages.length]
+  );
+
+  const removePendingImage = useCallback((index: number) => {
+    setPendingImages((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
   const send = async () => {
-    if (!input.trim() || sending) return;
-    const text = input.trim();
+    if ((!input.trim() && pendingImages.length === 0) || sending) return;
+    // A caption isn't required when at least one image is attached — the
+    // route requires non-empty `instruction`, so fall back to a sensible
+    // default rather than blocking an image-only send.
+    const text = input.trim() || 'Describe the attached image(s).';
+    const images = pendingImages;
     // Captured before this turn's messages are appended — the transcript
     // so far is exactly the "prior turns" the backend should see for
     // conversational continuity.
@@ -415,6 +496,8 @@ export default function ChatClient() {
       .slice(-MAX_HISTORY_MESSAGES)
       .map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }));
     setInput('');
+    setPendingImages([]);
+    setImageError(null);
     setSending(true);
     pendingTaskId.current = null;
 
@@ -425,6 +508,7 @@ export default function ChatClient() {
         role: 'user',
         content: text,
         time: new Date(),
+        attachments: images.length ? images.map(({ previewUrl }) => ({ previewUrl })) : undefined,
       },
     ]);
 
@@ -440,7 +524,14 @@ export default function ChatClient() {
       const res = await fetch('/api/tasks/freeform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instruction: text, history, objectiveId: objectiveId || undefined }),
+        body: JSON.stringify({
+          instruction: text,
+          history,
+          objectiveId: objectiveId || undefined,
+          images: images.length
+            ? images.map(({ mediaType, data }) => ({ mediaType, data }))
+            : undefined,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -572,6 +663,20 @@ export default function ChatClient() {
                 whiteSpace: 'pre-wrap',
               }}
             >
+              {msg.attachments && msg.attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {msg.attachments.map((a, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={i}
+                      src={a.previewUrl}
+                      alt="Attached"
+                      className="rounded"
+                      style={{ width: 160, height: 160, objectFit: 'cover' }}
+                    />
+                  ))}
+                </div>
+              )}
               {msg.content}
             </div>
           </div>
@@ -595,12 +700,68 @@ export default function ChatClient() {
         <div ref={bottomRef} />
       </div>
 
+      {pendingImages.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {pendingImages.map((img, i) => (
+            <div key={i} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={img.previewUrl}
+                alt="Pending attachment"
+                className="rounded"
+                style={{ width: 64, height: 64, objectFit: 'cover' }}
+              />
+              <button
+                onClick={() => removePendingImage(i)}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-xs"
+                style={{ background: '#1e2040', border: '1px solid #2d3060', color: '#e2e8f0' }}
+                title="Remove"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {imageError && <div className="mb-2 text-xs text-red-400">{imageError}</div>}
+
       <div className="flex gap-3">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={[...ACCEPTED_IMAGE_TYPES].join(',')}
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files) void addImageFiles(Array.from(e.target.files));
+            e.target.value = '';
+          }}
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={sending || pendingImages.length >= MAX_IMAGES}
+          title="Attach image"
+          className="px-4 py-3 rounded-lg text-sm transition-colors"
+          style={{
+            background: '#0d0d1a',
+            border: '1px solid #1e2040',
+            color: pendingImages.length >= MAX_IMAGES ? '#475569' : '#94a3b8',
+          }}
+        >
+          📎
+        </button>
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && send()}
+          onPaste={(e) => {
+            const files = Array.from(e.clipboardData.items)
+              .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+              .map((item) => item.getAsFile())
+              .filter((f): f is File => f !== null);
+            if (files.length > 0) void addImageFiles(files);
+          }}
           placeholder="Write a post, research a topic, run a workflow, ask anything..."
           className="flex-1 rounded-lg px-4 py-3 text-sm outline-none"
           style={{
@@ -611,7 +772,7 @@ export default function ChatClient() {
         />
         <button
           onClick={send}
-          disabled={sending || !input.trim()}
+          disabled={sending || (!input.trim() && pendingImages.length === 0)}
           className="px-6 py-3 rounded-lg text-xs font-bold tracking-widest transition-colors"
           style={{
             background: sending ? '#1e2040' : '#4fc3f720',
