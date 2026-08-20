@@ -10,5 +10,31 @@ node_modules
 data
 wireassist/aia/src-tauri/target
 
+# Frozen desktop app — pnpm build already excludes it (--filter '!synqagent');
+# only its package.json (copied separately in the Dockerfile) is needed for
+# workspace resolution.
+wireassist/aia/src
+wireassist/aia/src-tauri
+
+# Test/e2e files never run inside the deployed image — tests run in CI only.
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/playwright-e2e
+
+# Local pnpm cache — never needed inside the image.
+.pnpm-store
+
+# Docs/tooling irrelevant at runtime. Root-level only — deliberately NOT a
+# blanket **/*.md: packages/agents/ops/context/**/*.md (SOUL/IDENTITY/USER +
+# every workflow file) is read at runtime by context-loader.ts and must ship.
+/*.md
+docs
+design-plans
+.claude
+.github
+.husky
+
 # Ignore generated source maps
 *.map
