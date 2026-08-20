@@ -111,6 +111,18 @@ describe('describeEvent', () => {
     expect(describeEvent(evt('agent.approval_resolved', { agentRole: 'content' }))).toBe(
       'content approval resolved'
     );
+    expect(
+      describeEvent(evt('agent.post_published', { platform: 'twitter', status: 'published' }))
+    ).toBe('Published twitter post');
+    expect(
+      describeEvent(
+        evt('agent.post_published', {
+          platform: 'twitter',
+          status: 'failed',
+          errorMessage: 'rate limited',
+        })
+      )
+    ).toBe('Failed to publish twitter post: rate limited');
   });
 
   it('falls back to the stripped type for anything else', () => {
@@ -193,6 +205,60 @@ describe('foldTasks — agent cards', () => {
 
   it('ignores unrelated agent event types', () => {
     expect(foldTasks([evt('agent.content_generated', { taskId: 't1' })])).toHaveLength(0);
+  });
+});
+
+describe('foldTasks — post_published cards', () => {
+  it('a published post produces a standalone done card keyed by postId', () => {
+    const cards = foldTasks([
+      evt('agent.post_published', {
+        objectiveId: 'obj-1',
+        postId: 'post-1',
+        platform: 'twitter',
+        status: 'published',
+      }),
+    ]);
+    expect(cards).toHaveLength(1);
+    const card = cards[0] as AgentTaskCard;
+    expect(card.kind).toBe('agent');
+    expect(card.taskId).toBe('post-1');
+    expect(card.column).toBe('done');
+    expect(card.errored).toBe(false);
+    expect(card.description).toBe('Published twitter post');
+  });
+
+  it('a failed post produces an errored done card carrying the error message', () => {
+    const cards = foldTasks([
+      evt('agent.post_published', {
+        objectiveId: 'obj-1',
+        postId: 'post-1',
+        platform: 'twitter',
+        status: 'failed',
+        errorMessage: 'rate limited',
+      }),
+    ]);
+    const card = cards[0] as AgentTaskCard;
+    expect(card.column).toBe('done');
+    expect(card.errored).toBe(true);
+    expect(card.error).toBe('rate limited');
+    expect(card.description).toBe('Failed to publish twitter post');
+  });
+
+  it('is not affected by an earlier task_queued/task_complete card for the schedule task itself', () => {
+    const cards = foldTasks([
+      evt(
+        'agent.task_queued',
+        { taskId: 'task-s1', agentRole: 'content', description: 'Schedule post' },
+        1
+      ),
+      evt('agent.task_complete', { taskId: 'task-s1', agentRole: 'content' }, 2),
+      evt(
+        'agent.post_published',
+        { objectiveId: 'obj-1', postId: 'post-1', platform: 'twitter', status: 'published' },
+        3
+      ),
+    ]);
+    expect(cards).toHaveLength(2);
   });
 });
 

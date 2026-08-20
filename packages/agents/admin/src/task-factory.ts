@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { AgentTask, AgentRole, ProviderMessage } from '@wireassist/core';
+import type { AgentTask, AgentRole, ImageAttachment, ProviderMessage } from '@wireassist/core';
 
 type SupportedTaskInput =
   | { type: 'email_triage'; maxEmails?: number }
@@ -19,7 +19,7 @@ type SupportedTaskInput =
       attendees?: string[];
       description?: string;
     }
-  | { type: 'freeform'; prompt: string; history?: ProviderMessage[] }
+  | { type: 'freeform'; prompt: string; history?: ProviderMessage[]; images?: ImageAttachment[] }
   | { type: 'daily_briefing'; maxEmails?: number; daysAhead?: number }
   | { type: 'follow_up_nudges'; daysStale?: number }
   | { type: 'proactive_insights' }
@@ -124,6 +124,7 @@ export function createFreeformTask(params: {
   prompt: string;
   description?: string;
   history?: ProviderMessage[];
+  images?: ImageAttachment[];
   objectiveId?: string;
 }): AgentTask {
   return baseTask(
@@ -133,6 +134,7 @@ export function createFreeformTask(params: {
       type: 'freeform',
       prompt: params.prompt,
       history: params.history,
+      images: params.images,
     },
     params.objectiveId
   );

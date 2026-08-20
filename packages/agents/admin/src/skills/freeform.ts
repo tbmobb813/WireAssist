@@ -1,9 +1,10 @@
-import type { ProviderMessage, Skill } from '@wireassist/core';
+import type { ImageAttachment, ProviderMessage, Skill } from '@wireassist/core';
 
 export interface FreeformInput {
   type?: string;
   prompt?: string;
   history?: ProviderMessage[];
+  images?: ImageAttachment[];
 }
 
 export const freeformSkill: Skill<FreeformInput, void> = {
@@ -20,6 +21,7 @@ export const freeformSkill: Skill<FreeformInput, void> = {
     const response = await agent.runToolLoop(task, prompt, {
       extraContext: context,
       priorMessages: input.history,
+      images: input.images,
       // Admin's skill-tools (email_triage_skill, calendar_review_skill) are
       // each a full multi-step skill invocation that costs a single loop
       // iteration but can itself run a whole approval flow internally —

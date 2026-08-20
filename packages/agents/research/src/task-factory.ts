@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { AgentTask, ProviderMessage } from '@wireassist/core';
+import type { AgentTask, ImageAttachment, ProviderMessage } from '@wireassist/core';
 import type { Platform } from '@wireassist/trendpost-mcp';
 
 export const ResearchTasks = {
@@ -64,7 +64,12 @@ export const ResearchTasks = {
     };
   },
 
-  freeform(prompt: string, history?: ProviderMessage[], objectiveId?: string): AgentTask {
+  freeform(
+    prompt: string,
+    history?: ProviderMessage[],
+    objectiveId?: string,
+    images?: ImageAttachment[]
+  ): AgentTask {
     return {
       id: randomUUID(),
       agentRole: 'research',
@@ -72,7 +77,7 @@ export const ResearchTasks = {
       status: 'queued',
       createdAt: new Date(),
       updatedAt: new Date(),
-      input: { type: 'freeform', prompt, history },
+      input: { type: 'freeform', prompt, history, images },
       approvalRequired: false,
       objectiveId,
     };

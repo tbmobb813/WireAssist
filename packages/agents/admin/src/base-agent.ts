@@ -13,6 +13,8 @@ import {
   type Provider,
   type ProviderType,
   type ProviderMessage,
+  type ProviderContentBlock,
+  type ImageAttachment,
   type ProviderToolCall,
   type ProviderResponse,
   type ProviderCompletionOptions,
@@ -262,15 +264,23 @@ export abstract class BaseAgent {
   protected async runToolLoop(
     task: AgentTask,
     userMessage: string,
-    opts?: { extraContext?: string; maxIterations?: number; priorMessages?: ProviderMessage[] }
+    opts?: {
+      extraContext?: string;
+      maxIterations?: number;
+      priorMessages?: ProviderMessage[];
+      images?: ImageAttachment[];
+    }
   ): Promise<string> {
     const tools = this.config.toolSchemas ? Object.values(this.config.toolSchemas) : [];
     if (!this.getProvider().supportsTools || tools.length === 0) {
       // think() has no messages-array support — fold prior turns into the
       // context string instead, so conversational memory still survives on
-      // non-Anthropic providers rather than silently vanishing.
+      // non-Anthropic providers rather than silently vanishing. Images can't
+      // survive that fold either, and this path is only ever reached by
+      // providers that also lack vision support today, so note the drop
+      // rather than silently discarding an attachment the user sent.
       return this.think(
-        userMessage,
+        buildUserMessageWithImageNote(userMessage, opts?.images, this.getProvider().type),
         foldPriorMessagesIntoContext(opts?.priorMessages, opts?.extraContext)
       );
     }
@@ -280,7 +290,10 @@ export abstract class BaseAgent {
     const system = this.buildSystemPrompt(opts?.extraContext);
     const messages: ProviderMessage[] = [
       ...(opts?.priorMessages ?? []),
-      { role: 'user', content: userMessage },
+      {
+        role: 'user',
+        content: buildUserTurnContent(userMessage, opts?.images, this.getProvider()),
+      },
     ];
 
     for (let i = 0; i < maxIterations; i++) {
@@ -525,9 +538,22 @@ export abstract class BaseAgent {
   }
 }
 
+// A user turn's content is a plain string, except when it carries an image
+// (see ProviderContentBlock) — extracts just the text for paths that only
+// deal in plain strings.
+function textOnly(content: string | ProviderContentBlock[]): string {
+  if (typeof content === 'string') return content;
+  return content
+    .filter((b): b is Extract<ProviderContentBlock, { type: 'text' }> => b.type === 'text')
+    .map((b) => b.text)
+    .join(' ');
+}
+
 // Renders prior conversation turns as a plain-text transcript prefixed onto
 // extraContext, for providers/paths that don't support a real messages
-// array (the runToolLoop -> think() fallback).
+// array (the runToolLoop -> think() fallback). Images in a prior user turn
+// are dropped here — this path is only reached by providers that don't
+// support vision either, so there's nothing useful to preserve.
 function foldPriorMessagesIntoContext(
   priorMessages: ProviderMessage[] | undefined,
   extraContext?: string
@@ -538,10 +564,45 @@ function foldPriorMessagesIntoContext(
       (m): m is Extract<ProviderMessage, { role: 'user' | 'assistant' }> =>
         m.role === 'user' || m.role === 'assistant'
     )
-    .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+    .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${textOnly(m.content)}`)
     .join('\n');
   const header = `Recent conversation:\n${transcript}`;
   return extraContext ? `${header}\n\n${extraContext}` : header;
+}
+
+// Builds the current turn's user message content for the real tool-calling
+// loop: an image-bearing ProviderContentBlock[] (images first, then text —
+// see anthropic.ts's toAnthropicUserContent for why) when the active
+// provider supports vision, otherwise a plain string with a visible note
+// instead of silently dropping the attachment.
+function buildUserTurnContent(
+  userMessage: string,
+  images: ImageAttachment[] | undefined,
+  provider: Provider
+): string | ProviderContentBlock[] {
+  if (!images?.length) return userMessage;
+  if (!provider.supportsVision) {
+    return imageDropNote(userMessage, images.length, provider.type);
+  }
+  return [
+    ...images.map((img): ProviderContentBlock => ({ type: 'image', ...img })),
+    { type: 'text', text: userMessage },
+  ];
+}
+
+// Same visible-degrade note, for the runToolLoop -> think() fallback path
+// (think() only ever takes a plain string, never content blocks).
+function buildUserMessageWithImageNote(
+  userMessage: string,
+  images: ImageAttachment[] | undefined,
+  providerType: ProviderType
+): string {
+  return images?.length ? imageDropNote(userMessage, images.length, providerType) : userMessage;
+}
+
+function imageDropNote(userMessage: string, count: number, providerType: ProviderType): string {
+  const plural = count === 1 ? 'image' : 'images';
+  return `${userMessage}\n\n[${count} ${plural} attached — the active provider (${providerType}) doesn't support vision, so ${count === 1 ? 'it was' : 'they were'} not sent.]`;
 }
 
 // Retryable (worth failing over to OpenRouter): no HTTP status available at

@@ -5,6 +5,7 @@ import {
   type MemoryStore,
   type MCPClient,
   type EventBus,
+  type ImageAttachment,
   type ProviderMessage,
   type ProviderToolCall,
 } from '@wireassist/core';
@@ -23,6 +24,7 @@ export interface OpsFreeformInput {
   type: 'freeform';
   prompt: string;
   history?: ProviderMessage[];
+  images?: ImageAttachment[];
 }
 
 export interface TrustGraduationNudgesInput {

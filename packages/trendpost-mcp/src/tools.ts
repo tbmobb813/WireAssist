@@ -253,12 +253,13 @@ Return only valid JSON array. No markdown fences.`;
 
   // ── SCHEDULE POST ─────────────────────────────────────────────
   mcp.register('content_schedule_post', async (params) => {
-    const { content, platform, scheduledAt, tags, campaignId } = params as {
+    const { content, platform, scheduledAt, tags, campaignId, objectiveId } = params as {
       content: string;
       platform: Platform;
       scheduledAt: string;
       tags?: string[];
       campaignId?: string;
+      objectiveId?: string;
     };
 
     return storage.createPost({
@@ -267,6 +268,7 @@ Return only valid JSON array. No markdown fences.`;
       scheduledAt: new Date(scheduledAt),
       tags,
       campaignId,
+      objectiveId,
     });
   });
 

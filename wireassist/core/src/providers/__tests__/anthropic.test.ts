@@ -313,3 +313,97 @@ describe('AnthropicProvider tool-calling', () => {
     ]);
   });
 });
+
+describe('AnthropicProvider vision', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+
+  function mockResponse(body: unknown) {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => body });
+  }
+
+  it('declares supportsVision', () => {
+    const provider = new AnthropicProvider({ type: 'anthropic', apiKey: 'k' });
+    expect(provider.supportsVision).toBe(true);
+  });
+
+  it('translates an image+text user turn into image-then-text content blocks, images first', async () => {
+    mockResponse({
+      content: [{ type: 'text', text: 'A cat.' }],
+      model: 'claude-sonnet-5',
+      stop_reason: 'end_turn',
+    });
+    const provider = new AnthropicProvider({ type: 'anthropic', apiKey: 'k' });
+
+    const messages: ProviderMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: "What's in this image?" },
+          { type: 'image', mediaType: 'image/png', data: 'base64data' },
+        ],
+      },
+    ];
+
+    await provider.complete({ prompt: "What's in this image?", messages });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.messages).toEqual([
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: { type: 'base64', media_type: 'image/png', data: 'base64data' },
+          },
+          { type: 'text', text: "What's in this image?" },
+        ],
+      },
+    ]);
+  });
+
+  it('supports multiple images in one turn, all before any text blocks', async () => {
+    mockResponse({
+      content: [{ type: 'text', text: 'ok' }],
+      model: 'claude-sonnet-5',
+      stop_reason: 'end_turn',
+    });
+    const provider = new AnthropicProvider({ type: 'anthropic', apiKey: 'k' });
+
+    const messages: ProviderMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'image', mediaType: 'image/jpeg', data: 'img1' },
+          { type: 'text', text: 'Compare these:' },
+          { type: 'image', mediaType: 'image/jpeg', data: 'img2' },
+        ],
+      },
+    ];
+
+    await provider.complete({ prompt: 'Compare these:', messages });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.messages[0].content).toEqual([
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'img1' } },
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'img2' } },
+      { type: 'text', text: 'Compare these:' },
+    ]);
+  });
+
+  it('still sends a bare string for a text-only user turn (regression guard)', async () => {
+    mockResponse({
+      content: [{ type: 'text', text: 'ok' }],
+      model: 'claude-sonnet-5',
+      stop_reason: 'end_turn',
+    });
+    const provider = new AnthropicProvider({ type: 'anthropic', apiKey: 'k' });
+
+    const messages: ProviderMessage[] = [{ role: 'user', content: 'just text' }];
+    await provider.complete({ prompt: 'just text', messages });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.messages).toEqual([{ role: 'user', content: 'just text' }]);
+  });
+});

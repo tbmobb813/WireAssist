@@ -4,6 +4,7 @@
 import {
   Provider,
   ProviderCompletionOptions,
+  ProviderContentBlock,
   ProviderResponse,
   ProviderType,
   ProviderToolCall,
@@ -19,15 +20,35 @@ interface OpenRouterToolCall {
   type: 'function';
   function: { name: string; arguments: string };
 }
+type OpenRouterUserContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
 type OpenRouterMessage =
   | { role: 'system'; content: string }
-  | { role: 'user'; content: string }
+  | { role: 'user'; content: string | OpenRouterUserContentBlock[] }
   | { role: 'assistant'; content: string | null; tool_calls?: OpenRouterToolCall[] }
   | { role: 'tool'; tool_call_id: string; content: string };
+
+// Translates a provider-agnostic user turn into OpenAI-compatible wire
+// format. Images become data: URIs (image_url blocks) — OpenRouter proxies
+// to many vendors, and the data: URI form is the one that works uniformly
+// across them, unlike Anthropic's separate base64 source object.
+function toOpenRouterUserContent(
+  content: string | ProviderContentBlock[]
+): string | OpenRouterUserContentBlock[] {
+  if (typeof content === 'string') return content;
+  return content.map(
+    (block): OpenRouterUserContentBlock =>
+      block.type === 'image'
+        ? { type: 'image_url', image_url: { url: `data:${block.mediaType};base64,${block.data}` } }
+        : { type: 'text', text: block.text }
+  );
+}
 
 export class OpenRouterProvider implements Provider {
   type: ProviderType = 'openrouter';
   supportsTools = true;
+  supportsVision = true;
   currentModel: string;
   private apiKey: string;
   private baseUrl: string;
@@ -235,7 +256,7 @@ export class OpenRouterProvider implements Provider {
 
     for (const message of options.messages) {
       if (message.role === 'user') {
-        messages.push({ role: 'user', content: message.content });
+        messages.push({ role: 'user', content: toOpenRouterUserContent(message.content) });
         continue;
       }
       if (message.role === 'assistant') {

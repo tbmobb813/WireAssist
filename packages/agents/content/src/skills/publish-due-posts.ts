@@ -39,6 +39,22 @@ export const publishDuePostsSkill: Skill<PublishDuePostsInput, void> = {
         postId: post.id,
       })) as ScheduledPost;
       (result.status === 'published' ? published : failed).push(result);
+
+      // The task that actually publishes a post (this cron sweep) is never
+      // the task the user tagged with an objectiveId (that was
+      // schedulePostSkill, back at schedule time) — this batch task
+      // deliberately carries no objectiveId of its own, since one sweep
+      // spans posts from many objectives. Emit per-post so each post's
+      // publish outcome still reaches its own objective's Kanban board.
+      if (result.objectiveId) {
+        agent.emit('agent:post_published', {
+          objectiveId: result.objectiveId,
+          postId: result.id,
+          platform: result.platform,
+          status: result.status,
+          errorMessage: result.errorMessage,
+        });
+      }
     }
 
     const summary =

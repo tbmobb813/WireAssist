@@ -2,6 +2,7 @@
 import {
   Provider,
   ProviderCompletionOptions,
+  ProviderContentBlock,
   ProviderResponse,
   ProviderType,
   ProviderToolCall,
@@ -13,6 +14,10 @@ import type { ProviderConfig } from '../types';
 interface AnthropicTextBlock {
   type: 'text';
   text: string;
+}
+interface AnthropicImageBlock {
+  type: 'image';
+  source: { type: 'base64'; media_type: string; data: string };
 }
 interface AnthropicToolUseBlock {
   type: 'tool_use';
@@ -26,14 +31,39 @@ interface AnthropicToolResultBlock {
   content: string;
   is_error?: boolean;
 }
+type AnthropicUserContentBlock = AnthropicTextBlock | AnthropicImageBlock;
 type AnthropicContentBlock = AnthropicTextBlock | AnthropicToolUseBlock;
 type AnthropicMessage =
-  | { role: 'user'; content: string | AnthropicToolResultBlock[] }
+  | { role: 'user'; content: string | AnthropicToolResultBlock[] | AnthropicUserContentBlock[] }
   | { role: 'assistant'; content: AnthropicContentBlock[] };
+
+// Translates a provider-agnostic user turn into Anthropic's wire format.
+// Images are placed before text — Anthropic's docs recommend image-before-
+// text ordering for best results, regardless of the order the caller built
+// the ProviderContentBlock array in.
+function toAnthropicUserContent(
+  content: string | ProviderContentBlock[]
+): string | AnthropicUserContentBlock[] {
+  if (typeof content === 'string') return content;
+  const images: AnthropicImageBlock[] = [];
+  const texts: AnthropicTextBlock[] = [];
+  for (const block of content) {
+    if (block.type === 'image') {
+      images.push({
+        type: 'image',
+        source: { type: 'base64', media_type: block.mediaType, data: block.data },
+      });
+    } else {
+      texts.push({ type: 'text', text: block.text });
+    }
+  }
+  return [...images, ...texts];
+}
 
 export class AnthropicProvider implements Provider {
   type: ProviderType = 'anthropic';
   supportsTools = true;
+  supportsVision = true;
   currentModel: string;
   private apiKey: string;
   private baseUrl: string;
@@ -244,7 +274,7 @@ export class AnthropicProvider implements Provider {
     const result: AnthropicMessage[] = [];
     for (const message of options.messages) {
       if (message.role === 'user') {
-        result.push({ role: 'user', content: message.content });
+        result.push({ role: 'user', content: toAnthropicUserContent(message.content) });
         continue;
       }
       if (message.role === 'assistant') {
@@ -265,9 +295,18 @@ export class AnthropicProvider implements Provider {
         content: message.content,
         is_error: message.isError,
       };
+      // Only coalesce into a trailing user message that's itself a batch of
+      // tool_result blocks — never into an image/text user turn (that
+      // combination shouldn't arise from runToolLoop()'s own message
+      // construction, but content-block arrays are no longer single-purpose
+      // now that user turns can also carry images).
       const last = result[result.length - 1];
-      if (last?.role === 'user' && Array.isArray(last.content)) {
-        last.content.push(resultBlock);
+      const lastIsToolResultBatch =
+        last?.role === 'user' &&
+        Array.isArray(last.content) &&
+        (last.content.length === 0 || last.content[0].type === 'tool_result');
+      if (lastIsToolResultBatch) {
+        (last.content as AnthropicToolResultBlock[]).push(resultBlock);
       } else {
         result.push({ role: 'user', content: [resultBlock] });
       }

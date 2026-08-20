@@ -22,6 +22,8 @@ export type {
   ProviderToolDefinition,
   ProviderToolCall,
   ProviderMessage,
+  ProviderContentBlock,
+  ImageAttachment,
 } from './providers/base';
 
 // Streaming

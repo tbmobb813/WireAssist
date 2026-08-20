@@ -30,6 +30,7 @@ export const schedulePostSkill: Skill<SchedulePostInput, void> = {
       platform,
       scheduledAt,
       tags,
+      objectiveId: task.objectiveId,
     });
 
     agent.emit('agent:post_scheduled', { taskId: task.id, post });

@@ -28,6 +28,7 @@ describe('TrendPostStorage — createPost()', () => {
     expect(post.scheduledAt.toISOString()).toBe(scheduledAt.toISOString());
     expect(post.tags).toEqual([]);
     expect(post.campaignId).toBeUndefined();
+    expect(post.objectiveId).toBeUndefined();
     expect(post.createdAt).toBeInstanceOf(Date);
   });
 
@@ -42,6 +43,19 @@ describe('TrendPostStorage — createPost()', () => {
     });
     expect(post.tags).toEqual(['launch', 'product']);
     expect(post.campaignId).toBe('camp-1');
+  });
+
+  it('stores and round-trips objectiveId through getPost() and listPosts()', () => {
+    const storage = freshStorage();
+    const created = storage.createPost({
+      content: 'Post',
+      platform: 'linkedin',
+      scheduledAt: new Date(),
+      objectiveId: 'obj-1',
+    });
+    expect(created.objectiveId).toBe('obj-1');
+    expect(storage.getPost(created.id)?.objectiveId).toBe('obj-1');
+    expect(storage.listPosts().find((p) => p.id === created.id)?.objectiveId).toBe('obj-1');
   });
 
   it('each post gets a unique id', () => {
