@@ -16,7 +16,7 @@ export function distributeDates(
   if (count <= 0) return [];
   const totalDays = Math.max(weeksAhead, 1) * 7;
   const start = new Date(from.getTime() + DAY_MS);
-  start.setHours(9, 0, 0, 0);
+  start.setUTCHours(9, 0, 0, 0);
   const step = totalDays / count;
   return Array.from(
     { length: count },
