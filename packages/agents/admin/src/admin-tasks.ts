@@ -1,4 +1,4 @@
-import type { ImageAttachment, ProviderMessage } from '@wireassist/core';
+import type { ImageAttachment, DocumentAttachment, ProviderMessage } from '@wireassist/core';
 import {
   createCalendarReviewTask,
   createEmailTriageTask,
@@ -24,9 +24,10 @@ export const AdminTasks = {
     instruction: string,
     history?: ProviderMessage[],
     objectiveId?: string,
-    images?: ImageAttachment[]
+    images?: ImageAttachment[],
+    documents?: DocumentAttachment[]
   ) {
-    return createFreeformTask({ prompt: instruction, history, objectiveId, images });
+    return createFreeformTask({ prompt: instruction, history, objectiveId, images, documents });
   },
 
   dailyBriefing(maxEmails = 20, daysAhead = 7, objectiveId?: string) {

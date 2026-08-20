@@ -19,6 +19,12 @@ interface AnthropicImageBlock {
   type: 'image';
   source: { type: 'base64'; media_type: string; data: string };
 }
+interface AnthropicDocumentBlock {
+  type: 'document';
+  source:
+    | { type: 'base64'; media_type: 'application/pdf'; data: string }
+    | { type: 'text'; media_type: 'text/plain'; data: string };
+}
 interface AnthropicToolUseBlock {
   type: 'tool_use';
   id: string;
@@ -31,39 +37,56 @@ interface AnthropicToolResultBlock {
   content: string;
   is_error?: boolean;
 }
-type AnthropicUserContentBlock = AnthropicTextBlock | AnthropicImageBlock;
+type AnthropicUserContentBlock = AnthropicTextBlock | AnthropicImageBlock | AnthropicDocumentBlock;
 type AnthropicContentBlock = AnthropicTextBlock | AnthropicToolUseBlock;
 type AnthropicMessage =
   | { role: 'user'; content: string | AnthropicToolResultBlock[] | AnthropicUserContentBlock[] }
   | { role: 'assistant'; content: AnthropicContentBlock[] };
 
 // Translates a provider-agnostic user turn into Anthropic's wire format.
-// Images are placed before text — Anthropic's docs recommend image-before-
-// text ordering for best results, regardless of the order the caller built
+// Images and documents are placed before text — Anthropic's docs recommend
+// this ordering for best results, regardless of the order the caller built
 // the ProviderContentBlock array in.
 function toAnthropicUserContent(
   content: string | ProviderContentBlock[]
 ): string | AnthropicUserContentBlock[] {
   if (typeof content === 'string') return content;
-  const images: AnthropicImageBlock[] = [];
+  const attachments: (AnthropicImageBlock | AnthropicDocumentBlock)[] = [];
   const texts: AnthropicTextBlock[] = [];
   for (const block of content) {
     if (block.type === 'image') {
-      images.push({
+      attachments.push({
         type: 'image',
         source: { type: 'base64', media_type: block.mediaType, data: block.data },
       });
+    } else if (block.type === 'document') {
+      attachments.push(
+        block.mediaType === 'application/pdf'
+          ? {
+              type: 'document',
+              source: { type: 'base64', media_type: 'application/pdf', data: block.data },
+            }
+          : {
+              type: 'document',
+              source: {
+                type: 'text',
+                media_type: 'text/plain',
+                data: Buffer.from(block.data, 'base64').toString('utf8'),
+              },
+            }
+      );
     } else {
       texts.push({ type: 'text', text: block.text });
     }
   }
-  return [...images, ...texts];
+  return [...attachments, ...texts];
 }
 
 export class AnthropicProvider implements Provider {
   type: ProviderType = 'anthropic';
   supportsTools = true;
   supportsVision = true;
+  supportsDocuments = true;
   currentModel: string;
   private apiKey: string;
   private baseUrl: string;

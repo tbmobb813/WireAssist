@@ -1,5 +1,10 @@
 import { randomUUID } from 'crypto';
-import type { AgentTask, ImageAttachment, ProviderMessage } from '@wireassist/core';
+import type {
+  AgentTask,
+  ImageAttachment,
+  DocumentAttachment,
+  ProviderMessage,
+} from '@wireassist/core';
 import type { Platform } from '@wireassist/trendpost-mcp';
 import type { TimelineWeekInput } from './skills/generate-plan-from-timeline';
 
@@ -115,7 +120,8 @@ export const ContentTasks = {
     prompt: string,
     history?: ProviderMessage[],
     objectiveId?: string,
-    images?: ImageAttachment[]
+    images?: ImageAttachment[],
+    documents?: DocumentAttachment[]
   ): AgentTask {
     return {
       id: randomUUID(),
@@ -124,7 +130,7 @@ export const ContentTasks = {
       status: 'queued',
       createdAt: new Date(),
       updatedAt: new Date(),
-      input: { type: 'freeform', prompt, history, images },
+      input: { type: 'freeform', prompt, history, images, documents },
       approvalRequired: false,
       objectiveId,
     };

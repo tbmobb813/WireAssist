@@ -33,16 +33,26 @@ type OpenRouterMessage =
 // format. Images become data: URIs (image_url blocks) — OpenRouter proxies
 // to many vendors, and the data: URI form is the one that works uniformly
 // across them, unlike Anthropic's separate base64 source object.
+// Document blocks are dropped here defensively — this provider never
+// declares supportsDocuments, so base-agent.ts's runToolLoop() already
+// strips documents (with a visible note) before content ever reaches this
+// function, and completeWithFallback() skips the OpenRouter retry entirely
+// for document-bearing requests. This filter should never actually run;
+// it exists so a future caller that skips those guards fails safe (drops
+// the attachment) instead of sending OpenRouter something it can't use.
 function toOpenRouterUserContent(
   content: string | ProviderContentBlock[]
 ): string | OpenRouterUserContentBlock[] {
   if (typeof content === 'string') return content;
-  return content.map(
-    (block): OpenRouterUserContentBlock =>
-      block.type === 'image'
-        ? { type: 'image_url', image_url: { url: `data:${block.mediaType};base64,${block.data}` } }
-        : { type: 'text', text: block.text }
-  );
+  return content.flatMap((block): OpenRouterUserContentBlock[] => {
+    if (block.type === 'image') {
+      return [
+        { type: 'image_url', image_url: { url: `data:${block.mediaType};base64,${block.data}` } },
+      ];
+    }
+    if (block.type === 'document') return [];
+    return [{ type: 'text', text: block.text }];
+  });
 }
 
 export class OpenRouterProvider implements Provider {

@@ -407,3 +407,107 @@ describe('AnthropicProvider vision', () => {
     expect(body.messages).toEqual([{ role: 'user', content: 'just text' }]);
   });
 });
+
+describe('AnthropicProvider documents', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+
+  function mockResponse(body: unknown) {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => body });
+  }
+
+  it('declares supportsDocuments', () => {
+    const provider = new AnthropicProvider({ type: 'anthropic', apiKey: 'k' });
+    expect(provider.supportsDocuments).toBe(true);
+  });
+
+  it('translates a PDF document block into a base64 document source, before text', async () => {
+    mockResponse({
+      content: [{ type: 'text', text: 'ok' }],
+      model: 'claude-sonnet-5',
+      stop_reason: 'end_turn',
+    });
+    const provider = new AnthropicProvider({ type: 'anthropic', apiKey: 'k' });
+
+    const messages: ProviderMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Summarize this.' },
+          { type: 'document', mediaType: 'application/pdf', data: 'pdfbase64' },
+        ],
+      },
+    ];
+
+    await provider.complete({ prompt: 'Summarize this.', messages });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.messages[0].content).toEqual([
+      {
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: 'pdfbase64' },
+      },
+      { type: 'text', text: 'Summarize this.' },
+    ]);
+  });
+
+  it('decodes a text/plain document block back to a raw text source (not base64)', async () => {
+    mockResponse({
+      content: [{ type: 'text', text: 'ok' }],
+      model: 'claude-sonnet-5',
+      stop_reason: 'end_turn',
+    });
+    const provider = new AnthropicProvider({ type: 'anthropic', apiKey: 'k' });
+
+    const encoded = Buffer.from('hello from a text file', 'utf8').toString('base64');
+    const messages: ProviderMessage[] = [
+      {
+        role: 'user',
+        content: [{ type: 'document', mediaType: 'text/plain', data: encoded }],
+      },
+    ];
+
+    await provider.complete({ prompt: 'read it', messages });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.messages[0].content).toEqual([
+      {
+        type: 'document',
+        source: { type: 'text', media_type: 'text/plain', data: 'hello from a text file' },
+      },
+    ]);
+  });
+
+  it('places images and documents (in encounter order) before any text', async () => {
+    mockResponse({
+      content: [{ type: 'text', text: 'ok' }],
+      model: 'claude-sonnet-5',
+      stop_reason: 'end_turn',
+    });
+    const provider = new AnthropicProvider({ type: 'anthropic', apiKey: 'k' });
+
+    const messages: ProviderMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Look at both:' },
+          { type: 'document', mediaType: 'application/pdf', data: 'pdfdata' },
+          { type: 'image', mediaType: 'image/png', data: 'imgdata' },
+        ],
+      },
+    ];
+
+    await provider.complete({ prompt: 'Look at both:', messages });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.messages[0].content).toEqual([
+      {
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: 'pdfdata' },
+      },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'imgdata' } },
+      { type: 'text', text: 'Look at both:' },
+    ]);
+  });
+});

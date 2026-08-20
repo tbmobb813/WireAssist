@@ -15,6 +15,7 @@ import {
   type ProviderMessage,
   type ProviderContentBlock,
   type ImageAttachment,
+  type DocumentAttachment,
   type ProviderToolCall,
   type ProviderResponse,
   type ProviderCompletionOptions,
@@ -125,6 +126,12 @@ export abstract class BaseAgent {
       return await this.getProvider().complete(options);
     } catch (error) {
       if (!isRetryableProviderError(error)) throw error;
+      // OpenRouter's PDF support varies too much per underlying model to
+      // trust uniformly (unlike vision, which nearly every OpenRouter model
+      // handles the same way) — silently retrying without the document
+      // could produce a confidently wrong answer that ignores what the user
+      // attached. Surface the original error instead of degrading silently.
+      if (hasDocumentAttachment(options.messages)) throw error;
       const fallback = this.getFallbackProvider();
       if (!fallback) throw error;
       const message = error instanceof Error ? error.message : String(error);
@@ -269,18 +276,24 @@ export abstract class BaseAgent {
       maxIterations?: number;
       priorMessages?: ProviderMessage[];
       images?: ImageAttachment[];
+      documents?: DocumentAttachment[];
     }
   ): Promise<string> {
     const tools = this.config.toolSchemas ? Object.values(this.config.toolSchemas) : [];
     if (!this.getProvider().supportsTools || tools.length === 0) {
       // think() has no messages-array support — fold prior turns into the
       // context string instead, so conversational memory still survives on
-      // non-Anthropic providers rather than silently vanishing. Images can't
-      // survive that fold either, and this path is only ever reached by
-      // providers that also lack vision support today, so note the drop
-      // rather than silently discarding an attachment the user sent.
+      // non-Anthropic providers rather than silently vanishing. Attachments
+      // can't survive that fold either, and this path is only ever reached
+      // by providers that also lack vision/document support today, so note
+      // the drop rather than silently discarding what the user attached.
       return this.think(
-        buildUserMessageWithImageNote(userMessage, opts?.images, this.getProvider().type),
+        buildUserMessageWithAttachmentNote(
+          userMessage,
+          opts?.images,
+          opts?.documents,
+          this.getProvider().type
+        ),
         foldPriorMessagesIntoContext(opts?.priorMessages, opts?.extraContext)
       );
     }
@@ -292,7 +305,12 @@ export abstract class BaseAgent {
       ...(opts?.priorMessages ?? []),
       {
         role: 'user',
-        content: buildUserTurnContent(userMessage, opts?.images, this.getProvider()),
+        content: buildUserTurnContent(
+          userMessage,
+          opts?.images,
+          opts?.documents,
+          this.getProvider()
+        ),
       },
     ];
 
@@ -571,38 +589,82 @@ function foldPriorMessagesIntoContext(
 }
 
 // Builds the current turn's user message content for the real tool-calling
-// loop: an image-bearing ProviderContentBlock[] (images first, then text —
-// see anthropic.ts's toAnthropicUserContent for why) when the active
-// provider supports vision, otherwise a plain string with a visible note
-// instead of silently dropping the attachment.
+// loop: an attachment-bearing ProviderContentBlock[] (images/documents first,
+// then text — see anthropic.ts's toAnthropicUserContent for why) for
+// whichever attachment kinds the active provider supports; any kind it
+// doesn't support gets a visible drop-note instead of silently vanishing.
+// Images and documents are independent — a provider can support one without
+// the other (OpenRouter: vision yes, documents no).
 function buildUserTurnContent(
   userMessage: string,
   images: ImageAttachment[] | undefined,
+  documents: DocumentAttachment[] | undefined,
   provider: Provider
 ): string | ProviderContentBlock[] {
-  if (!images?.length) return userMessage;
-  if (!provider.supportsVision) {
-    return imageDropNote(userMessage, images.length, provider.type);
+  const usableImages = provider.supportsVision ? (images ?? []) : [];
+  const usableDocuments = provider.supportsDocuments ? (documents ?? []) : [];
+  const droppedImages = provider.supportsVision ? 0 : (images?.length ?? 0);
+  const droppedDocuments = provider.supportsDocuments ? 0 : (documents?.length ?? 0);
+
+  if (usableImages.length === 0 && usableDocuments.length === 0) {
+    return droppedImages || droppedDocuments
+      ? attachmentDropNote(userMessage, droppedImages, droppedDocuments, provider.type)
+      : userMessage;
   }
+
+  const text =
+    droppedImages || droppedDocuments
+      ? attachmentDropNote(userMessage, droppedImages, droppedDocuments, provider.type)
+      : userMessage;
+
   return [
-    ...images.map((img): ProviderContentBlock => ({ type: 'image', ...img })),
-    { type: 'text', text: userMessage },
+    ...usableImages.map((img): ProviderContentBlock => ({ type: 'image', ...img })),
+    ...usableDocuments.map((doc): ProviderContentBlock => ({ type: 'document', ...doc })),
+    { type: 'text', text },
   ];
 }
 
 // Same visible-degrade note, for the runToolLoop -> think() fallback path
-// (think() only ever takes a plain string, never content blocks).
-function buildUserMessageWithImageNote(
+// (think() only ever takes a plain string, never content blocks) — every
+// attachment is dropped here since this path is only reached by providers
+// that also lack tool-calling, and none of those support vision/documents.
+function buildUserMessageWithAttachmentNote(
   userMessage: string,
   images: ImageAttachment[] | undefined,
+  documents: DocumentAttachment[] | undefined,
   providerType: ProviderType
 ): string {
-  return images?.length ? imageDropNote(userMessage, images.length, providerType) : userMessage;
+  return images?.length || documents?.length
+    ? attachmentDropNote(userMessage, images?.length ?? 0, documents?.length ?? 0, providerType)
+    : userMessage;
 }
 
-function imageDropNote(userMessage: string, count: number, providerType: ProviderType): string {
-  const plural = count === 1 ? 'image' : 'images';
-  return `${userMessage}\n\n[${count} ${plural} attached — the active provider (${providerType}) doesn't support vision, so ${count === 1 ? 'it was' : 'they were'} not sent.]`;
+function hasDocumentAttachment(messages: ProviderMessage[] | undefined): boolean {
+  if (!messages) return false;
+  return messages.some(
+    (m) =>
+      m.role === 'user' &&
+      Array.isArray(m.content) &&
+      m.content.some((block) => block.type === 'document')
+  );
+}
+
+function attachmentDropNote(
+  userMessage: string,
+  imageCount: number,
+  documentCount: number,
+  providerType: ProviderType
+): string {
+  const parts: string[] = [];
+  if (imageCount > 0) {
+    parts.push(`${imageCount} ${imageCount === 1 ? 'image' : 'images'}`);
+  }
+  if (documentCount > 0) {
+    parts.push(`${documentCount} ${documentCount === 1 ? 'document' : 'documents'}`);
+  }
+  if (parts.length === 0) return userMessage;
+  const totalCount = imageCount + documentCount;
+  return `${userMessage}\n\n[${parts.join(' and ')} attached — the active provider (${providerType}) doesn't support ${imageCount > 0 && documentCount > 0 ? 'vision/documents' : imageCount > 0 ? 'vision' : 'documents'}, so ${totalCount === 1 ? 'it was' : 'they were'} not sent.]`;
 }
 
 // Retryable (worth failing over to OpenRouter): no HTTP status available at

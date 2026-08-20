@@ -1,5 +1,5 @@
 import { OpenRouterProvider } from '../openrouter';
-import { ProviderHttpError } from '../base';
+import { ProviderHttpError, type Provider } from '../base';
 
 function mockFetchOnce(response: Partial<Response> & { json?: () => Promise<unknown> }) {
   (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -371,6 +371,45 @@ describe('OpenRouterProvider vision', () => {
 
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
     expect(body.messages).toEqual([{ role: 'user', content: 'just text' }]);
+  });
+});
+
+describe('OpenRouterProvider documents', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+
+  it('does not declare supportsDocuments', () => {
+    const provider: Provider = new OpenRouterProvider({ type: 'openrouter', apiKey: 'k' });
+    expect(provider.supportsDocuments).toBeUndefined();
+  });
+
+  it('drops a document block defensively rather than sending it (base-agent should never let this happen)', async () => {
+    mockFetchOnce({
+      json: async () => ({
+        choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+        model: 'm',
+      }),
+    });
+    const provider = new OpenRouterProvider({ type: 'openrouter', apiKey: 'k' });
+
+    await provider.complete({
+      prompt: 'unused',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'read this' },
+            { type: 'document', mediaType: 'application/pdf', data: 'pdfdata' },
+          ],
+        },
+      ],
+    });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.messages).toEqual([
+      { role: 'user', content: [{ type: 'text', text: 'read this' }] },
+    ]);
   });
 });
 

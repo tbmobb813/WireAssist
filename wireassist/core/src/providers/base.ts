@@ -13,6 +13,13 @@ export interface Provider {
   // BaseAgent.runToolLoop() strips images (with a note in the text turn
   // instead of silently dropping them) when this is false or unset.
   supportsVision?: boolean;
+  // Whether this provider can accept document (PDF/text) content blocks in a
+  // user turn. Deliberately never set on OpenRouter — PDF support varies too
+  // much per underlying model to trust uniformly, unlike vision. BaseAgent
+  // strips documents (with a note) when this is false or unset, and skips
+  // the OpenRouter fallback entirely for document-bearing requests rather
+  // than silently retrying without the attachment.
+  supportsDocuments?: boolean;
 
   complete(options: ProviderCompletionOptions): Promise<ProviderResponse>;
   stream(options: ProviderCompletionOptions): Promise<AsyncGenerator<string>>;
@@ -58,13 +65,23 @@ export interface ImageAttachment {
   data: string;
 }
 
-// A block within a user turn's content when it's more than plain text — only
-// used for image-bearing turns today. `data` is raw base64, no `data:` URI
-// prefix (providers that need one, e.g. OpenRouter's OpenAI-compatible wire
-// format, add it themselves in buildMessages()).
+// Same shape/flow as ImageAttachment, for PDF or plain-text file attachments.
+// `data` is always raw base64 (even for text/plain — the provider that
+// supports documents decodes it back to a string itself, e.g. anthropic.ts).
+export interface DocumentAttachment {
+  mediaType: 'application/pdf' | 'text/plain';
+  data: string;
+  filename?: string;
+}
+
+// A block within a user turn's content when it's more than plain text.
+// `data` is raw base64, no `data:` URI prefix (providers that need one, e.g.
+// OpenRouter's OpenAI-compatible wire format, add it themselves in
+// buildMessages()).
 export type ProviderContentBlock =
   | { type: 'text'; text: string }
-  | ({ type: 'image' } & ImageAttachment);
+  | ({ type: 'image' } & ImageAttachment)
+  | ({ type: 'document' } & DocumentAttachment);
 
 // Turn history for a multi-turn tool-calling loop. Providers without tool
 // support can ignore `messages`/`tools` entirely and fall back to `prompt`.

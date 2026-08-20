@@ -13,6 +13,7 @@ import {
   type AgentRole,
   type AgentTask,
   type ImageAttachment,
+  type DocumentAttachment,
 } from '@wireassist/core';
 import { logger } from '@wireassist/core/logger';
 import {
@@ -747,6 +748,27 @@ function sanitizeImages(raw: unknown): ImageAttachment[] | undefined {
   return images.length > 0 ? images.slice(0, MAX_IMAGES_PER_MESSAGE) : undefined;
 }
 
+// Same defense-in-depth as sanitizeImages() — 30 MB is a safety margin under
+// Anthropic's 32 MB base64-encoded PDF limit.
+const MAX_DOCUMENTS_PER_MESSAGE = 4;
+const MAX_DOCUMENT_BASE64_BYTES = 30 * 1024 * 1024;
+const ALLOWED_DOCUMENT_MEDIA_TYPES = new Set(['application/pdf', 'text/plain']);
+function sanitizeDocuments(raw: unknown): DocumentAttachment[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const documents = raw.filter(
+    (doc): doc is DocumentAttachment =>
+      !!doc &&
+      typeof doc === 'object' &&
+      typeof (doc as DocumentAttachment).mediaType === 'string' &&
+      ALLOWED_DOCUMENT_MEDIA_TYPES.has((doc as DocumentAttachment).mediaType) &&
+      typeof (doc as DocumentAttachment).data === 'string' &&
+      (doc as DocumentAttachment).data.length > 0 &&
+      (doc as DocumentAttachment).data.length <= MAX_DOCUMENT_BASE64_BYTES &&
+      (doc.filename === undefined || typeof doc.filename === 'string')
+  );
+  return documents.length > 0 ? documents.slice(0, MAX_DOCUMENTS_PER_MESSAGE) : undefined;
+}
+
 app.post('/api/tasks/freeform', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
@@ -755,10 +777,12 @@ app.post('/api/tasks/freeform', async (c) => {
     history: rawHistory,
     objectiveId: rawObjectiveId,
     images: rawImages,
+    documents: rawDocuments,
   } = await c.req.json();
   if (!instruction) return c.json({ error: 'instruction required' }, 400);
   const history = sanitizeHistory(rawHistory);
   const images = sanitizeImages(rawImages);
+  const documents = sanitizeDocuments(rawDocuments);
   const objectiveId =
     typeof rawObjectiveId === 'string' && rawObjectiveId ? rawObjectiveId : undefined;
 
@@ -803,7 +827,7 @@ app.post('/api/tasks/freeform', async (c) => {
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'content_freeform': {
-      const task = ContentTasks.freeform(decision.prompt, history, objectiveId, images);
+      const task = ContentTasks.freeform(decision.prompt, history, objectiveId, images, documents);
       queueContentTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
@@ -819,7 +843,7 @@ app.post('/api/tasks/freeform', async (c) => {
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'research_freeform': {
-      const task = ResearchTasks.freeform(decision.prompt, history, objectiveId, images);
+      const task = ResearchTasks.freeform(decision.prompt, history, objectiveId, images, documents);
       queueResearchTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
@@ -829,6 +853,7 @@ app.post('/api/tasks/freeform', async (c) => {
         history,
         objectiveId,
         images,
+        documents,
       });
       queueOpsTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
@@ -843,7 +868,7 @@ app.post('/api/tasks/freeform', async (c) => {
       return c.json({ taskId: task.id, status: 'queued' });
     }
     case 'gtm_freeform': {
-      const task = GtmTasks.freeform(decision.prompt, history, objectiveId, images);
+      const task = GtmTasks.freeform(decision.prompt, history, objectiveId, images, documents);
       queueGtmTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
@@ -863,7 +888,7 @@ app.post('/api/tasks/freeform', async (c) => {
           503
         );
       }
-      const task = GitHubTasks.freeform(decision.prompt, history, objectiveId, images);
+      const task = GitHubTasks.freeform(decision.prompt, history, objectiveId, images, documents);
       queueGithubTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
     }
@@ -873,7 +898,8 @@ app.post('/api/tasks/freeform', async (c) => {
         decision.kind === 'admin_freeform' ? decision.prompt : instruction,
         history,
         objectiveId,
-        images
+        images,
+        documents
       );
       queueAgentTask(task);
       return c.json({ taskId: task.id, status: 'queued' });
@@ -949,13 +975,20 @@ app.post('/api/tasks/generate-plan', async (c) => {
 app.post('/api/tasks/admin-freeform', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const { prompt, history: rawHistory, objectiveId, images: rawImages } = await c.req.json();
+  const {
+    prompt,
+    history: rawHistory,
+    objectiveId,
+    images: rawImages,
+    documents: rawDocuments,
+  } = await c.req.json();
   if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
   const task = AdminTasks.freeform(
     prompt,
     sanitizeHistory(rawHistory),
     typeof objectiveId === 'string' ? objectiveId : undefined,
-    sanitizeImages(rawImages)
+    sanitizeImages(rawImages),
+    sanitizeDocuments(rawDocuments)
   );
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
@@ -964,13 +997,20 @@ app.post('/api/tasks/admin-freeform', async (c) => {
 app.post('/api/tasks/content-freeform', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const { prompt, history: rawHistory, objectiveId, images: rawImages } = await c.req.json();
+  const {
+    prompt,
+    history: rawHistory,
+    objectiveId,
+    images: rawImages,
+    documents: rawDocuments,
+  } = await c.req.json();
   if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
   const task = ContentTasks.freeform(
     prompt,
     sanitizeHistory(rawHistory),
     typeof objectiveId === 'string' ? objectiveId : undefined,
-    sanitizeImages(rawImages)
+    sanitizeImages(rawImages),
+    sanitizeDocuments(rawDocuments)
   );
   queueContentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
@@ -1014,13 +1054,20 @@ app.post('/api/tasks/synthesize', async (c) => {
 app.post('/api/tasks/research-freeform', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const { prompt, history: rawHistory, objectiveId, images: rawImages } = await c.req.json();
+  const {
+    prompt,
+    history: rawHistory,
+    objectiveId,
+    images: rawImages,
+    documents: rawDocuments,
+  } = await c.req.json();
   if (!prompt || typeof prompt !== 'string') return c.json({ error: 'prompt required' }, 400);
   const task = ResearchTasks.freeform(
     prompt,
     sanitizeHistory(rawHistory),
     typeof objectiveId === 'string' ? objectiveId : undefined,
-    sanitizeImages(rawImages)
+    sanitizeImages(rawImages),
+    sanitizeDocuments(rawDocuments)
   );
   queueResearchTask(task);
   return c.json({ taskId: task.id, status: 'queued' });

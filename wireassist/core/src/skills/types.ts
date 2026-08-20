@@ -1,6 +1,6 @@
 import type { AgentRole, AgentTask } from '../agents/types';
 import type { ApprovalRequest } from '../approval/types';
-import type { ImageAttachment, ProviderMessage } from '../providers/base';
+import type { ImageAttachment, DocumentAttachment, ProviderMessage } from '../providers/base';
 
 // Narrower than BaseAgent itself — a Skill can reach these, but never
 // `config`, `client`, or `status` directly.
@@ -26,6 +26,7 @@ export interface SkillAgentHandle {
       maxIterations?: number;
       priorMessages?: ProviderMessage[];
       images?: ImageAttachment[];
+      documents?: DocumentAttachment[];
     }
   ): Promise<string>;
   // Approved/rejected decision history — for skills that reflect on

@@ -11,6 +11,7 @@ import type {
   ProviderMessage,
   ProviderCompletionOptions,
   ImageAttachment,
+  DocumentAttachment,
 } from '@wireassist/core';
 import { ProviderFactory, ProviderHttpError } from '@wireassist/core';
 import { BaseAgent } from '../base-agent';
@@ -43,6 +44,7 @@ class TestAgent extends BaseAgent {
       maxIterations?: number;
       priorMessages?: ProviderMessage[];
       images?: ImageAttachment[];
+      documents?: DocumentAttachment[];
     }
   ) {
     return this.runToolLoop(task, userMessage, opts);
@@ -767,6 +769,33 @@ describe('BaseAgent.completeWithFallback()', () => {
     );
   });
 
+  it('does not retry via OpenRouter when the request carries a document attachment — surfaces the original error', async () => {
+    process.env.OPENROUTER_API_KEY = 'k';
+    const originalError = new ProviderHttpError(
+      'anthropic',
+      503,
+      'Anthropic API error: 503 - overloaded'
+    );
+    primaryComplete.mockRejectedValueOnce(originalError);
+    const agent = makeAgent();
+
+    await expect(
+      agent.testCompleteWithFallback({
+        prompt: 'read this',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'document', mediaType: 'application/pdf', data: 'pdfbase64' },
+              { type: 'text', text: 'read this' },
+            ],
+          },
+        ],
+      })
+    ).rejects.toBe(originalError);
+    expect(fallbackComplete).not.toHaveBeenCalled();
+  });
+
   it('retries via OpenRouter on a 429 from the primary', async () => {
     process.env.OPENROUTER_API_KEY = 'k';
     primaryComplete.mockRejectedValueOnce(new ProviderHttpError('anthropic', 429, 'rate limited'));
@@ -1051,6 +1080,80 @@ describe('BaseAgent.runToolLoop()', () => {
 
     expect(completeMock.mock.calls[0][0].prompt).toBe(
       "describe this\n\n[1 image attached — the active provider (openai) doesn't support vision, so it was not sent.]"
+    );
+  });
+
+  it('builds a document-then-text content block for the current turn when the provider supports documents', async () => {
+    jest.spyOn(ProviderFactory, 'create').mockReturnValue({
+      type: 'anthropic',
+      supportsTools: true,
+      supportsDocuments: true,
+      currentModel: 'claude-sonnet-5',
+      complete: completeMock,
+      stream: jest.fn(),
+      listModels: jest.fn(),
+      validateConfig: jest.fn(),
+    });
+    completeMock.mockResolvedValueOnce(stubResponse({ content: 'It says hello.' }));
+    const { agent } = makeToolAgent();
+    const documents: DocumentAttachment[] = [{ mediaType: 'application/pdf', data: 'pdfbase64' }];
+
+    const result = await agent.testRunToolLoop(makeTask(), 'what does this say?', { documents });
+
+    expect(result).toBe('It says hello.');
+    expect(completeMock.mock.calls[0][0].messages).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'document', mediaType: 'application/pdf', data: 'pdfbase64' },
+          { type: 'text', text: 'what does this say?' },
+        ],
+      },
+    ]);
+  });
+
+  it('drops documents with a visible note in the text turn when the provider lacks document support', async () => {
+    completeMock.mockResolvedValueOnce(stubResponse({ content: 'ok' }));
+    // makeToolAgent()'s mocked provider has no supportsDocuments flag set —
+    // same as every provider except Anthropic today (OpenRouter included).
+    const { agent } = makeToolAgent();
+    const documents: DocumentAttachment[] = [{ mediaType: 'application/pdf', data: 'pdfbase64' }];
+
+    await agent.testRunToolLoop(makeTask(), 'what does this say?', { documents });
+
+    const sentContent = completeMock.mock.calls[0][0].messages[0].content;
+    expect(sentContent).toBe(
+      "what does this say?\n\n[1 document attached — the active provider (anthropic) doesn't support documents, so it was not sent.]"
+    );
+  });
+
+  it('drops documents with a note when falling back to think() (provider without tool support)', async () => {
+    jest.spyOn(ProviderFactory, 'create').mockReturnValue({
+      type: 'openai',
+      supportsTools: false,
+      currentModel: 'gpt-4o',
+      complete: completeMock,
+      stream: jest.fn(),
+      listModels: jest.fn(),
+      validateConfig: jest.fn(),
+    });
+    completeMock.mockResolvedValue(stubResponse({ content: 'plain answer' }));
+
+    const config: AgentConfig = {
+      role: 'admin',
+      name: 'Test Agent',
+      systemPrompt: 'sys',
+      tools: [],
+      provider: 'openai',
+      toolSchemas: { x: { name: 'x', description: 'd', inputSchema: {} } },
+    };
+    const agent = new TestAgent(config, makeDeps());
+    const documents: DocumentAttachment[] = [{ mediaType: 'application/pdf', data: 'pdfbase64' }];
+
+    await agent.testRunToolLoop(makeTask(), 'read this', { documents });
+
+    expect(completeMock.mock.calls[0][0].prompt).toBe(
+      "read this\n\n[1 document attached — the active provider (openai) doesn't support documents, so it was not sent.]"
     );
   });
 

@@ -24,6 +24,7 @@ export type {
   ProviderMessage,
   ProviderContentBlock,
   ImageAttachment,
+  DocumentAttachment,
 } from './providers/base';
 
 // Streaming

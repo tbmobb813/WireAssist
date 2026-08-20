@@ -1,9 +1,10 @@
-import type { ImageAttachment, ProviderMessage, Skill } from '@wireassist/core';
+import type { ImageAttachment, DocumentAttachment, ProviderMessage, Skill } from '@wireassist/core';
 
 export interface OpsFreeformInput {
   prompt: string;
   history?: ProviderMessage[];
   images?: ImageAttachment[];
+  documents?: DocumentAttachment[];
 }
 
 export const opsFreeformSkill: Skill<OpsFreeformInput, void> = {
@@ -17,6 +18,7 @@ export const opsFreeformSkill: Skill<OpsFreeformInput, void> = {
       extraContext: context || undefined,
       priorMessages: input.history,
       images: input.images,
+      documents: input.documents,
       // A real business question plausibly chains several raw read calls
       // (sheets_read, list_workflows, a content-check call) before
       // answering — same cap-exhaustion risk already confirmed live on

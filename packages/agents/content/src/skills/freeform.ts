@@ -1,10 +1,11 @@
-import type { ImageAttachment, ProviderMessage, Skill } from '@wireassist/core';
+import type { ImageAttachment, DocumentAttachment, ProviderMessage, Skill } from '@wireassist/core';
 
 export interface FreeformInput {
   type?: string;
   prompt?: string;
   history?: ProviderMessage[];
   images?: ImageAttachment[];
+  documents?: DocumentAttachment[];
 }
 
 export const freeformSkill: Skill<FreeformInput, void> = {
@@ -22,6 +23,7 @@ export const freeformSkill: Skill<FreeformInput, void> = {
       extraContext: context,
       priorMessages: input.history,
       images: input.images,
+      documents: input.documents,
       // A real freeform ask ("how did my recent posts do, what should I
       // write next") plausibly chains several raw read calls
       // (content_list_posts -> content_analyze -> content_list_ideas)

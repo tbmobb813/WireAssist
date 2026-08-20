@@ -1,10 +1,11 @@
-import type { ImageAttachment, ProviderMessage, Skill } from '@wireassist/core';
+import type { ImageAttachment, DocumentAttachment, ProviderMessage, Skill } from '@wireassist/core';
 
 export interface FreeformInput {
   type?: string;
   prompt?: string;
   history?: ProviderMessage[];
   images?: ImageAttachment[];
+  documents?: DocumentAttachment[];
 }
 
 export const freeformSkill: Skill<FreeformInput, void> = {
@@ -22,6 +23,7 @@ export const freeformSkill: Skill<FreeformInput, void> = {
       extraContext: context,
       priorMessages: input.history,
       images: input.images,
+      documents: input.documents,
       // Admin's skill-tools (email_triage_skill, calendar_review_skill) are
       // each a full multi-step skill invocation that costs a single loop
       // iteration but can itself run a whole approval flow internally —
