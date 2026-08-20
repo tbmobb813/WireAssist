@@ -10,6 +10,7 @@ import type {
   ProviderResponse,
   ProviderMessage,
   ProviderCompletionOptions,
+  ImageAttachment,
 } from '@wireassist/core';
 import { ProviderFactory, ProviderHttpError } from '@wireassist/core';
 import { BaseAgent } from '../base-agent';
@@ -37,7 +38,12 @@ class TestAgent extends BaseAgent {
   testRunToolLoop(
     task: AgentTask,
     userMessage: string,
-    opts?: { extraContext?: string; maxIterations?: number; priorMessages?: ProviderMessage[] }
+    opts?: {
+      extraContext?: string;
+      maxIterations?: number;
+      priorMessages?: ProviderMessage[];
+      images?: ImageAttachment[];
+    }
   ) {
     return this.runToolLoop(task, userMessage, opts);
   }
@@ -971,6 +977,81 @@ describe('BaseAgent.runToolLoop()', () => {
     await agent.testRunToolLoop(makeTask(), 'follow-up', { priorMessages });
 
     expect(completeMock.mock.calls[0][0].systemPrompt).toContain('User: earlier question');
+  });
+
+  it('builds an image-then-text content block for the current turn when the provider supports vision', async () => {
+    jest.spyOn(ProviderFactory, 'create').mockReturnValue({
+      type: 'anthropic',
+      supportsTools: true,
+      supportsVision: true,
+      currentModel: 'claude-sonnet-5',
+      complete: completeMock,
+      stream: jest.fn(),
+      listModels: jest.fn(),
+      validateConfig: jest.fn(),
+    });
+    completeMock.mockResolvedValueOnce(stubResponse({ content: 'I see a cat.' }));
+    const { agent } = makeToolAgent();
+    const images: ImageAttachment[] = [{ mediaType: 'image/png', data: 'base64data' }];
+
+    const result = await agent.testRunToolLoop(makeTask(), "what's this?", { images });
+
+    expect(result).toBe('I see a cat.');
+    expect(completeMock.mock.calls[0][0].messages).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'image', mediaType: 'image/png', data: 'base64data' },
+          { type: 'text', text: "what's this?" },
+        ],
+      },
+    ]);
+  });
+
+  it('drops images with a visible note in the text turn when the provider lacks vision support', async () => {
+    completeMock.mockResolvedValueOnce(stubResponse({ content: 'ok' }));
+    // makeToolAgent()'s mocked provider (from the outer beforeEach) has no
+    // supportsVision flag set, i.e. falsy — same as every provider except
+    // Anthropic/OpenRouter today.
+    const { agent } = makeToolAgent();
+    const images: ImageAttachment[] = [{ mediaType: 'image/png', data: 'base64data' }];
+
+    await agent.testRunToolLoop(makeTask(), "what's this?", { images });
+
+    const sentContent = completeMock.mock.calls[0][0].messages[0].content;
+    expect(sentContent).toBe(
+      "what's this?\n\n[1 image attached — the active provider (anthropic) doesn't support vision, so it was not sent.]"
+    );
+  });
+
+  it('drops images with a note when falling back to think() (provider without tool support)', async () => {
+    jest.spyOn(ProviderFactory, 'create').mockReturnValue({
+      type: 'openai',
+      supportsTools: false,
+      currentModel: 'gpt-4o',
+      complete: completeMock,
+      stream: jest.fn(),
+      listModels: jest.fn(),
+      validateConfig: jest.fn(),
+    });
+    completeMock.mockResolvedValue(stubResponse({ content: 'plain answer' }));
+
+    const config: AgentConfig = {
+      role: 'admin',
+      name: 'Test Agent',
+      systemPrompt: 'sys',
+      tools: [],
+      provider: 'openai',
+      toolSchemas: { x: { name: 'x', description: 'd', inputSchema: {} } },
+    };
+    const agent = new TestAgent(config, makeDeps());
+    const images: ImageAttachment[] = [{ mediaType: 'image/png', data: 'base64data' }];
+
+    await agent.testRunToolLoop(makeTask(), 'describe this', { images });
+
+    expect(completeMock.mock.calls[0][0].prompt).toBe(
+      "describe this\n\n[1 image attached — the active provider (openai) doesn't support vision, so it was not sent.]"
+    );
   });
 
   it('executes a read-only tool call immediately (no approval) and feeds the result back', async () => {

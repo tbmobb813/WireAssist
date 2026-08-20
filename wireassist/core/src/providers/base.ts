@@ -9,6 +9,10 @@ export interface Provider {
   // real multi-turn tool-calling loop. BaseAgent.runToolLoop() falls back to
   // a single-shot think() call when false — see base-agent.ts.
   supportsTools: boolean;
+  // Whether this provider can accept image content blocks in a user turn.
+  // BaseAgent.runToolLoop() strips images (with a note in the text turn
+  // instead of silently dropping them) when this is false or unset.
+  supportsVision?: boolean;
 
   complete(options: ProviderCompletionOptions): Promise<ProviderResponse>;
   stream(options: ProviderCompletionOptions): Promise<AsyncGenerator<string>>;
@@ -46,10 +50,28 @@ export interface ProviderToolCall {
   input: Record<string, unknown>;
 }
 
+// A raw image attachment as it flows from the UI through routes/tasks/skills
+// before becoming a ProviderContentBlock — `data` is raw base64, no `data:`
+// URI prefix.
+export interface ImageAttachment {
+  mediaType: string;
+  data: string;
+}
+
+// A block within a user turn's content when it's more than plain text — only
+// used for image-bearing turns today. `data` is raw base64, no `data:` URI
+// prefix (providers that need one, e.g. OpenRouter's OpenAI-compatible wire
+// format, add it themselves in buildMessages()).
+export type ProviderContentBlock =
+  | { type: 'text'; text: string }
+  | ({ type: 'image' } & ImageAttachment);
+
 // Turn history for a multi-turn tool-calling loop. Providers without tool
 // support can ignore `messages`/`tools` entirely and fall back to `prompt`.
+// A user turn's content is an array only when it carries an image — plain
+// text stays a bare string in every other case.
 export type ProviderMessage =
-  | { role: 'user'; content: string }
+  | { role: 'user'; content: string | ProviderContentBlock[] }
   | { role: 'assistant'; content: string; toolCalls?: ProviderToolCall[] }
   | { role: 'tool_result'; toolCallId: string; content: string; isError?: boolean };
 

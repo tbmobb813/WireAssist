@@ -311,6 +311,69 @@ describe('OpenRouterProvider — tool calling', () => {
   });
 });
 
+describe('OpenRouterProvider vision', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+
+  it('declares supportsVision', () => {
+    const provider = new OpenRouterProvider({ type: 'openrouter', apiKey: 'k' });
+    expect(provider.supportsVision).toBe(true);
+  });
+
+  it('translates an image+text user turn into OpenAI-compatible image_url/text blocks', async () => {
+    mockFetchOnce({
+      json: async () => ({
+        choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+        model: 'm',
+      }),
+    });
+    const provider = new OpenRouterProvider({ type: 'openrouter', apiKey: 'k' });
+
+    await provider.complete({
+      prompt: 'unused when messages is set',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: "What's this?" },
+            { type: 'image', mediaType: 'image/png', data: 'base64data' },
+          ],
+        },
+      ],
+    });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.messages).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: "What's this?" },
+          { type: 'image_url', image_url: { url: 'data:image/png;base64,base64data' } },
+        ],
+      },
+    ]);
+  });
+
+  it('still sends a bare string for a text-only user turn (regression guard)', async () => {
+    mockFetchOnce({
+      json: async () => ({
+        choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+        model: 'm',
+      }),
+    });
+    const provider = new OpenRouterProvider({ type: 'openrouter', apiKey: 'k' });
+
+    await provider.complete({
+      prompt: 'unused',
+      messages: [{ role: 'user', content: 'just text' }],
+    });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.messages).toEqual([{ role: 'user', content: 'just text' }]);
+  });
+});
+
 describe('OpenRouterProvider.listModels()', () => {
   beforeEach(() => {
     global.fetch = jest.fn();

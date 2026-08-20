@@ -83,6 +83,26 @@ function makeDeps(
   };
 }
 
+describe('GitHubAgent — freeform', () => {
+  it('passes task.input.images through to runToolLoop', async () => {
+    const deps = makeDeps();
+    const agent = new GitHubAgent(deps);
+    const runToolLoopSpy = jest.spyOn(agent as any, 'runToolLoop').mockResolvedValue('answer');
+    const images = [{ mediaType: 'image/png', data: 'base64data' }];
+
+    const task = makeTask({
+      input: { type: 'freeform', prompt: "what's this?", images },
+    });
+    await agent.run(task);
+
+    expect(runToolLoopSpy).toHaveBeenCalledWith(
+      task,
+      "what's this?",
+      expect.objectContaining({ images })
+    );
+  });
+});
+
 describe('GitHubAgent.executeToolCall', () => {
   it('runs a read-only tool immediately, with no approval request', async () => {
     const deps = makeDeps();

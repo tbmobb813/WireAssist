@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { AgentTask, ProviderMessage } from '@wireassist/core';
+import type { AgentTask, ImageAttachment, ProviderMessage } from '@wireassist/core';
 import type { OpsTaskInput } from './nixops-agent';
 
 function baseTask(description: string, input: OpsTaskInput, objectiveId?: string): AgentTask {
@@ -38,6 +38,7 @@ export function createOpsFreeformTask(params: {
   prompt: string;
   description?: string;
   history?: ProviderMessage[];
+  images?: ImageAttachment[];
   objectiveId?: string;
 }): AgentTask {
   return baseTask(
@@ -46,6 +47,7 @@ export function createOpsFreeformTask(params: {
       type: 'freeform',
       prompt: params.prompt,
       history: params.history,
+      images: params.images,
     },
     params.objectiveId
   );
