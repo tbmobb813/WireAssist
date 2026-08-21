@@ -132,6 +132,29 @@ export class MemoryStore {
   }
 
   /**
+   * Like listRecent(), but returns only entries carrying at least one of
+   * `tags` — for a caller that wants "every recent memory of this kind"
+   * (e.g. tagged freeform requests), not just whatever's most recent
+   * overall. Tags are a JSON-serialized array column, not a normalized
+   * one, so — same convention as excludeByTags() — this filters in JS
+   * after fetching, rather than a SQL LIKE/json_each query. Unlike
+   * listRecent()'s SQL-level LIMIT, `limit` here bounds the matching
+   * results after filtering, not an arbitrary recent window that might
+   * contain none of them.
+   */
+  listByTags(tags: string[], limit = 50): MemoryEntry[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, content, agent_role, tags, created_at FROM memories ORDER BY created_at DESC`
+      )
+      .all() as RawRow[];
+    const wanted = new Set(tags);
+    return this.mapRows(rows)
+      .filter((e) => e.tags.some((t) => wanted.has(t)))
+      .slice(0, limit);
+  }
+
+  /**
    * Synchronous search — returns vector results if the query embedding is already cached,
    * otherwise falls back to FTS5 and primes the cache for the next call.
    */

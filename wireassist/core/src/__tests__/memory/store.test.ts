@@ -68,6 +68,64 @@ describe('MemoryStore.store() — sync path', () => {
   });
 });
 
+describe('MemoryStore.listByTags()', () => {
+  test('returns only entries carrying at least one of the given tags', () => {
+    const store = freshStore();
+    store.store({
+      content: 'a freeform ask',
+      agentRole: 'admin',
+      tags: ['admin', 'freeform_request'],
+      createdAt: new Date(),
+    });
+    store.store({
+      content: 'a trace entry',
+      agentRole: 'admin',
+      tags: ['trace'],
+      createdAt: new Date(),
+    });
+    store.store({
+      content: 'another freeform ask',
+      agentRole: 'content',
+      tags: ['content', 'freeform_request'],
+      createdAt: new Date(),
+    });
+
+    const entries = store.listByTags(['freeform_request']);
+    expect(entries).toHaveLength(2);
+    expect(entries.map((e) => e.content).sort()).toEqual(
+      ['a freeform ask', 'another freeform ask'].sort()
+    );
+  });
+
+  test('returns an empty array when nothing matches', () => {
+    const store = freshStore();
+    store.store({
+      content: 'unrelated',
+      agentRole: 'admin',
+      tags: ['trace'],
+      createdAt: new Date(),
+    });
+
+    expect(store.listByTags(['freeform_request'])).toEqual([]);
+  });
+
+  test('caps results at limit, most recent first', () => {
+    const store = freshStore();
+    for (let i = 0; i < 5; i++) {
+      store.store({
+        content: `ask ${i}`,
+        agentRole: 'admin',
+        tags: ['freeform_request'],
+        createdAt: new Date(Date.now() + i * 1000),
+      });
+    }
+
+    const entries = store.listByTags(['freeform_request'], 2);
+    expect(entries).toHaveLength(2);
+    expect(entries.map((e) => e.content)).toEqual(['ask 4', 'ask 3']);
+  });
+});
+
 describe('MemoryStore.storeAsync()', () => {
   test('stores entry with embedding immediately', async () => {
     const store = freshStore();

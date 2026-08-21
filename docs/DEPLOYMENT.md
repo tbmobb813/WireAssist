@@ -665,6 +665,40 @@ credentials for the platforms you actually plan to auto-publish to; a
 scheduled post for a platform with no credentials configured will fail
 with a clear "missing credential" error rather than blocking the others.
 
+## 15. Autonomous pattern-detection nudge
+
+`dev/detect-skill-opportunities.sh` triggers the Admin Agent's
+`detect_skill_opportunities` task — it looks across recent freeform
+requests (every agent's `freeform.ts` remembers its own request, tagged
+`freeform_request`) for a genuine repeated pattern that a purpose-built
+skill could handle better than a one-off chat reply.
+
+**This is proposal-only, never autonomous.** If a pattern is found, it's
+proposed for approval (gate 1) — nothing happens until Jason approves the
+_pattern itself_. Only on approval does it hand off a request to the
+relevant agent's own `propose_skill`, which drafts real code and gates
+_that_ separately (gate 2), through the exact same Approvals-tab/Telegram
+`/approve_<id>` path as every other approval in this codebase. No skill is
+ever drafted, and no PR is ever opened, without two separate human
+approvals along the way. If nothing is stale, it says so and skips pinging
+Telegram.
+
+Requires `ANTHROPIC_API_KEY` already configured.
+
+**Cron entry** (weekly, offset from the existing Monday weekly nudges to
+spread cron load — patterns need time to accumulate, same reasoning as
+proactive-insights/trust-graduation-nudges above):
+
+```bash
+crontab -e
+# add:
+0 8 * * 2 cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/detect-skill-opportunities.sh >> /var/log/wireassist-detect-skill-opportunities.log 2>&1
+```
+
+No `jq` needed (no request body). Run it manually once first
+(`WIREASSIST_API_URL=http://localhost:3002 ./dev/detect-skill-opportunities.sh`)
+to confirm it queues successfully before trusting it to cron.
+
 ## Updating after a code change
 
 ```bash

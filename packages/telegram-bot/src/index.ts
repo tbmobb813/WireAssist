@@ -477,6 +477,11 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
       await send(`⏰ ${String(p.summary ?? '').slice(0, 3000)}\n\nUse /approvals to review.`);
       break;
     }
+    case 'detect_skill_opportunities_complete': {
+      if (!p.patternFound) break;
+      await send(`🔍 ${String(p.summary ?? '').slice(0, 3000)}\n\nUse /approvals to review.`);
+      break;
+    }
     case 'publish_due_posts_complete': {
       const published = Array.isArray(p.published) ? p.published : [];
       const failed = Array.isArray(p.failed) ? p.failed : [];
