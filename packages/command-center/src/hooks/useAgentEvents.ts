@@ -24,8 +24,68 @@ export type AgentEvent =
       event: 'approval_resolved';
       payload: { id?: string; agentRole?: string; approved: boolean; objectiveId?: string };
     }
-  | { event: 'triage_complete'; payload: unknown }
-  | { event: 'calendar_review_complete'; payload: unknown }
+  | {
+      event: 'triage_complete';
+      payload: {
+        taskId: string;
+        summary: string;
+        categories: {
+          urgent: { threadId: string; from: string; subject: string; reason: string }[];
+          replyNeeded: { threadId: string; from: string; subject: string; draftReply: string }[];
+          fyi: { threadId: string; from: string; subject: string }[];
+          ignore: { threadId: string; from: string; reason: string }[];
+        };
+      };
+    }
+  | {
+      event: 'calendar_review_complete';
+      payload: {
+        taskId: string;
+        events: unknown[];
+        review: {
+          summary: string;
+          conflicts: { event1: string; event2: string; overlap: string }[];
+          overloadedDays: { date: string; eventCount: number; recommendation: string }[];
+          suggestions: { type: string; description: string; action: string }[];
+        };
+      };
+    }
+  | {
+      event: 'meeting_prep_complete';
+      payload: {
+        taskId: string;
+        summary: string;
+        prepared: { eventId: string; summary: string; prep: string }[];
+      };
+    }
+  | {
+      event: 'meeting_followup_complete';
+      payload: {
+        taskId: string;
+        summary: string;
+        followedUp: { eventId: string; summary: string; followup: string }[];
+      };
+    }
+  | {
+      event: 'objective_health_check_complete';
+      payload: {
+        taskId: string;
+        summary: string;
+        stale: { id: string; title: string; daysSinceActivity: number | null }[];
+      };
+    }
+  | {
+      event: 'travel_itinerary_digest_complete';
+      payload: { taskId: string; summary: string; hasTravel: boolean };
+    }
+  | {
+      event: 'expense_digest_complete';
+      payload: { taskId: string; summary: string; hasExpenses: boolean };
+    }
+  | {
+      event: 'draft_document_complete';
+      payload: { taskId: string; title: string; webViewLink: string };
+    }
   | { event: 'freeform_response'; payload: { taskId: string; response: string } }
   | {
       event: 'content_generated';
