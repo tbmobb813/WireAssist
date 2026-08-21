@@ -244,6 +244,51 @@ function parseRepoSearchResult(raw: unknown): RepoSummary[] {
     .filter((r): r is RepoSummary => r !== null);
 }
 
+// GitHubMcpClient.callTool() returns MCP's array-of-content-blocks shape —
+// extract the first text block, parse it as JSON, and normalize to a flat
+// PR list. Same defensive snake_case/camelCase handling as
+// parseRepoSearchResult() above, since field names aren't verified live in
+// this sandbox (no GitHub credentials configured here).
+interface PrSummary {
+  number: number;
+  title: string;
+  url: string;
+  updatedAt: string;
+}
+
+function parsePrListResult(raw: unknown): PrSummary[] {
+  const blocks = Array.isArray(raw) ? raw : [];
+  const textBlock = blocks.find(
+    (b): b is { type: string; text: string } =>
+      typeof b === 'object' && b !== null && (b as { type?: unknown }).type === 'text'
+  );
+  if (!textBlock) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(textBlock.text);
+  } catch {
+    return [];
+  }
+
+  const items: unknown[] = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray((parsed as { items?: unknown[] })?.items)
+      ? (parsed as { items: unknown[] }).items
+      : [];
+
+  return items
+    .map((item) => {
+      const pr = item as Record<string, unknown>;
+      const number = pr.number as number | undefined;
+      const url = (pr.html_url ?? pr.htmlUrl ?? pr.url ?? '') as string;
+      const updatedAt = (pr.updated_at ?? pr.updatedAt ?? '') as string;
+      if (typeof number !== 'number' || !url || !updatedAt) return null;
+      return { number, title: (pr.title ?? '') as string, url, updatedAt };
+    })
+    .filter((pr): pr is PrSummary => pr !== null);
+}
+
 function sqliteSetupHint(): string {
   return (
     'SQLite (better-sqlite3) is not built. Run:\n' +
@@ -331,6 +376,7 @@ events.on('agent:follow_up_nudges_complete', (p) => broadcast('follow_up_nudges_
 events.on('agent:proactive_insights_complete', (p) => broadcast('proactive_insights_complete', p));
 events.on('agent:budget_warning_complete', (p) => broadcast('budget_warning_complete', p));
 events.on('agent:stale_approvals_complete', (p) => broadcast('stale_approvals_complete', p));
+events.on('agent:stale_prs_complete', (p) => broadcast('stale_prs_complete', p));
 events.on('agent:objective_health_check_complete', (p) =>
   broadcast('objective_health_check_complete', p)
 );
@@ -1375,6 +1421,32 @@ app.post('/api/tasks/github-freeform', async (c) => {
   );
   queueGithubTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// No anthropicConfigured() gate — the summary is a fixed template, not
+// think()-phrased (see stale-prs.ts), so it works even before an Anthropic
+// key is configured, matching objective-health-check's precedent.
+app.post('/api/tasks/stale-prs', async (c) => {
+  if (!githubAgent || !githubReady) {
+    return c.json({ error: 'GitHub agent not connected' }, 503);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const daysStale = Number.isFinite(body.daysStale) && body.daysStale >= 0 ? body.daysStale : 5;
+  const [owner, repo] = (process.env.WIREASSIST_REPO ?? 'tbmobb813/WireAssist').split('/');
+  try {
+    const raw = await githubAgent.callReadOnlyTool('list_pull_requests', {
+      owner,
+      repo,
+      state: 'open',
+      perPage: 100,
+    });
+    const task = GitHubTasks.stalePrs(parsePrListResult(raw), daysStale);
+    queueGithubTask(task);
+    return c.json({ taskId: task.id, status: 'queued' });
+  } catch (err) {
+    logger.error('Stale PR check failed', err instanceof Error ? err.message : err);
+    return c.json({ error: 'Failed to list pull requests' }, 502);
+  }
 });
 
 // Best-effort pre-fill for the GTM wizard: name always; category/problem/benefit/

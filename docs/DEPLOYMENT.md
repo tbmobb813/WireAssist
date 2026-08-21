@@ -689,7 +689,30 @@ No `jq` needed (no request body). Run it manually once first
 (`WIREASSIST_API_URL=http://localhost:3002 ./dev/objective-health-check.sh`)
 to confirm it queues successfully before trusting it to cron.
 
-## 16. Content performance retro
+## 16. Stale PR nudge
+
+`dev/stale-prs.sh` triggers the GitHub Dev Agent's `stale_prs_nudge` task —
+it scans every open pull request on the configured repo (`WIREASSIST_REPO`,
+default `tbmobb813/WireAssist`) and flags any that have gone 5+ days without
+an update. It only reads and reports — it never comments, labels, or closes
+anything itself. If nothing is stale, it says so and skips pinging
+Telegram.
+
+**Cron entry** (daily — a stuck PR is more time-sensitive than a decision
+streak, matching stale-approval nudges' reasoning above):
+
+```bash
+crontab -e
+# add:
+0 9 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/stale-prs.sh >> /var/log/wireassist-stale-prs.log 2>&1
+```
+
+No `jq` needed (no request body). Run it manually once first
+(`WIREASSIST_API_URL=http://localhost:3002 ./dev/stale-prs.sh`) to confirm
+it queues successfully before trusting it to cron — requires GitHub
+credentials already configured (section 4).
+
+## 17. Content performance retro
 
 `dev/content-retro.sh` triggers the Content Agent's `content_retro` task —
 it analyzes every post published in the last 30 days (default) via
