@@ -665,6 +665,36 @@ credentials for the platforms you actually plan to auto-publish to; a
 scheduled post for a platform with no credentials configured will fail
 with a clear "missing credential" error rather than blocking the others.
 
+## 15. Meeting prep
+
+`dev/meeting-prep.sh` triggers the Admin Agent's `meeting_prep` task — it
+scans the calendar for meetings starting within the next 2 hours (default)
+and, for each one with attendees, drafts prep notes (recent email threads
+with them, suggested talking points) via `think()`. Meetings with no
+attendees are skipped — there's nothing to prep.
+
+Idempotent by design: each prepped event gets a marker remembered against
+it, checked before prepping again — so running this every 30 minutes never
+re-prepares the same meeting twice as it drifts through the lookahead
+window on successive ticks.
+
+Requires `ANTHROPIC_API_KEY` and Gmail/Calendar credentials already
+configured (sections 1 and 4).
+
+**Cron entry** (every 30 minutes — the one nudge in this doc needing
+sub-daily cadence, since a meeting needs prep _before_ it happens, not once
+a day at an arbitrary time):
+
+```bash
+crontab -e
+# add:
+*/30 * * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/meeting-prep.sh >> /var/log/wireassist-meeting-prep.log 2>&1
+```
+
+No `jq` needed (no request body). Run it manually once first
+(`WIREASSIST_API_URL=http://localhost:3002 ./dev/meeting-prep.sh`) to
+confirm it queues successfully before trusting it to cron.
+
 ## Updating after a code change
 
 ```bash

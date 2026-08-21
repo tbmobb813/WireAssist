@@ -8,6 +8,7 @@ import {
   createProactiveInsightsTask,
   createBudgetWarningTask,
   createStaleApprovalsTask,
+  createMeetingPrepTask,
 } from './task-factory';
 
 /** Convenience factories used by Command Center API routes and demos. */
@@ -48,5 +49,9 @@ export const AdminTasks = {
 
   staleApprovals(daysStale = 3, objectiveId?: string) {
     return createStaleApprovalsTask({ daysStale, objectiveId });
+  },
+
+  meetingPrep(hoursAhead = 2, objectiveId?: string) {
+    return createMeetingPrepTask({ hoursAhead, objectiveId });
   },
 };

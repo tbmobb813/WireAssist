@@ -36,7 +36,8 @@ type SupportedTaskInput =
   | { type: 'follow_up_nudges'; daysStale?: number }
   | { type: 'proactive_insights' }
   | { type: 'budget_warning_nudge'; thresholdPercent?: number }
-  | { type: 'stale_approvals_nudge'; daysStale?: number };
+  | { type: 'stale_approvals_nudge'; daysStale?: number }
+  | { type: 'meeting_prep'; hoursAhead?: number };
 
 function baseTask(
   role: AgentRole,
@@ -219,6 +220,19 @@ export function createStaleApprovalsTask(options?: {
     'admin',
     options?.description ?? 'Flag approval requests that have been sitting pending too long.',
     { type: 'stale_approvals_nudge', daysStale: options?.daysStale },
+    options?.objectiveId
+  );
+}
+
+export function createMeetingPrepTask(options?: {
+  description?: string;
+  hoursAhead?: number;
+  objectiveId?: string;
+}): AgentTask {
+  return baseTask(
+    'admin',
+    options?.description ?? 'Draft prep notes for meetings starting soon.',
+    { type: 'meeting_prep', hoursAhead: options?.hoursAhead },
     options?.objectiveId
   );
 }
