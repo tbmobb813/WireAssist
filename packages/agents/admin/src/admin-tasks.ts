@@ -9,6 +9,7 @@ import {
   createBudgetWarningTask,
   createStaleApprovalsTask,
   createDetectSkillOpportunitiesTask,
+  createMeetingPrepTask,
   createObjectiveHealthCheckTask,
 } from './task-factory';
 import type { ObjectiveHealthCheckCandidate } from './skills/objective-health-check';
@@ -55,6 +56,10 @@ export const AdminTasks = {
 
   detectSkillOpportunities(limit = 200, objectiveId?: string) {
     return createDetectSkillOpportunitiesTask({ limit, objectiveId });
+  },
+
+  meetingPrep(hoursAhead = 2, objectiveId?: string) {
+    return createMeetingPrepTask({ hoursAhead, objectiveId });
   },
 
   objectiveHealthCheck(

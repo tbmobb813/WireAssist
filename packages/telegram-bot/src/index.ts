@@ -488,6 +488,12 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
       await send(`🔍 ${String(p.summary ?? '').slice(0, 3000)}\n\nUse /approvals to review.`);
       break;
     }
+    case 'meeting_prep_complete': {
+      const prepared = Array.isArray(p.prepared) ? p.prepared : [];
+      if (prepared.length === 0) break;
+      await send(`🗒️ ${String(p.summary ?? '').slice(0, 3000)}`);
+      break;
+    }
     case 'objective_health_check_complete': {
       const stale = Array.isArray(p.stale) ? p.stale : [];
       if (stale.length === 0) break;

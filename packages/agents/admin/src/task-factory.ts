@@ -39,6 +39,7 @@ type SupportedTaskInput =
   | { type: 'budget_warning_nudge'; thresholdPercent?: number }
   | { type: 'stale_approvals_nudge'; daysStale?: number }
   | { type: 'detect_skill_opportunities'; limit?: number }
+  | { type: 'meeting_prep'; hoursAhead?: number }
   | {
       type: 'objective_health_check_nudge';
       daysStale?: number;
@@ -239,6 +240,19 @@ export function createDetectSkillOpportunitiesTask(options?: {
     'admin',
     options?.description ?? 'Look for a repeated pattern in recent freeform requests.',
     { type: 'detect_skill_opportunities', limit: options?.limit },
+    options?.objectiveId
+  );
+}
+
+export function createMeetingPrepTask(options?: {
+  description?: string;
+  hoursAhead?: number;
+  objectiveId?: string;
+}): AgentTask {
+  return baseTask(
+    'admin',
+    options?.description ?? 'Draft prep notes for meetings starting soon.',
+    { type: 'meeting_prep', hoursAhead: options?.hoursAhead },
     options?.objectiveId
   );
 }
