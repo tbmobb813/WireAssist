@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { logger } from '@wireassist/core/logger';
 import { invokeSafe } from '../lib/utils/tauri';
 import { useUiStore } from '../lib/stores/uiStore';
 
@@ -32,7 +33,7 @@ export default function OllamaModelManager({ onClose }: Props) {
       const modelList = await invokeSafe<string[]>('ollama_list_models');
       setModels(modelList || []);
     } catch (e) {
-      console.error('Failed to load models:', e);
+      logger.error('Failed to load models:', e);
       useUiStore.getState().addToast({
         message: 'Failed to load models. Is Ollama running?',
         type: 'error',

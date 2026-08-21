@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { logger } from '@wireassist/core/logger';
 import { database } from '../lib/api/database';
 import type { Tag } from '../lib/api/database';
 
@@ -33,7 +34,7 @@ export default function TagInput({
         setTags(conversationTags);
         onTagsChange?.(conversationTags);
       } catch (error) {
-        console.error('Failed to load conversation tags:', error);
+        logger.error('Failed to load conversation tags:', error);
       }
     };
 
@@ -58,7 +59,7 @@ export default function TagInput({
         );
         setSuggestions(filteredTags);
       } catch (error) {
-        console.error('Failed to search tags:', error);
+        logger.error('Failed to search tags:', error);
         setSuggestions([]);
       }
     };
@@ -86,7 +87,7 @@ export default function TagInput({
       setInputValue('');
       setShowSuggestions(false);
     } catch (error) {
-      console.error('Failed to add tag:', error);
+      logger.error('Failed to add tag:', error);
     } finally {
       setIsLoading(false);
     }
@@ -99,7 +100,7 @@ export default function TagInput({
       setTags(newTags);
       onTagsChange?.(newTags);
     } catch (error) {
-      console.error('Failed to remove tag:', error);
+      logger.error('Failed to remove tag:', error);
     }
   };
 

@@ -204,10 +204,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
             try {
               const result = filteredCommands[selectedIndex].action();
               if (result instanceof Promise) {
-                result.catch((err) => console.error('Command execution error:', err));
+                result.catch(() => {});
               }
-            } catch (err) {
-              console.error('Command execution error:', err);
+            } catch {
+              // ignore
             }
           }
           break;
@@ -232,12 +232,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
     setSelectedIndex(0);
   }, [query]);
 
-  if (!isOpen) {
-    console.log('📂 CommandPalette NOT rendering (isOpen=false)');
-    return null;
-  }
-
-  console.log('📂 CommandPalette IS rendering (isOpen=true)');
+  if (!isOpen) return null;
 
   const categoryLabels = {
     conversations: 'Conversations',
@@ -316,9 +311,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
                       onClick={() => {
                         try {
                           const result = command.action();
-                          if (result instanceof Promise) {
-                            result.catch((err) => console.error('Command execution error:', err));
-                          }
+                          if (result instanceof Promise) result.catch(() => {});
                         } catch (err) {
                           console.error('Command execution error:', err);
                         }

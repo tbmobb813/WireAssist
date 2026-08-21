@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { logger } from '@wireassist/core/logger';
 import { database } from '../lib/api/database';
 import {
   BarChart3,
@@ -79,7 +80,7 @@ export default function UsageAnalyticsDashboard({ onClose }: UsageAnalyticsDashb
       setData(analytics);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load analytics');
-      console.error('Analytics error:', err);
+      logger.error('Analytics error:', err);
     } finally {
       setLoading(false);
     }

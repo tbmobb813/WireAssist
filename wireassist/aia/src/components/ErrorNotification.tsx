@@ -1,4 +1,5 @@
 import { ParsedError, getErrorIcon } from '../types/errors';
+import { logger } from '@wireassist/core/logger';
 import { useChatStore } from '../lib/stores/chatStore';
 import { useUiStore } from '../lib/stores/uiStore';
 import { createFixRequest } from '../types/errors';
@@ -33,7 +34,7 @@ export default function ErrorNotification({ error, onDismiss }: ErrorNotificatio
 
       onDismiss();
     } catch (err) {
-      console.error('Failed to send error to AI:', err);
+      logger.error('Failed to send error to AI:', err);
       addToast({
         message: 'Failed to send error to AI',
         type: 'error',

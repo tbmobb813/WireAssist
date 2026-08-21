@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { logger } from '@wireassist/core/logger';
 import { useUpdateStore } from '@/lib/stores/updateStore';
 import { useUiStore } from '@/lib/stores/uiStore';
 import { invokeSafe, isTauriEnvironment } from '@/lib/utils/tauri';
@@ -39,7 +40,7 @@ export const UpdateManager: React.FC = () => {
           setCurrentVersion(version);
         }
       } catch (error) {
-        console.error('Failed to get current version:', error);
+        logger.error('Failed to get current version:', error);
       }
     };
 
@@ -87,7 +88,7 @@ export const UpdateManager: React.FC = () => {
         setShowDialog(true);
       }
     } catch (error) {
-      console.error('Failed to check for updates:', error);
+      logger.error('Failed to check for updates:', error);
       addToast({
         message: 'Failed to check for updates',
         type: 'error',
@@ -153,7 +154,7 @@ export const UpdateManager: React.FC = () => {
 
       setShowDialog(false);
     } catch (error) {
-      console.error('Failed to download update:', error);
+      logger.error('Failed to download update:', error);
       addToast({
         message: `Failed to download update: ${error}`,
         type: 'error',

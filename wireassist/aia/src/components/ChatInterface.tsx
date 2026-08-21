@@ -587,8 +587,16 @@ export default function ChatInterface(): JSX.Element {
               onClick={async () => {
                 try {
                   await database.window.toggle();
-                } catch (e) {
-                  console.error('failed to toggle window', e);
+                } catch (err) {
+                  console.error('failed to toggle window', err);
+                  // log at debug level
+                  // (avoid importing logger in hot path; use console.debug fallback if needed)
+                  try {
+                    const { logger } = await import('@wireassist/core/logger');
+                    logger.debug('Clipboard access not available:', err);
+                  } catch {
+                    // ignore
+                  }
                 }
               }}
               className="

@@ -160,7 +160,12 @@ export default function MessageBubble({ message, isHighlighted = false }: Props)
       }
       addToast({ message: 'Copied to clipboard', type: 'success', ttl: 1500 });
     } catch (e) {
-      console.error('Failed to copy:', e);
+      try {
+        const { logger } = await import('@wireassist/core/logger');
+        logger.error('Failed to copy:', e);
+      } catch {
+        // ignore
+      }
       addToast({ message: 'Failed to copy', type: 'error', ttl: 2000 });
     }
   };
@@ -187,7 +192,10 @@ export default function MessageBubble({ message, isHighlighted = false }: Props)
         ttl: 2000,
       });
     } catch (error) {
-      console.error('Failed to save artifact:', error);
+      try {
+        const { logger } = await import('@wireassist/core/logger');
+        logger.error('Failed to save artifact:', error);
+      } catch {}
       addToast({
         message: 'Failed to save artifact',
         type: 'error',
@@ -468,7 +476,10 @@ export default function MessageBubble({ message, isHighlighted = false }: Props)
           messageId={message.id}
           onClose={() => setShowBranchDialog(false)}
           onBranchCreated={(branchId: string) => {
-            console.log('Branch created:', branchId);
+            try {
+              const { logger } = await import('@wireassist/core/logger');
+              logger.info('Branch created:', branchId);
+            } catch {}
           }}
         />
       )}

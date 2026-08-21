@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { logger } from '@wireassist/core/logger';
 import { createPortal } from 'react-dom';
 
 /**
@@ -10,7 +11,7 @@ export const KeyboardDebugger: React.FC = () => {
   const [lastKey, setLastKey] = useState<string>('');
   const [events, setEvents] = useState<string[]>([]);
 
-  console.log('🧪 KeyboardDebugger RENDER, visible:', visible);
+  logger.debug('🧪 KeyboardDebugger RENDER, visible:', visible);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -31,18 +32,18 @@ export const KeyboardDebugger: React.FC = () => {
       ) {
         e.preventDefault();
         e.stopPropagation();
-        console.log('🧪 Toggling keyboard debugger, current visible:', visible);
+        logger.debug('🧪 Toggling keyboard debugger, current visible:', visible);
         setVisible((v) => {
-          console.log('🧪 Setting visible to:', !v);
+          logger.debug('🧪 Setting visible to:', !v);
           return !v;
         });
       }
     };
 
-    console.log('🧪 KeyboardDebugger mounted, visible:', visible);
+    logger.debug('🧪 KeyboardDebugger mounted, visible:', visible);
     document.addEventListener('keydown', handleKeyDown, { capture: true });
     const toggleListener = () => {
-      console.log('🧪 Toggle event received');
+      logger.debug('🧪 Toggle event received');
       setVisible((v) => !v);
     };
     document.addEventListener('toggle-keyboard-debugger', toggleListener as EventListener);
@@ -68,7 +69,7 @@ export const KeyboardDebugger: React.FC = () => {
       <button
         title="Click to show keyboard debugger (or press Ctrl+Alt+D)"
         onClick={() => {
-          console.log('🧪 Button clicked, showing debugger');
+          logger.debug('🧪 Button clicked, showing debugger');
           setVisible(true);
         }}
         className="block text-base text-white bg-red-600 hover:bg-red-700 px-6 py-4 rounded-xl border-4 border-yellow-400 shadow-2xl font-bold animate-bounce cursor-pointer whitespace-nowrap"

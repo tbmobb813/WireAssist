@@ -44,8 +44,11 @@ export class HybridRoutingProvider implements HybridProvider {
     if (ollamaAvailable) {
       try {
         ollamaModels = (await invokeSafe<string[]>('ollama_list_models')) || [];
-      } catch {
-        console.warn('Failed to get Ollama models:');
+      } catch (e) {
+        try {
+          const { logger } = await import('@wireassist/core/logger');
+          logger.warn('Failed to get Ollama models:', e);
+        } catch {}
       }
     }
 

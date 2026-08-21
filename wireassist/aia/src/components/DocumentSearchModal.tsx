@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { logger } from '@wireassist/core/logger';
 import { X, Search, File, FolderOpen } from 'lucide-react';
 import { invokeSafe, isTauriEnvironment } from '../lib/utils/tauri';
 import { useUiStore } from '../lib/stores/uiStore';
@@ -56,7 +57,7 @@ export default function DocumentSearchModal({ onClose }: DocumentSearchModalProp
         });
       }
     } catch (error) {
-      console.error('Search error:', error);
+      logger.error('Search error:', error);
       addToast({
         message: 'Search failed',
         type: 'error',
