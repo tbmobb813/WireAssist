@@ -9,6 +9,11 @@ interface AgentCard {
   status: 'idle' | 'running' | 'waiting_approval' | 'error';
 }
 
+interface DepartmentGroup {
+  department: string;
+  agents: AgentCard[];
+}
+
 // role 'strategy' is NixOps — there's no dedicated 'ops' AgentRole yet.
 function agentLink(role: string): { href: string; label: string } {
   switch (role) {
@@ -25,6 +30,33 @@ function agentLink(role: string): { href: string; label: string } {
     default:
       return { href: '/chat', label: 'Ask via chat' };
   }
+}
+
+function groupAgentsByDepartment(agents: AgentCard[]): DepartmentGroup[] {
+  const agentsByRole = new Map(agents.map((a) => [a.role, a]));
+
+  return [
+    {
+      department: 'Administration',
+      agents: [agentsByRole.get('admin')].filter(Boolean) as AgentCard[],
+    },
+    {
+      department: 'Marketing',
+      agents: [agentsByRole.get('content'), agentsByRole.get('gtm')].filter(Boolean) as AgentCard[],
+    },
+    {
+      department: 'Research',
+      agents: [agentsByRole.get('research')].filter(Boolean) as AgentCard[],
+    },
+    {
+      department: 'Engineering',
+      agents: [agentsByRole.get('github')].filter(Boolean) as AgentCard[],
+    },
+    {
+      department: 'Operations',
+      agents: [agentsByRole.get('strategy')].filter(Boolean) as AgentCard[],
+    },
+  ].filter((g) => g.agents.length > 0);
 }
 
 const statusColor = (s: string) =>
@@ -55,38 +87,47 @@ export default function DashboardWorkforceTile({
   const activeObjectives = useActiveObjectives();
   const [objectiveId, setObjectiveId] = useState('');
 
+  const departments = groupAgentsByDepartment(agents);
+
   return (
     // Status at a glance; click through for detail.
     <div className="md:col-span-2">
       <div className="text-sm font-semibold text-gray-300 mb-4">Workforce</div>
-      <div className="space-y-2">
-        {agents.map((agent) => (
-          <Link
-            key={agent.role}
-            href={agentLink(agent.role).href}
-            className="flex items-center justify-between rounded-xl px-4 py-3 border transition-colors hover:border-accent/40"
-            style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
-          >
-            <div className="flex items-center gap-2.5">
-              <span
-                className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ background: statusColor(agent.status) }}
-              />
-              <div>
-                <div className="font-medium text-sm text-gray-200">{agent.name}</div>
-                <div className="text-xs text-gray-600">{agent.role}</div>
-              </div>
+      <div className="space-y-4">
+        {departments.map((dept) => (
+          <div key={dept.department} className="space-y-2">
+            <div className="px-1 text-[10px] font-semibold tracking-widest text-gray-600 uppercase">
+              {dept.department}
             </div>
-            <div
-              className="text-[11px] font-medium px-2 py-1 rounded-full flex-shrink-0"
-              style={{
-                color: statusColor(agent.status),
-                background: `${statusColor(agent.status)}15`,
-              }}
-            >
-              {statusLabel(agent.status)}
-            </div>
-          </Link>
+            {dept.agents.map((agent) => (
+              <Link
+                key={agent.role}
+                href={agentLink(agent.role).href}
+                className="flex items-center justify-between rounded-xl px-4 py-3 border transition-colors hover:border-accent/40"
+                style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ background: statusColor(agent.status) }}
+                  />
+                  <div>
+                    <div className="font-medium text-sm text-gray-200">{agent.name}</div>
+                    <div className="text-xs text-gray-600">{agent.role}</div>
+                  </div>
+                </div>
+                <div
+                  className="text-[11px] font-medium px-2 py-1 rounded-full flex-shrink-0"
+                  style={{
+                    color: statusColor(agent.status),
+                    background: `${statusColor(agent.status)}15`,
+                  }}
+                >
+                  {statusLabel(agent.status)}
+                </div>
+              </Link>
+            ))}
+          </div>
         ))}
       </div>
 
