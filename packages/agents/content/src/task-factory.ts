@@ -149,4 +149,18 @@ export const ContentTasks = {
       objectiveId,
     };
   },
+
+  contentRetro(daysAgo = 30, objectiveId?: string): AgentTask {
+    return {
+      id: randomUUID(),
+      agentRole: 'content',
+      description: `Content performance retro over the last ${daysAgo} days`,
+      status: 'queued',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      input: { type: 'content_retro', daysAgo },
+      approvalRequired: false,
+      objectiveId,
+    };
+  },
 };

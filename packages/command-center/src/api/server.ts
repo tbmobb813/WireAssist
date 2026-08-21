@@ -332,6 +332,7 @@ events.on('agent:proactive_insights_complete', (p) => broadcast('proactive_insig
 events.on('agent:budget_warning_complete', (p) => broadcast('budget_warning_complete', p));
 events.on('agent:stale_approvals_complete', (p) => broadcast('stale_approvals_complete', p));
 events.on('agent:publish_due_posts_complete', (p) => broadcast('publish_due_posts_complete', p));
+events.on('agent:content_retro_complete', (p) => broadcast('content_retro_complete', p));
 events.on('agent:post_published', (p) => broadcast('post_published', p));
 
 // Agent-to-agent handoff: a skill (e.g. Research's research_topic, once its
@@ -654,6 +655,16 @@ app.post('/api/tasks/stale-approvals', async (c) => {
 app.post('/api/tasks/publish-due-posts', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   const task = ContentTasks.publishDuePosts();
+  queueContentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/content-retro', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const body = await c.req.json().catch(() => ({}));
+  const daysAgo = Number.isFinite(body.daysAgo) && body.daysAgo >= 0 ? body.daysAgo : 30;
+  const task = ContentTasks.contentRetro(daysAgo);
   queueContentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
