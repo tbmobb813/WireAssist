@@ -38,6 +38,7 @@ type SupportedTaskInput =
   | { type: 'proactive_insights' }
   | { type: 'budget_warning_nudge'; thresholdPercent?: number }
   | { type: 'stale_approvals_nudge'; daysStale?: number }
+  | { type: 'detect_skill_opportunities'; limit?: number }
   | { type: 'meeting_prep'; hoursAhead?: number }
   | {
       type: 'objective_health_check_nudge';
@@ -226,6 +227,19 @@ export function createStaleApprovalsTask(options?: {
     'admin',
     options?.description ?? 'Flag approval requests that have been sitting pending too long.',
     { type: 'stale_approvals_nudge', daysStale: options?.daysStale },
+    options?.objectiveId
+  );
+}
+
+export function createDetectSkillOpportunitiesTask(options?: {
+  description?: string;
+  limit?: number;
+  objectiveId?: string;
+}): AgentTask {
+  return baseTask(
+    'admin',
+    options?.description ?? 'Look for a repeated pattern in recent freeform requests.',
+    { type: 'detect_skill_opportunities', limit: options?.limit },
     options?.objectiveId
   );
 }

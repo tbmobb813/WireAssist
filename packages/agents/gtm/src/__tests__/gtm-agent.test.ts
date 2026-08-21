@@ -105,7 +105,12 @@ describe('GtmAgent — chat tool-calling loop', () => {
     const agent = new GtmAgent(makeDeps());
     const toolSchemas = (agent as any).config.toolSchemas;
     expect(Object.keys(toolSchemas).sort()).toEqual(
-      ['generate_gtm_skill', 'generate_psych_skill', 'delegate_to_agent'].sort()
+      [
+        'generate_gtm_skill',
+        'generate_psych_skill',
+        'propose_skill_skill',
+        'delegate_to_agent',
+      ].sort()
     );
   });
 

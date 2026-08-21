@@ -7,6 +7,7 @@ import { analyzePostSkill } from './analyze-post';
 import { listScheduledSkill } from './list-scheduled';
 import { freeformSkill } from './freeform';
 import { publishDuePostsSkill } from './publish-due-posts';
+import { proposeSkillSkill } from './propose-skill';
 import { contentRetroSkill } from './content-retro';
 
 export const CONTENT_SKILLS: Skill[] = [
@@ -18,5 +19,6 @@ export const CONTENT_SKILLS: Skill[] = [
   listScheduledSkill,
   freeformSkill,
   publishDuePostsSkill,
+  proposeSkillSkill,
   contentRetroSkill,
 ];

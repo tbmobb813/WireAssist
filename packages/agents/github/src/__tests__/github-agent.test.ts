@@ -83,6 +83,31 @@ function makeDeps(
   };
 }
 
+describe('GitHubAgent — propose_skill_skill', () => {
+  it('executeToolCall() dispatches propose_skill_skill via invokeSkill(), letting the skill self-gate its own approval', async () => {
+    const deps = makeDeps({
+      approval: { request: jest.fn().mockResolvedValue(false) },
+    });
+    const agent = new GitHubAgent(deps);
+    const thinkSpy = jest
+      .spyOn(agent as any, 'think')
+      .mockResolvedValue('CLARIFICATION_NEEDED: which repo?');
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c-propose',
+      name: 'propose_skill_skill',
+      input: { request: 'a skill that does X' },
+    });
+
+    expect(result.isError).toBe(false);
+    expect(thinkSpy).toHaveBeenCalled();
+    // A clarification response never calls proposeAction()/approval.request
+    // — dispatched immediately via invokeSkill(), not approval-gated a
+    // second time at this outer level.
+    expect(deps.approval.request).not.toHaveBeenCalled();
+  });
+});
+
 describe('GitHubAgent — freeform', () => {
   it('passes task.input.images through to runToolLoop', async () => {
     const deps = makeDeps();
@@ -256,6 +281,44 @@ describe('GitHubAgent.executeToolCall', () => {
     expect(result).toEqual({ result: { ok: true }, isError: false });
   });
 
+  it.each([
+    'packages/agents/admin/src/skills/proposed/x.ts',
+    'packages/agents/content/src/skills/proposed/x.ts',
+    'packages/agents/research/src/skills/proposed/x.ts',
+    'packages/agents/gtm/src/skills/proposed/x.ts',
+    'packages/agents/ops/src/skills/proposed/x.ts',
+    'packages/agents/github/src/skills/proposed/x.ts',
+  ])(
+    "allows create_or_update_file under %s (each of the 6 agents' own staging directory)",
+    async (path) => {
+      const deps = makeDeps();
+      const agent = new GitHubAgent(deps);
+
+      const result = await (agent as any).executeToolCall(makeTask(), {
+        id: 'c-allowlist',
+        name: 'create_or_update_file',
+        input: { path, content: 'export const x = 1;' },
+      });
+
+      expect(result.isError).toBe(false);
+    }
+  );
+
+  it('rejects a 7th, made-up proposed/ path not on the explicit allowlist — this is a security boundary, not just a feature gate', async () => {
+    const deps = makeDeps();
+    const agent = new GitHubAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c-not-allowlisted',
+      name: 'create_or_update_file',
+      input: { path: 'packages/agents/rogue/src/skills/proposed/x.ts', content: 'x' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(deps.approval.request).not.toHaveBeenCalled();
+    expect(deps.githubClient.callTool).not.toHaveBeenCalled();
+  });
+
   it('rejects create_branch unless the branch name starts with skill-proposal/', async () => {
     const deps = makeDeps();
     const agent = new GitHubAgent(deps);
@@ -383,6 +446,7 @@ describe('GitHubAgent config', () => {
         'issue_read',
         'issue_write',
         'pull_request_review_write',
+        'propose_skill_skill',
         'delegate_to_agent',
       ].sort()
     );

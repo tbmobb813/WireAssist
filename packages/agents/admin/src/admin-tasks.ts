@@ -8,6 +8,7 @@ import {
   createProactiveInsightsTask,
   createBudgetWarningTask,
   createStaleApprovalsTask,
+  createDetectSkillOpportunitiesTask,
   createMeetingPrepTask,
   createObjectiveHealthCheckTask,
 } from './task-factory';
@@ -51,6 +52,10 @@ export const AdminTasks = {
 
   staleApprovals(daysStale = 3, objectiveId?: string) {
     return createStaleApprovalsTask({ daysStale, objectiveId });
+  },
+
+  detectSkillOpportunities(limit = 200, objectiveId?: string) {
+    return createDetectSkillOpportunitiesTask({ limit, objectiveId });
   },
 
   meetingPrep(hoursAhead = 2, objectiveId?: string) {

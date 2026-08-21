@@ -60,7 +60,13 @@ describe('NixOpsAgent — chat tool-calling loop', () => {
     const agent = new NixOpsAgent(makeDeps());
     const toolSchemas = (agent as any).config.toolSchemas;
     expect(Object.keys(toolSchemas).sort()).toEqual(
-      ['list_workflows', 'run_workflow_skill', 'sheets_read', 'delegate_to_agent'].sort()
+      [
+        'list_workflows',
+        'run_workflow_skill',
+        'sheets_read',
+        'propose_skill_skill',
+        'delegate_to_agent',
+      ].sort()
     );
   });
 

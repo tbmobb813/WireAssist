@@ -82,6 +82,11 @@ export function createFreeformSkill(config: FreeformSkillConfig): Skill<Freeform
 
       const { event, payload } = buildCompletionEvent({ task, response });
       agent.emit(event, payload);
+
+      // Tagged for detect_skill_opportunities' later pattern search — after
+      // handling, not before, so a request that errors doesn't get
+      // remembered as a "real" pattern data point.
+      agent.remember(prompt, [task.agentRole, 'freeform_request']);
     },
   };
 }

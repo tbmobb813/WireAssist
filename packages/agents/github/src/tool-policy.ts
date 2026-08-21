@@ -26,13 +26,14 @@ import { logger } from '@wireassist/core/logger';
 // create_repository, fork_repository, and any org/repo-admin,
 // collaborator/team, or secret/Actions-write tool.
 //
-// create_or_update_file and create_branch ARE allowed (added for the
-// propose_skill pilot — an Admin skill that drafts new skill code and asks
-// this agent to open a draft PR containing it) but only within the narrow
-// bounds enforced in github-agent.ts's executeToolCall(): file writes are
-// restricted to the packages/agents/admin/src/skills/proposed/ staging
-// directory, and branches must be named skill-proposal/*. Nothing else in
-// the repo is reachable through either tool.
+// create_or_update_file and create_branch ARE allowed (for propose_skill —
+// every agent's skill that drafts new skill code and asks this agent to
+// open a draft PR containing it) but only within the narrow bounds enforced
+// in github-agent.ts's executeToolCall(): file writes are restricted to an
+// explicit 6-entry allowlist of each agent's own proposed/ staging
+// directory (not a wildcard — see PROPOSED_SKILL_PATH_PREFIXES there), and
+// branches must be named skill-proposal/*. Nothing else in the repo is
+// reachable through either tool.
 export const READ_ONLY_GITHUB_TOOLS = new Set([
   'issue_read',
   'pull_request_read',
@@ -61,8 +62,8 @@ export const READ_ONLY_GITHUB_TOOLS = new Set([
 //     'REQUEST_CHANGES' (a COMMENT-only review, or a pending/resolve-thread
 //     action, is fine; approving or blocking a PR is a human decision).
 //   - create_pull_request: rejected unless draft === true.
-//   - create_or_update_file: rejected unless path starts with
-//     packages/agents/admin/src/skills/proposed/.
+//   - create_or_update_file: rejected unless path starts with one of the 6
+//     agents' own .../skills/proposed/ prefixes.
 //   - create_branch: rejected unless the branch name starts with
 //     skill-proposal/.
 const WRITE_GITHUB_TOOLS = new Set([

@@ -377,6 +377,9 @@ events.on('agent:proactive_insights_complete', (p) => broadcast('proactive_insig
 events.on('agent:budget_warning_complete', (p) => broadcast('budget_warning_complete', p));
 events.on('agent:stale_approvals_complete', (p) => broadcast('stale_approvals_complete', p));
 events.on('agent:stale_prs_complete', (p) => broadcast('stale_prs_complete', p));
+events.on('agent:detect_skill_opportunities_complete', (p) =>
+  broadcast('detect_skill_opportunities_complete', p)
+);
 events.on('agent:meeting_prep_complete', (p) => broadcast('meeting_prep_complete', p));
 events.on('agent:objective_health_check_complete', (p) =>
   broadcast('objective_health_check_complete', p)
@@ -694,6 +697,16 @@ app.post('/api/tasks/stale-approvals', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const daysStale = Number.isFinite(body.daysStale) && body.daysStale >= 0 ? body.daysStale : 3;
   const task = AdminTasks.staleApprovals(daysStale);
+  queueAgentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/detect-skill-opportunities', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const body = await c.req.json().catch(() => ({}));
+  const limit = Number.isFinite(body.limit) && body.limit > 0 ? body.limit : 200;
+  const task = AdminTasks.detectSkillOpportunities(limit);
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });

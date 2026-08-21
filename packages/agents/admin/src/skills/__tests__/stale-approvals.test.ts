@@ -26,6 +26,7 @@ function makeAgentHandle(overrides: Partial<SkillAgentHandle> = {}): SkillAgentH
     runToolLoop: jest.fn().mockResolvedValue(''),
     listDecisions: jest.fn().mockReturnValue([]),
     listPending: jest.fn().mockReturnValue([]),
+    listMemories: jest.fn().mockReturnValue([]),
     ...overrides,
   };
 }
@@ -78,15 +79,13 @@ describe('staleApprovalsSkill', () => {
   });
 
   it('flags an approval pending at or past the default 3-day threshold', async () => {
-    const listPending = jest
-      .fn()
-      .mockReturnValue([
-        pending({
-          agentRole: 'strategy',
-          action: 'deliver_workflow_output',
-          createdAt: daysAgo(4),
-        }),
-      ]);
+    const listPending = jest.fn().mockReturnValue([
+      pending({
+        agentRole: 'strategy',
+        action: 'deliver_workflow_output',
+        createdAt: daysAgo(4),
+      }),
+    ]);
     const agent = makeAgentHandle({ listPending });
 
     await staleApprovalsSkill.execute({ agent, task: makeTask(), input: {} });
