@@ -104,6 +104,31 @@ describe('content_list_posts — dueOnly', () => {
 
     expect(upcoming.map((p) => p.id)).toEqual([future.id]);
   });
+
+  it('daysAgo returns only posts scheduled within the backward-looking window', async () => {
+    const { storage, mcp } = freshTools();
+    const recent = storage.createPost({
+      content: 'recent',
+      platform: 'twitter',
+      scheduledAt: new Date(Date.now() - 2 * 24 * 60 * 60_000),
+    });
+    storage.createPost({
+      content: 'too old',
+      platform: 'twitter',
+      scheduledAt: new Date(Date.now() - 10 * 24 * 60 * 60_000),
+    });
+    storage.createPost({
+      content: 'future',
+      platform: 'twitter',
+      scheduledAt: new Date(Date.now() + 60 * 60_000),
+    });
+
+    const withinWindow = (await mcp.call('content_list_posts', {
+      daysAgo: 5,
+    })) as { id: string }[];
+
+    expect(withinWindow.map((p) => p.id)).toEqual([recent.id]);
+  });
 });
 
 describe('content_publish_post', () => {

@@ -8,6 +8,7 @@ import { listScheduledSkill } from './list-scheduled';
 import { freeformSkill } from './freeform';
 import { publishDuePostsSkill } from './publish-due-posts';
 import { proposeSkillSkill } from './propose-skill';
+import { contentRetroSkill } from './content-retro';
 
 export const CONTENT_SKILLS: Skill[] = [
   generatePostSkill,
@@ -19,4 +20,5 @@ export const CONTENT_SKILLS: Skill[] = [
   freeformSkill,
   publishDuePostsSkill,
   proposeSkillSkill,
+  contentRetroSkill,
 ];

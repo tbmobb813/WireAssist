@@ -742,7 +742,34 @@ No `jq` needed (no request body). Run it manually once first
 (`WIREASSIST_API_URL=http://localhost:3002 ./dev/meeting-prep.sh`) to
 confirm it queues successfully before trusting it to cron.
 
-## 18. Autonomous pattern-detection nudge
+## 18. Content performance retro
+
+`dev/content-retro.sh` triggers the Content Agent's `content_retro` task —
+it analyzes every post published in the last 30 days (default) via
+`content_analyze`, then synthesizes a short retro via `think()`: what's
+working, what's falling flat, one concrete thing to try next. Unlike the
+deterministic nudges above, this always has something to say — even a quiet
+period with zero published posts gets a real note about it — so it always
+pings Telegram, never silently skips.
+
+Requires `ANTHROPIC_API_KEY` configured, and costs real LLM calls (one
+`content_analyze` per published post, plus one `think()` synthesis) — unlike
+the free deterministic nudges above.
+
+**Cron entry** (monthly — performance trends need a longer window than any
+other nudge in this doc):
+
+```bash
+crontab -e
+# add:
+0 8 1 * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/content-retro.sh >> /var/log/wireassist-content-retro.log 2>&1
+```
+
+No `jq` needed (no request body). Run it manually once first
+(`WIREASSIST_API_URL=http://localhost:3002 ./dev/content-retro.sh`) to
+confirm it queues successfully before trusting it to cron.
+
+## 19. Autonomous pattern-detection nudge
 
 `dev/detect-skill-opportunities.sh` triggers the Admin Agent's
 `detect_skill_opportunities` task — it looks across recent freeform
