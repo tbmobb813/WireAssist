@@ -31,5 +31,10 @@ export const opsFreeformSkill: Skill<OpsFreeformInput, void> = {
       taskId: task.id,
       response,
     });
+
+    // Tagged for detect_skill_opportunities' later pattern search — after
+    // handling, not before, so a request that errors doesn't get
+    // remembered as a "real" pattern data point.
+    agent.remember(input.prompt, [task.agentRole, 'freeform_request']);
   },
 };

@@ -6,6 +6,7 @@ import {
   type AgentStatus,
   type IApprovalQueue,
   type MemoryStore,
+  type MemoryEntry,
   type MCPClient,
   type EventBus,
   type SkillAgentHandle,
@@ -215,6 +216,7 @@ export abstract class BaseAgent {
       runToolLoop: (task, userMessage, opts) => this.runToolLoop(task, userMessage, opts),
       listDecisions: (params) => this.listDecisions(params),
       listPending: () => this.listPending(),
+      listMemories: (params) => this.listMemories(params),
     };
   }
 
@@ -553,6 +555,16 @@ export abstract class BaseAgent {
   // shared-table reasoning as listDecisions() above.
   protected listPending(): ApprovalRequest[] {
     return this.approval.getPending();
+  }
+
+  // Recent memories carrying at least one of the given tags, across every
+  // agent — see MemoryStore.listByTags() for why this needs its own query
+  // rather than filtering loadContext()'s relevance search.
+  protected listMemories(params?: { tags?: string[]; limit?: number }): MemoryEntry[] {
+    const limit = params?.limit ?? 50;
+    return params?.tags?.length
+      ? this.memory.listByTags(params.tags, limit)
+      : this.memory.listRecent(limit);
   }
 }
 

@@ -1,6 +1,7 @@
 import type { AgentRole, AgentTask } from '../agents/types';
 import type { ApprovalRequest } from '../approval/types';
 import type { ImageAttachment, DocumentAttachment, ProviderMessage } from '../providers/base';
+import type { MemoryEntry } from '../memory/store';
 
 // Narrower than BaseAgent itself — a Skill can reach these, but never
 // `config`, `client`, or `status` directly.
@@ -36,6 +37,12 @@ export interface SkillAgentHandle {
   // Still-unresolved approval requests, across every agent — for skills
   // that flag approvals sitting too long without a decision.
   listPending(): ApprovalRequest[];
+  // Recent memories carrying at least one of `tags`, most recent first —
+  // for skills that reflect on a specific kind of remembered signal across
+  // every agent (e.g. tagged freeform requests), not a relevance search
+  // against one query the way loadContext() is. Omitting tags returns
+  // everything, most recent first (same as listRecent()'s own default).
+  listMemories(params?: { tags?: string[]; limit?: number }): MemoryEntry[];
 }
 
 export interface SkillExecutionContext<TInput = unknown> {
