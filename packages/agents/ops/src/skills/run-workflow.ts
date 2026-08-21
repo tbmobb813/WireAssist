@@ -1,6 +1,10 @@
 import type { Skill, SkillAgentHandle } from '@wireassist/core';
 import { loadWorkflow, parseSheetRef, parsePublishTarget } from '../context-loader';
-import { applyWorkflowSettings } from '../workflow-settings';
+import {
+  applyWorkflowSettings,
+  getWorkflowSettingsMeta,
+  getWorkflowSettingLabels,
+} from '../workflow-settings';
 import { getTrustStage } from '../trust-stage';
 import { logRun } from '../run-log';
 import type { DraftPostResult, RecentPost } from '../wordpress-client';
@@ -71,6 +75,31 @@ export const runWorkflowSkill: Skill<RunWorkflowInput, void> = {
     // SOUL.md's Diagnose step: "Pull the current real state (inbox, sheet,
     // API, files)." A workflow file opts in with a "**Sheet:**" line
     // (see parseSheetRef); workflows without one just skip this.
+    // Soft staleness note for any periodic setting last confirmed over 60
+    // days ago — SOUL.md's "pull the current real state, never act on
+    // assumed or stale data" principle, made actionable instead of silent.
+    // Not a block: the model decides whether the drift actually matters for
+    // this particular run.
+    const staleNotes: string[] = [];
+    const settingsMeta = getWorkflowSettingsMeta(input.workflow);
+    const periodicLabels = new Set(
+      getWorkflowSettingLabels(input.workflow)
+        .filter((l) => l.periodic)
+        .map((l) => l.label)
+    );
+    for (const label of periodicLabels) {
+      const updatedAt = settingsMeta[label]?.updatedAt;
+      if (!updatedAt) continue;
+      const ageDays = (Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60 * 24);
+      if (ageDays > 60) {
+        staleNotes.push(
+          `NOTE: "${label}" was last confirmed ${Math.floor(ageDays)} days ago — if costs/rates ` +
+            'may have moved, ask JNix to confirm before computing figures that depend on it.'
+        );
+      }
+    }
+    const staleContext = staleNotes.join('\n');
+
     const sheetRef = parseSheetRef(workflow);
     let sheetContext = '';
     if (sheetRef) {
@@ -103,6 +132,7 @@ export const runWorkflowSkill: Skill<RunWorkflowInput, void> = {
           "didn't address is different — proceed if it isn't essential to a correct result, per " +
           "the workflow file's own escalation rules.",
         sheetContext,
+        staleContext,
         'End with exactly one line: "VERDICT: PROCEED" if the workflow can run, or ' +
           '"VERDICT: BLOCKED — <reason>" if a required input is missing per the escalation rules. ' +
           'When blocking on a missing setting, name the exact label(s) verbatim (e.g. "Printify ' +

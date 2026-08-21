@@ -3,6 +3,8 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import {
   getWorkflowSettings,
+  getWorkflowSettingsMeta,
+  getWorkflowSettingLabels,
   setWorkflowSettings,
   applyWorkflowSettings,
 } from '../workflow-settings';
@@ -129,6 +131,14 @@ describe('applyWorkflowSettings()', () => {
     );
   });
 
+  it('is safe against the _SETTING_PERIODIC:_ tag too, substituting it the same way as _SETTING:_', () => {
+    const periodicMarkdown = '- Printify base costs: _SETTING_PERIODIC: link or paste cost sheet_';
+    setWorkflowSettings('nixlevel-listing', { 'Printify base costs': '$4.20/unit' });
+    expect(applyWorkflowSettings(periodicMarkdown, 'nixlevel-listing')).toBe(
+      '- Printify base costs: $4.20/unit'
+    );
+  });
+
   it('never writes back to the workflow file on disk — this is a pure in-memory substitution', () => {
     // Regression guard for the actual persistence bug: an earlier version of
     // this module wrote the substituted value into the workflow .md file
@@ -146,5 +156,54 @@ describe('applyWorkflowSettings()', () => {
       expect(String(call[0])).not.toContain('context/workflows');
     }
     writeSpy.mockRestore();
+  });
+});
+
+describe('getWorkflowSettingsMeta()', () => {
+  it('returns an updatedAt timestamp for every saved setting', () => {
+    const before = new Date();
+    setWorkflowSettings('nixlevel-listing', { 'Printify base costs': '$4.20/unit' });
+    const meta = getWorkflowSettingsMeta('nixlevel-listing');
+    expect(meta['Printify base costs']).toBeDefined();
+    expect(new Date(meta['Printify base costs'].updatedAt).getTime()).toBeGreaterThanOrEqual(
+      before.getTime()
+    );
+  });
+
+  it('returns an empty object for a workflow with no saved settings', () => {
+    expect(getWorkflowSettingsMeta('nixlevel-listing')).toEqual({});
+  });
+
+  it('reads old on-disk entries stored as bare strings (pre-updatedAt shape) without throwing', () => {
+    const { writeFileSync, mkdirSync } = jest.requireActual('fs') as typeof import('fs');
+    const { dirname } = jest.requireActual('path') as typeof import('path');
+    const path = process.env.WIREASSIST_OPS_SETTINGS_FILE as string;
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(
+      path,
+      JSON.stringify({ 'nixlevel-listing': { 'Printify base costs': '$3.00/unit' } })
+    );
+    expect(getWorkflowSettings('nixlevel-listing')).toEqual({
+      'Printify base costs': '$3.00/unit',
+    });
+    expect(getWorkflowSettingsMeta('nixlevel-listing')['Printify base costs'].updatedAt).toBe('');
+  });
+});
+
+describe('getWorkflowSettingLabels()', () => {
+  it('flags a _SETTING_PERIODIC:_ field as periodic and a plain _SETTING:_ field as not', () => {
+    const labels = getWorkflowSettingLabels('nixlevel-listing');
+    expect(labels).toContainEqual({ label: 'Printify base costs', periodic: true });
+    expect(labels).toContainEqual({ label: 'Variant naming convention', periodic: false });
+  });
+
+  it('returns an empty array for an unknown workflow rather than throwing', () => {
+    expect(getWorkflowSettingLabels('does-not-exist')).toEqual([]);
+  });
+
+  it('reads the raw file, so periodic-ness is stable even after the setting is filled and its placeholder disappears from the merged preview', () => {
+    setWorkflowSettings('nixlevel-listing', { 'Printify base costs': '$4.20/unit' });
+    const labels = getWorkflowSettingLabels('nixlevel-listing');
+    expect(labels).toContainEqual({ label: 'Printify base costs', periodic: true });
   });
 });

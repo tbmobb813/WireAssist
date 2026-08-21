@@ -1,5 +1,6 @@
 # Workflow: MindType.Studio weekly content queue
 
+**Use when:** you need this week's MindType.Studio post queue (carousel, quote, story) from a weekly theme or emotional focus.
 **Rule of R score:** Repetitive ✅ Rule-based ✅ Return on time ✅ — the same 3-post cadence runs every week.
 **Trust stage:** 2 (approve everything first)
 
@@ -22,7 +23,7 @@ A week's queue is DONE when all of these exist in `output/mindtype/<week-slug>/`
 
 - Weekly theme / emotional focus from JNix (e.g. "boundaries," "rest as productivity")
 - Brand voice examples — 2-3 best-performing past posts to mirror: _SETTING: JNix pastes examples_
-- Current hashtag bank (not a stale saved set): _SETTING: JNix pastes current hashtags_
+- Current hashtag bank (not a stale saved set): _SETTING_PERIODIC: JNix pastes current hashtags_
 - Any current campaign or launch to tie into, if applicable: _TODO: JNix notes it here, or leaves blank if none_
 
 ## DATA loop specifics

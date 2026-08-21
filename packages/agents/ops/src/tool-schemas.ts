@@ -21,7 +21,7 @@ export const OPS_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
   list_workflows: {
     name: 'list_workflows',
     description:
-      'List the names of every registered NixOps workflow. Call this before run_workflow_skill if you are not certain of the exact workflow name — never guess one.',
+      'List every registered NixOps workflow, each with its exact name and a one-sentence "useWhen" trigger description. Call this before run_workflow_skill if you are not certain of the exact workflow name, or when two workflows could plausibly fit the brief — read useWhen to pick the right one rather than guessing from the name alone.',
     inputSchema: { type: 'object', properties: {} },
   },
   // ── Skill, exposed as a composable tool (dispatched via invokeSkill(),

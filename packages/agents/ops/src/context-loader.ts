@@ -33,6 +33,27 @@ export function listWorkflows(dir: string = CONTEXT_DIR): string[] {
     .map((f) => basename(f, '.md'));
 }
 
+// Extracts a workflow's "**Use when:**" trigger line, so callers picking
+// between workflows (the model via list_workflows, or JNix via the /ops
+// dropdown) see what distinguishes it without opening the file. Falls back
+// to the bare name for any workflow that hasn't been given the line yet —
+// this must never throw, since a missing line is expected during rollout.
+export function getWorkflowSummary(name: string, dir: string = CONTEXT_DIR): string {
+  try {
+    const markdown = loadWorkflow(name, dir);
+    const match = markdown.match(/^\*\*Use when:\*\*\s*(.+)$/m);
+    return match ? match[1].trim() : name;
+  } catch {
+    return name;
+  }
+}
+
+export function listWorkflowSummaries(
+  dir: string = CONTEXT_DIR
+): { name: string; useWhen: string }[] {
+  return listWorkflows(dir).map((name) => ({ name, useWhen: getWorkflowSummary(name, dir) }));
+}
+
 export function loadWorkflow(name: string, dir: string = CONTEXT_DIR): string {
   // Reject path separators so task input can't escape the workflows directory.
   // The explicit typeof check matters: RegExp#test() coerces a non-string

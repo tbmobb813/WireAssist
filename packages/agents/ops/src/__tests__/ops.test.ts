@@ -79,8 +79,8 @@ describe('parsePublishTarget', () => {
     expect(parsePublishTarget('**Publish target:** medium')).toBeNull();
   });
 
-  it('the live seo-article workflow declares wordpress as its publish target', () => {
-    expect(parsePublishTarget(loadWorkflow('seo-article'))).toBe('wordpress');
+  it('the live article-package workflow declares wordpress as its publish target', () => {
+    expect(parsePublishTarget(loadWorkflow('article-package'))).toBe('wordpress');
   });
 });
 

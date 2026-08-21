@@ -8,6 +8,8 @@ export * as OpsTasks from './task-factory';
 export {
   loadOpsContext,
   listWorkflows,
+  listWorkflowSummaries,
+  getWorkflowSummary,
   loadWorkflow,
   parsePublishTarget,
   type PublishTarget,
@@ -23,6 +25,8 @@ export {
 } from './trust-stage';
 export {
   getWorkflowSettings,
+  getWorkflowSettingsMeta,
+  getWorkflowSettingLabels,
   setWorkflowSettings,
   applyWorkflowSettings,
 } from './workflow-settings';

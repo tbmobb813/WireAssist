@@ -70,9 +70,20 @@ interface OpsApproval {
   createdAt: string;
 }
 
+interface WorkflowSummary {
+  name: string;
+  useWhen: string;
+}
+
+interface SettingMeta {
+  updatedAt: string;
+  periodic: boolean;
+}
+
 export default function OpsPage() {
-  const [workflows, setWorkflows] = useState<string[]>([]);
+  const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
   const [selectedWorkflow, setSelectedWorkflow] = useState('');
+  const [settingsMeta, setSettingsMeta] = useState<Record<string, SettingMeta>>({});
   const [workflowPreview, setWorkflowPreview] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [trustStage, setTrustStageState] = useState(2);
@@ -129,7 +140,7 @@ export default function OpsPage() {
       .then((d) => {
         if (Array.isArray(d.workflows)) {
           setWorkflows(d.workflows);
-          if (d.workflows.length > 0) setSelectedWorkflow(d.workflows[0]);
+          if (d.workflows.length > 0) setSelectedWorkflow(d.workflows[0].name);
         }
       })
       .catch(() => {});
@@ -180,10 +191,12 @@ export default function OpsPage() {
         const settings = d.settings ?? {};
         setSavedSettings(settings);
         setSettingDrafts(settings);
+        setSettingsMeta(d.meta ?? {});
       })
       .catch(() => {
         setSavedSettings({});
         setSettingDrafts({});
+        setSettingsMeta({});
       });
   }, [selectedWorkflow]);
 
@@ -192,13 +205,18 @@ export default function OpsPage() {
     setSavingSettings(true);
     setSettingsSavedNotice(false);
     try {
-      const res = await fetch(`/api/ops/settings/${encodeURIComponent(selectedWorkflow)}`, {
+      await fetch(`/api/ops/settings/${encodeURIComponent(selectedWorkflow)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ values: settingDrafts }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (data.settings) setSavedSettings(data.settings);
+      // Refetch (not just the POST response) so both settings and meta
+      // (updatedAt/periodic) reflect the freshly-written store.
+      const settingsRes = await fetch(
+        `/api/ops/settings/${encodeURIComponent(selectedWorkflow)}`
+      ).then((r) => r.json());
+      if (settingsRes.settings) setSavedSettings(settingsRes.settings);
+      setSettingsMeta(settingsRes.meta ?? {});
       // Placeholders just got rewritten in the workflow file — refetch so
       // workflowTodos/settingFields reflect the file as it now stands.
       const preview = await fetch(
@@ -209,6 +227,12 @@ export default function OpsPage() {
     } finally {
       setSavingSettings(false);
     }
+  }
+
+  function settingAgeDays(label: string): number | null {
+    const updatedAt = settingsMeta[label]?.updatedAt;
+    if (!updatedAt) return null;
+    return Math.floor((Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60 * 24));
   }
 
   useEffect(() => {
@@ -423,15 +447,20 @@ export default function OpsPage() {
           <select
             value={selectedWorkflow}
             onChange={(e) => setSelectedWorkflow(e.target.value)}
-            className="w-full rounded px-3 py-2 text-sm mb-3 outline-none"
+            className="w-full rounded px-3 py-2 text-sm outline-none"
             style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
           >
             {workflows.map((w) => (
-              <option key={w} value={w} style={{ background: '#080810' }}>
-                {w}
+              <option key={w.name} value={w.name} style={{ background: '#080810' }}>
+                {w.name}
               </option>
             ))}
           </select>
+        )}
+        {selectedWorkflow && (
+          <div className="text-xs text-gray-600 mb-3 mt-1">
+            {workflows.find((w) => w.name === selectedWorkflow)?.useWhen}
+          </div>
         )}
         {selectedWorkflow && (
           <div className="mb-3">
@@ -460,21 +489,47 @@ export default function OpsPage() {
               WORKFLOW SETTINGS (SET ONCE)
             </div>
             <div className="space-y-2">
-              {settingFields.map((s) => (
-                <div key={s.label}>
-                  <label className="text-xs text-gray-400 block mb-1">{s.label}</label>
-                  <textarea
-                    value={settingDrafts[s.label] ?? ''}
-                    onChange={(e) =>
-                      setSettingDrafts((prev) => ({ ...prev, [s.label]: e.target.value }))
-                    }
-                    placeholder={s.instruction}
-                    rows={2}
-                    className="w-full rounded px-3 py-2 text-xs outline-none resize-none"
-                    style={{ background: '#0d0d1a', border: '1px solid #1e2040', color: '#e2e8f0' }}
-                  />
-                </div>
-              ))}
+              {settingFields.map((s) => {
+                const meta = settingsMeta[s.label];
+                const ageDays = settingAgeDays(s.label);
+                return (
+                  <div key={s.label}>
+                    <label className="text-xs text-gray-400 block mb-1 flex items-center gap-2">
+                      <span>{s.label}</span>
+                      {meta?.periodic && (
+                        <span
+                          className="text-xs px-1.5 py-0.5 rounded"
+                          style={{ background: '#ffb34720', color: '#ffb347' }}
+                        >
+                          🔄 refresh periodically
+                        </span>
+                      )}
+                      {ageDays !== null && (
+                        <span
+                          className="text-xs"
+                          style={{ color: ageDays > 60 ? '#f87171' : '#475569' }}
+                        >
+                          last updated {ageDays}d ago
+                        </span>
+                      )}
+                    </label>
+                    <textarea
+                      value={settingDrafts[s.label] ?? ''}
+                      onChange={(e) =>
+                        setSettingDrafts((prev) => ({ ...prev, [s.label]: e.target.value }))
+                      }
+                      placeholder={s.instruction}
+                      rows={2}
+                      className="w-full rounded px-3 py-2 text-xs outline-none resize-none"
+                      style={{
+                        background: '#0d0d1a',
+                        border: '1px solid #1e2040',
+                        color: '#e2e8f0',
+                      }}
+                    />
+                  </div>
+                );
+              })}
             </div>
             <div className="mt-2 flex items-center gap-3">
               <button
@@ -563,6 +618,12 @@ export default function OpsPage() {
                 Stage 4 — heartbeat (unattended)
               </option>
             </select>
+          </div>
+        )}
+        {settingFields.length > 0 && (
+          <div className="text-xs text-gray-600 mb-2">
+            Need this run to differ from a saved setting? Just say so in the brief — e.g. &quot;for
+            this one, target teens instead.&quot;
           </div>
         )}
         <textarea

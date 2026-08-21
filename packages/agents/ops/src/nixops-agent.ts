@@ -11,7 +11,7 @@ import {
   type ProviderToolCall,
 } from '@wireassist/core';
 import { BaseAgent, buildDelegateToolSchema, DELEGATE_TOOL_NAME } from '@wireassist/agent-admin';
-import { loadOpsContext, listWorkflows } from './context-loader';
+import { loadOpsContext, listWorkflows, listWorkflowSummaries } from './context-loader';
 import { OPS_SKILLS } from './skills';
 import { OPS_TOOL_SCHEMAS, READ_ONLY_OPS_TOOLS, OPS_SKILL_TOOLS } from './tool-schemas';
 
@@ -98,6 +98,10 @@ pseudocode or prose describing the idea.`,
 
   workflows(): string[] {
     return listWorkflows();
+  }
+
+  workflowSummaries(): { name: string; useWhen: string }[] {
+    return listWorkflowSummaries();
   }
 
   // run() is inherited from BaseAgent — see skills/ for each capability.
