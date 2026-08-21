@@ -183,6 +183,15 @@ describe('researchTopicSkill — Research -> NixOps handoff', () => {
         }),
       })
     );
+    const handoffCall = (agent.emit as jest.Mock).mock.calls.find(
+      (c) => c[0] === 'agent:handoff_requested' && c[1].task.input.type === 'run_workflow'
+    );
+    const brief = handoffCall[1].task.input.brief as string;
+    // The "don't ask a follow-up" instruction must stay scoped to picking
+    // WHICH product — a genuinely missing shop setting should still block,
+    // not get silently guessed just because this is a one-shot handoff.
+    expect(brief).toContain('WHICH product');
+    expect(brief).toContain('does not excuse a genuinely missing shop setting');
   });
 
   it('does not emit a handoff when the ops-handoff approval is declined', async () => {

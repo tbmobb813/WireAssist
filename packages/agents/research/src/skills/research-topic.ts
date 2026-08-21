@@ -116,8 +116,12 @@ export const researchTopicSkill: Skill<ResearchTopicInput, void> = {
             `(not vague categories) it points to, and write one numbered product entry per ` +
             `concept so this run can batch-generate a listing for each. If only one clear ` +
             `candidate emerges, that's fine — one numbered entry is still valid. Do not ask a ` +
-            `follow-up question; this is a one-shot handoff with no way to hear a reply, so pick ` +
-            `the strongest candidates and proceed.\n\nRESEARCH ON "${query}":\n${summary}`,
+            `follow-up question about WHICH product to pick; this is a one-shot handoff with no ` +
+            `way to hear a reply, so pick the strongest candidates yourself and proceed. This ` +
+            `does not excuse a genuinely missing shop setting (variant naming, cost sheet, etc.) ` +
+            `— if the workflow's own rules say to block on one of those, still block; don't ` +
+            `invent a value for it just because this is a one-shot handoff.` +
+            `\n\nRESEARCH ON "${query}":\n${summary}`,
           description: `NixOps run from research: ${query}`,
           objectiveId: task.objectiveId,
         });

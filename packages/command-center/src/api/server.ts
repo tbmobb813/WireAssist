@@ -37,6 +37,7 @@ import {
   MAX_TRUST_STAGE,
   getWorkflowSettings,
   setWorkflowSettings,
+  applyWorkflowSettings,
   setupOpsMCP,
   registerWordPressTools,
   registerImageTools,
@@ -1091,7 +1092,7 @@ app.get('/api/ops/workflows/:name', (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   try {
     const name = c.req.param('name');
-    return c.json({ workflow: name, content: loadWorkflow(name) });
+    return c.json({ workflow: name, content: applyWorkflowSettings(loadWorkflow(name), name) });
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : 'Unknown workflow' }, 404);
   }

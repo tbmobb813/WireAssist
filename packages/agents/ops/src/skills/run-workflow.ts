@@ -1,5 +1,6 @@
 import type { Skill, SkillAgentHandle } from '@wireassist/core';
 import { loadWorkflow, parseSheetRef, parsePublishTarget } from '../context-loader';
+import { applyWorkflowSettings } from '../workflow-settings';
 import { getTrustStage } from '../trust-stage';
 import { logRun } from '../run-log';
 import type { DraftPostResult, RecentPost } from '../wordpress-client';
@@ -23,7 +24,7 @@ export const runWorkflowSkill: Skill<RunWorkflowInput, void> = {
   requiresApproval: true,
 
   async execute({ agent, task, input }) {
-    const workflow = loadWorkflow(input.workflow);
+    const workflow = applyWorkflowSettings(loadWorkflow(input.workflow), input.workflow);
     const priorRuns = await agent.loadContext(`workflow ${input.workflow}`);
     const stages: StageResult[] = [];
 
@@ -95,9 +96,18 @@ export const runWorkflowSkill: Skill<RunWorkflowInput, void> = {
       'diagnose',
       [
         'Check the workflow inputs against the brief. List unfilled TODOs or missing inputs.',
+        'A workflow-level setting still showing a literal "_SETTING:_" placeholder in the ' +
+          'WORKFLOW FILE above is a genuine gap, not something to fill in yourself — never ' +
+          'invent a plausible-sounding value for it (a fake variant convention, a guessed cost, ' +
+          'an imagined example listing). That always blocks. A per-run "_TODO:_" field the brief ' +
+          "didn't address is different — proceed if it isn't essential to a correct result, per " +
+          "the workflow file's own escalation rules.",
         sheetContext,
         'End with exactly one line: "VERDICT: PROCEED" if the workflow can run, or ' +
-          '"VERDICT: BLOCKED — <reason>" if a required input is missing per the escalation rules.',
+          '"VERDICT: BLOCKED — <reason>" if a required input is missing per the escalation rules. ' +
+          'When blocking on a missing setting, name the exact label(s) verbatim (e.g. "Printify ' +
+          'base costs") and say they can be filled in via the /ops page\'s "Workflow settings" ' +
+          'panel — this reason is shown directly to JNix, so it must be specific enough to act on.',
       ]
         .filter(Boolean)
         .join('\n\n')
