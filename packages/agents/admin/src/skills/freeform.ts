@@ -1,45 +1,12 @@
-import type { ImageAttachment, DocumentAttachment, ProviderMessage, Skill } from '@wireassist/core';
+import { createFreeformSkill } from '@wireassist/core';
 
-export interface FreeformInput {
-  type?: string;
-  prompt?: string;
-  history?: ProviderMessage[];
-  images?: ImageAttachment[];
-  documents?: DocumentAttachment[];
-}
-
-export const freeformSkill: Skill<FreeformInput, void> = {
-  name: 'freeform',
+export const freeformSkill = createFreeformSkill({
   role: 'admin',
   description: 'Open-ended chat, backed by the full tool-calling loop.',
-
-  async execute({ agent, task, input }) {
-    const prompt =
-      input.type === 'freeform' && typeof input.prompt === 'string'
-        ? input.prompt
-        : task.description;
-    const context = await agent.loadContext(prompt);
-    const response = await agent.runToolLoop(task, prompt, {
-      extraContext: context,
-      priorMessages: input.history,
-      images: input.images,
-      documents: input.documents,
-      // Admin's skill-tools (email_triage_skill, calendar_review_skill) are
-      // each a full multi-step skill invocation that costs a single loop
-      // iteration but can itself run a whole approval flow internally —
-      // the default cap of 6 leaves too little room to also reason about
-      // the actual request (or delegate_to_agent) afterward.
-      maxIterations: 12,
-    });
-
-    agent.emit('agent:freeform_response', {
-      taskId: task.id,
-      response,
-    });
-
-    // Tagged for detect_skill_opportunities' later pattern search — after
-    // handling, not before, so a request that errors doesn't get
-    // remembered as a "real" pattern data point.
-    agent.remember(prompt, [task.agentRole, 'freeform_request']);
-  },
-};
+  // Admin's skill-tools (email_triage_skill, calendar_review_skill) are
+  // each a full multi-step skill invocation that costs a single loop
+  // iteration but can itself run a whole approval flow internally — the
+  // default cap of 6 leaves too little room to also reason about the
+  // actual request (or delegate_to_agent) afterward.
+  maxIterations: 12,
+});

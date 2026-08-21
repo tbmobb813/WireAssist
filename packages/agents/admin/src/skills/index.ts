@@ -11,6 +11,7 @@ import { budgetWarningSkill } from './budget-warning';
 import { staleApprovalsSkill } from './stale-approvals';
 import { proposeSkillSkill } from './propose-skill';
 import { detectSkillOpportunitiesSkill } from './detect-skill-opportunities';
+import { objectiveHealthCheckSkill } from './objective-health-check';
 
 export const ADMIN_SKILLS: Skill[] = [
   emailTriageSkill,
@@ -25,6 +26,7 @@ export const ADMIN_SKILLS: Skill[] = [
   staleApprovalsSkill,
   proposeSkillSkill,
   detectSkillOpportunitiesSkill,
+  objectiveHealthCheckSkill,
 ];
 
 export {
@@ -40,5 +42,6 @@ export {
   staleApprovalsSkill,
   proposeSkillSkill,
   detectSkillOpportunitiesSkill,
+  objectiveHealthCheckSkill,
 };
 export { proposeOrAutoApprove } from './propose-or-auto-approve';

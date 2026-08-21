@@ -6,6 +6,7 @@ import type {
   DocumentAttachment,
   ProviderMessage,
 } from '@wireassist/core';
+import type { ObjectiveHealthCheckCandidate } from './skills/objective-health-check';
 
 type SupportedTaskInput =
   | { type: 'email_triage'; maxEmails?: number }
@@ -37,7 +38,12 @@ type SupportedTaskInput =
   | { type: 'proactive_insights' }
   | { type: 'budget_warning_nudge'; thresholdPercent?: number }
   | { type: 'stale_approvals_nudge'; daysStale?: number }
-  | { type: 'detect_skill_opportunities'; limit?: number };
+  | { type: 'detect_skill_opportunities'; limit?: number }
+  | {
+      type: 'objective_health_check_nudge';
+      daysStale?: number;
+      objectives: ObjectiveHealthCheckCandidate[];
+    };
 
 function baseTask(
   role: AgentRole,
@@ -234,5 +240,23 @@ export function createDetectSkillOpportunitiesTask(options?: {
     options?.description ?? 'Look for a repeated pattern in recent freeform requests.',
     { type: 'detect_skill_opportunities', limit: options?.limit },
     options?.objectiveId
+  );
+}
+
+export function createObjectiveHealthCheckTask(options: {
+  objectives: ObjectiveHealthCheckCandidate[];
+  description?: string;
+  daysStale?: number;
+  objectiveId?: string;
+}): AgentTask {
+  return baseTask(
+    'admin',
+    options.description ?? 'Flag active Objectives that have gone quiet.',
+    {
+      type: 'objective_health_check_nudge',
+      daysStale: options.daysStale,
+      objectives: options.objectives,
+    },
+    options.objectiveId
   );
 }

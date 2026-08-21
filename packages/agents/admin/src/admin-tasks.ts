@@ -9,7 +9,9 @@ import {
   createBudgetWarningTask,
   createStaleApprovalsTask,
   createDetectSkillOpportunitiesTask,
+  createObjectiveHealthCheckTask,
 } from './task-factory';
+import type { ObjectiveHealthCheckCandidate } from './skills/objective-health-check';
 
 /** Convenience factories used by Command Center API routes and demos. */
 export const AdminTasks = {
@@ -53,5 +55,13 @@ export const AdminTasks = {
 
   detectSkillOpportunities(limit = 200, objectiveId?: string) {
     return createDetectSkillOpportunitiesTask({ limit, objectiveId });
+  },
+
+  objectiveHealthCheck(
+    objectives: ObjectiveHealthCheckCandidate[],
+    daysStale = 5,
+    objectiveId?: string
+  ) {
+    return createObjectiveHealthCheckTask({ objectives, daysStale, objectiveId });
   },
 };
