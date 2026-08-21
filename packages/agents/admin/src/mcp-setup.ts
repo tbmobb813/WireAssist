@@ -3,6 +3,7 @@ import { logger } from '@wireassist/core/logger';
 import { GmailClient } from './gmail-client';
 import { CalendarClient } from './calendar-client';
 import { SheetsClient } from './sheets-client';
+import { DriveClient } from './drive-client';
 
 export async function setupAdminMCP(mcp: MCPClient): Promise<void> {
   const gmail = new GmailClient();
@@ -31,6 +32,7 @@ export async function setupAdminMCP(mcp: MCPClient): Promise<void> {
   // hasRequiredScopes() check inside gmail.authenticate() above already
   // forced re-authorization if it was missing, so no separate probe needed.
   const sheets = new SheetsClient();
+  const drive = new DriveClient();
 
   // ── GMAIL (unchanged) ──────────────────────────────────────────
   mcp.register('gmail_list_threads', async (params) => {
@@ -214,6 +216,33 @@ export async function setupAdminMCP(mcp: MCPClient): Promise<void> {
       spreadsheetId: params.spreadsheetId as string,
       range: params.range as string,
       values: params.values as string[][],
+    });
+  });
+
+  // ── DRIVE ───────────────────────────────────────────────────────
+  mcp.register('drive_create_file', async (params) => {
+    return drive.createDoc({
+      title: params.title as string,
+      content: params.content as string,
+      folderId: params.folderId as string | undefined,
+    });
+  });
+
+  mcp.register('drive_update_file', async (params) => {
+    return drive.updateDoc({
+      fileId: params.fileId as string,
+      content: params.content as string,
+    });
+  });
+
+  mcp.register('drive_read_file', async (params) => {
+    return drive.readDoc({ fileId: params.fileId as string });
+  });
+
+  mcp.register('drive_search_files', async (params) => {
+    return drive.searchFiles({
+      query: params.query as string,
+      maxResults: params.maxResults as number | undefined,
     });
   });
 }

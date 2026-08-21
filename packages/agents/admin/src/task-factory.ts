@@ -44,7 +44,11 @@ type SupportedTaskInput =
       type: 'objective_health_check_nudge';
       daysStale?: number;
       objectives: ObjectiveHealthCheckCandidate[];
-    };
+    }
+  | { type: 'travel_itinerary_digest'; daysAhead?: number }
+  | { type: 'expense_digest'; daysAgo?: number }
+  | { type: 'meeting_followup'; hoursBack?: number }
+  | { type: 'draft_document'; brief: string; title?: string };
 
 function baseTask(
   role: AgentRole,
@@ -272,5 +276,58 @@ export function createObjectiveHealthCheckTask(options: {
       objectives: options.objectives,
     },
     options.objectiveId
+  );
+}
+
+export function createTravelItineraryTask(options?: {
+  description?: string;
+  daysAhead?: number;
+  objectiveId?: string;
+}): AgentTask {
+  return baseTask(
+    'admin',
+    options?.description ?? 'Compile an upcoming travel itinerary digest.',
+    { type: 'travel_itinerary_digest', daysAhead: options?.daysAhead },
+    options?.objectiveId
+  );
+}
+
+export function createExpenseDigestTask(options?: {
+  description?: string;
+  daysAgo?: number;
+  objectiveId?: string;
+}): AgentTask {
+  return baseTask(
+    'admin',
+    options?.description ?? 'Summarize recent receipts and invoices by category.',
+    { type: 'expense_digest', daysAgo: options?.daysAgo },
+    options?.objectiveId
+  );
+}
+
+export function createMeetingFollowupTask(options?: {
+  description?: string;
+  hoursBack?: number;
+  objectiveId?: string;
+}): AgentTask {
+  return baseTask(
+    'admin',
+    options?.description ?? 'Draft follow-ups for meetings that just ended.',
+    { type: 'meeting_followup', hoursBack: options?.hoursBack },
+    options?.objectiveId
+  );
+}
+
+export function createDraftDocumentTask(params: {
+  brief: string;
+  title?: string;
+  description?: string;
+  objectiveId?: string;
+}): AgentTask {
+  return baseTask(
+    'admin',
+    params.description ?? `Draft a document: ${params.title ?? params.brief.slice(0, 60)}`,
+    { type: 'draft_document', brief: params.brief, title: params.title },
+    params.objectiveId
   );
 }

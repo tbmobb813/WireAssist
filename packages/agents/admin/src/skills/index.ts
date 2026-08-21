@@ -13,6 +13,10 @@ import { proposeSkillSkill } from './propose-skill';
 import { detectSkillOpportunitiesSkill } from './detect-skill-opportunities';
 import { meetingPrepSkill } from './meeting-prep';
 import { objectiveHealthCheckSkill } from './objective-health-check';
+import { travelItinerarySkill } from './travel-itinerary';
+import { expenseDigestSkill } from './expense-digest';
+import { meetingFollowupSkill } from './meeting-followup';
+import { draftDocumentSkill } from './draft-document';
 
 export const ADMIN_SKILLS: Skill[] = [
   emailTriageSkill,
@@ -29,6 +33,10 @@ export const ADMIN_SKILLS: Skill[] = [
   detectSkillOpportunitiesSkill,
   meetingPrepSkill,
   objectiveHealthCheckSkill,
+  travelItinerarySkill,
+  expenseDigestSkill,
+  meetingFollowupSkill,
+  draftDocumentSkill,
 ];
 
 export {
@@ -46,5 +54,9 @@ export {
   detectSkillOpportunitiesSkill,
   meetingPrepSkill,
   objectiveHealthCheckSkill,
+  travelItinerarySkill,
+  expenseDigestSkill,
+  meetingFollowupSkill,
+  draftDocumentSkill,
 };
 export { proposeOrAutoApprove } from './propose-or-auto-approve';

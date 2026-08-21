@@ -384,6 +384,12 @@ events.on('agent:meeting_prep_complete', (p) => broadcast('meeting_prep_complete
 events.on('agent:objective_health_check_complete', (p) =>
   broadcast('objective_health_check_complete', p)
 );
+events.on('agent:travel_itinerary_digest_complete', (p) =>
+  broadcast('travel_itinerary_digest_complete', p)
+);
+events.on('agent:expense_digest_complete', (p) => broadcast('expense_digest_complete', p));
+events.on('agent:meeting_followup_complete', (p) => broadcast('meeting_followup_complete', p));
+events.on('agent:draft_document_complete', (p) => broadcast('draft_document_complete', p));
 events.on('agent:publish_due_posts_complete', (p) => broadcast('publish_due_posts_complete', p));
 events.on('agent:content_retro_complete', (p) => broadcast('content_retro_complete', p));
 events.on('agent:post_published', (p) => broadcast('post_published', p));
@@ -737,6 +743,52 @@ app.post('/api/tasks/objective-health-check', async (c) => {
     })
   );
   const task = AdminTasks.objectiveHealthCheck(objectives, daysStale);
+  queueAgentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/travel-itinerary', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!gmailReady) return c.json(gmailRequired(), 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const body = await c.req.json().catch(() => ({}));
+  const daysAhead = Number.isFinite(body.daysAhead) && body.daysAhead >= 0 ? body.daysAhead : 14;
+  const task = AdminTasks.travelItinerary(daysAhead);
+  queueAgentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/expense-digest', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!gmailReady) return c.json(gmailRequired(), 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const body = await c.req.json().catch(() => ({}));
+  const daysAgo = Number.isFinite(body.daysAgo) && body.daysAgo >= 0 ? body.daysAgo : 30;
+  const task = AdminTasks.expenseDigest(daysAgo);
+  queueAgentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/meeting-followup', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!gmailReady) return c.json(gmailRequired(), 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const body = await c.req.json().catch(() => ({}));
+  const hoursBack = Number.isFinite(body.hoursBack) && body.hoursBack >= 0 ? body.hoursBack : 3;
+  const task = AdminTasks.meetingFollowup(hoursBack);
+  queueAgentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/draft-document', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!gmailReady) return c.json(gmailRequired(), 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const body = await c.req.json().catch(() => ({}));
+  if (typeof body.brief !== 'string' || body.brief.trim().length === 0) {
+    return c.json({ error: 'brief is required' }, 400);
+  }
+  const task = AdminTasks.draftDocument(body.brief, body.title);
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });

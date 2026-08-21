@@ -14,6 +14,9 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar',
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/spreadsheets',
+  // Narrow scope — only files this app itself creates or opens, not the
+  // user's whole Drive.
+  'https://www.googleapis.com/auth/drive.file',
 ];
 
 const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
@@ -55,7 +58,9 @@ export class GmailClient {
     if (fs.existsSync(TOKEN_PATH)) {
       const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
       if (!this.hasRequiredScopes(token.scope)) {
-        logger.warn('\n⚠️  Existing token is missing required Gmail/Calendar scopes. Re-authorizing...');
+        logger.warn(
+          '\n⚠️  Existing token is missing required Gmail/Calendar scopes. Re-authorizing...'
+        );
         await this.runOAuthFlow();
         return;
       }
