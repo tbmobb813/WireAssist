@@ -502,6 +502,13 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
       await send(`📤 ${String(p.summary ?? '').slice(0, 3000)}`);
       break;
     }
+    case 'content_retro_complete': {
+      // Always sends — unlike the nudges above, a retro is meaningful even
+      // over a quiet period (postsAnalyzed: 0 still gets a real note about
+      // why nothing published), so there's no empty-array case to skip.
+      await send(`📊 ${String(p.summary ?? '').slice(0, 3000)}\n\nUse /content to review.`);
+      break;
+    }
   }
 }
 

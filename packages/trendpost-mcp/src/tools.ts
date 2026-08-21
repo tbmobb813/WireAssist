@@ -274,10 +274,11 @@ Return only valid JSON array. No markdown fences.`;
 
   // ── LIST SCHEDULED POSTS ──────────────────────────────────────
   mcp.register('content_list_posts', async (params) => {
-    const { status, platform, daysAhead, dueOnly } = params as {
+    const { status, platform, daysAhead, daysAgo, dueOnly } = params as {
       status?: string;
       platform?: Platform;
       daysAhead?: number;
+      daysAgo?: number;
       dueOnly?: boolean;
     };
 
@@ -287,6 +288,19 @@ Return only valid JSON array. No markdown fences.`;
     // storage.listPosts() would treat as an empty from-now-to-now window).
     if (dueOnly) {
       return storage.listPosts({ status: status as PostStatus | undefined, platform, to: now });
+    }
+
+    // daysAgo looks backward (for a retro over recently-published posts) —
+    // mutually exclusive with daysAhead's forward-looking window, since a
+    // caller wants one direction or the other, never both.
+    if (daysAgo) {
+      const from = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+      return storage.listPosts({
+        status: status as PostStatus | undefined,
+        platform,
+        from,
+        to: now,
+      });
     }
 
     const to = daysAhead ? new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000) : undefined;
