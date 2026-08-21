@@ -1,5 +1,6 @@
 # Workflow: NixLevel product listing generation
 
+**Use when:** you have one or more Etsy product concepts and need a full, upload-ready listing package (title, description, tags, variants, margin, marketing angles) for each.
 **Rule of R score:** Repetitive ✅ Rule-based ✅ Return on time ✅ — pilot workflow.
 **Trust stage:** 2 (approve everything first)
 
@@ -25,7 +26,7 @@ For EACH product concept in the brief, a listing is DONE when all of these exist
 - Product concept + design description from JNix — for a batch, list each product concept as its own numbered or bulleted entry; each becomes its own listing package. Recommended batch size: roughly 2-5 products per run for full-detail output — much larger batches should be split into multiple runs.
 - Existing listing example to mirror: _SETTING: JNix pastes one best-performing listing here_
 - Variant naming convention: _SETTING: JNix pastes current convention here_
-- Printify base costs: _SETTING: link or paste current cost sheet_
+- Printify base costs: _SETTING_PERIODIC: link or paste current cost sheet_
 
 ## DATA loop specifics
 

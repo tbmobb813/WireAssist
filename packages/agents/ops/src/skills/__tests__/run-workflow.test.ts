@@ -16,7 +16,7 @@ import { runWorkflowSkill } from '../run-workflow';
 const RAW_WORKFLOW = [
   '## Inputs',
   '- Variant naming convention: _SETTING: JNix pastes current convention here_',
-  '- Printify base costs: _SETTING: link or paste current cost sheet_',
+  '- Printify base costs: _SETTING_PERIODIC: link or paste current cost sheet_',
 ].join('\n');
 
 function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
@@ -77,7 +77,39 @@ describe('runWorkflowSkill — settings merge and Diagnose enforcement', () => {
     expect(firstPrompt).not.toContain('_SETTING: JNix pastes current convention here_');
     // A genuinely unfilled setting still shows its real placeholder — the
     // model needs to actually see the gap to correctly block on it.
-    expect(firstPrompt).toContain('_SETTING: link or paste current cost sheet_');
+    expect(firstPrompt).toContain('_SETTING_PERIODIC: link or paste current cost sheet_');
+  });
+
+  it('adds a staleness note to Diagnose when a periodic setting was last confirmed over 60 days ago', async () => {
+    setWorkflowSettings('nixlevel-listing', { 'Printify base costs': '$4.20/unit' });
+    // setWorkflowSettings() always stamps "now" — rewrite it to 90 days ago
+    // directly in the settings store so the test doesn't depend on real time.
+    const path = process.env.WIREASSIST_OPS_SETTINGS_FILE as string;
+    const fsActual: typeof import('fs') = jest.requireActual('fs');
+    const stored = JSON.parse(fsActual.readFileSync(path, 'utf-8'));
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    stored['nixlevel-listing']['Printify base costs'].updatedAt = ninetyDaysAgo;
+    fsActual.writeFileSync(path, JSON.stringify(stored));
+
+    const think = jest.fn().mockResolvedValue('VERDICT: PROCEED');
+    const agent = makeAgentHandle({ think });
+
+    await runWorkflowSkill.execute({ agent, task: makeTask(), input: makeTask().input as any });
+
+    const diagnosePrompt = think.mock.calls[0][0] as string;
+    expect(diagnosePrompt).toContain('"Printify base costs" was last confirmed');
+    expect(diagnosePrompt).toContain('90 days ago');
+  });
+
+  it('adds no staleness note for a periodic setting confirmed recently', async () => {
+    setWorkflowSettings('nixlevel-listing', { 'Printify base costs': '$4.20/unit' });
+    const think = jest.fn().mockResolvedValue('VERDICT: PROCEED');
+    const agent = makeAgentHandle({ think });
+
+    await runWorkflowSkill.execute({ agent, task: makeTask(), input: makeTask().input as any });
+
+    const diagnosePrompt = think.mock.calls[0][0] as string;
+    expect(diagnosePrompt).not.toContain('was last confirmed');
   });
 
   it('instructs the model never to invent a value for a genuinely-missing setting, and to name it when blocking', async () => {

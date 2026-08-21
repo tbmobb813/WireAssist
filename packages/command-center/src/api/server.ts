@@ -36,6 +36,8 @@ import {
   MIN_TRUST_STAGE,
   MAX_TRUST_STAGE,
   getWorkflowSettings,
+  getWorkflowSettingsMeta,
+  getWorkflowSettingLabels,
   setWorkflowSettings,
   applyWorkflowSettings,
   setupOpsMCP,
@@ -1082,7 +1084,7 @@ app.get('/api/budget', (c) => {
 // ── OPS (NIXOPS) TASKS ────────────────────────────────────────────────────
 app.get('/api/ops/workflows', (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
-  return c.json({ workflows: opsAgent.workflows() });
+  return c.json({ workflows: opsAgent.workflowSummaries() });
 });
 
 // Preview a workflow's actual requirements before running it, so a brief can
@@ -1129,9 +1131,24 @@ app.post('/api/ops/trust/:workflow', async (c) => {
 // value (see workflow-settings.ts), so the DATA loop's Diagnose stage picks
 // them up automatically with no other code changes.
 app.get('/api/ops/settings/:workflow', (c) => {
+  const workflow = c.req.param('workflow');
+  const settingsMeta = getWorkflowSettingsMeta(workflow);
+  const periodicLabels = new Set(
+    getWorkflowSettingLabels(workflow)
+      .filter((l) => l.periodic)
+      .map((l) => l.label)
+  );
+  const meta: Record<string, { updatedAt: string; periodic: boolean }> = {};
+  for (const label of new Set([...Object.keys(settingsMeta), ...periodicLabels])) {
+    meta[label] = {
+      updatedAt: settingsMeta[label]?.updatedAt ?? '',
+      periodic: periodicLabels.has(label),
+    };
+  }
   return c.json({
-    workflow: c.req.param('workflow'),
-    settings: getWorkflowSettings(c.req.param('workflow')),
+    workflow,
+    settings: getWorkflowSettings(workflow),
+    meta,
   });
 });
 
