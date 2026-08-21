@@ -26,6 +26,7 @@ describe('CONTENT_SKILL_TOOLS', () => {
         'schedule_post_skill',
         'analyze_post_skill',
         'list_scheduled_skill',
+        'propose_skill_skill',
       ].sort()
     );
   });

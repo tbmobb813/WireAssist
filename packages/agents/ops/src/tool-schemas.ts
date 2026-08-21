@@ -44,6 +44,21 @@ export const OPS_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
       required: ['workflow', 'brief'],
     },
   },
+  propose_skill_skill: {
+    name: 'propose_skill_skill',
+    description:
+      'Draft a brand-new NixOps skill (real TypeScript) for a capability the user describes, and — once they approve the drafted code — send it to the GitHub Dev Agent to open as a draft PR for review. The drafted code is never wired into the running system by this tool; that stays a separate, manual step after the PR is reviewed and merged. Use this when the user is asking you to build yourself a new capability, not asking you to just do something with your existing tools.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        request: {
+          type: 'string',
+          description: "The capability being requested, in the user's own words.",
+        },
+      },
+      required: ['request'],
+    },
+  },
 };
 
 // Tool names that only ever read data — safe to execute immediately in the
@@ -53,4 +68,4 @@ export const READ_ONLY_OPS_TOOLS = new Set<string>(['sheets_read', 'list_workflo
 // Skill-tool names dispatched via invokeSkill() rather than useTool() — see
 // NixOpsAgent.executeToolCall(). Kept separate from READ_ONLY_OPS_TOOLS
 // since these are never valid useTool()/MCP calls.
-export const OPS_SKILL_TOOLS = new Set<string>(['run_workflow_skill']);
+export const OPS_SKILL_TOOLS = new Set<string>(['run_workflow_skill', 'propose_skill_skill']);

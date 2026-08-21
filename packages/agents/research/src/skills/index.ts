@@ -2,11 +2,13 @@ import type { Skill, SkillChain } from '@wireassist/core';
 import { researchTopicSkill } from './research-topic';
 import { synthesizeFindingsSkill } from './synthesize-findings';
 import { freeformSkill } from './freeform';
+import { proposeSkillSkill } from './propose-skill';
 
 export const RESEARCH_SKILLS: Skill[] = [
   researchTopicSkill,
   synthesizeFindingsSkill,
   freeformSkill,
+  proposeSkillSkill,
 ];
 
 // Same-agent SkillChain example: research a topic, then synthesize it

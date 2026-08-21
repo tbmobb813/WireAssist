@@ -75,6 +75,7 @@ describe('ContentAgent — chat tool-calling loop', () => {
         'schedule_post_skill',
         'analyze_post_skill',
         'list_scheduled_skill',
+        'propose_skill_skill',
         'delegate_to_agent',
       ].sort()
     );

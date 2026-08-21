@@ -10,16 +10,28 @@ import {
 import { BaseAgent, buildDelegateToolSchema, DELEGATE_TOOL_NAME } from '@wireassist/agent-admin';
 import { GITHUB_SKILLS } from './skills';
 import { GITHUB_TOOL_ALLOWLIST, READ_ONLY_GITHUB_TOOLS } from './tool-policy';
-import { buildGithubToolSchemas } from './tool-schemas';
+import { buildGithubToolSchemas, GITHUB_SKILL_TOOLS, PROPOSE_SKILL_SCHEMA } from './tool-schemas';
 import type { GitHubMcpClient, RemoteToolDefinition } from './github-client';
 
-const PROPOSED_SKILL_PATH_PREFIX = 'packages/agents/admin/src/skills/proposed/';
+// The real security boundary for propose_skill's PR-writing step, across
+// all 6 agents — an explicit allowlist of exactly 6 real paths, not a
+// wildcard pattern. A wildcard (e.g. anything ending in /skills/proposed/)
+// would silently permit a write to any such path a future typo or
+// prompt-injection could construct; this list is auditable and safe.
+const PROPOSED_SKILL_PATH_PREFIXES = [
+  'packages/agents/admin/src/skills/proposed/',
+  'packages/agents/content/src/skills/proposed/',
+  'packages/agents/research/src/skills/proposed/',
+  'packages/agents/gtm/src/skills/proposed/',
+  'packages/agents/ops/src/skills/proposed/',
+  'packages/agents/github/src/skills/proposed/',
+];
 
 const GITHUB_SYSTEM_PROMPT = `You are the GitHub Dev Agent for WireAssist.
 You give JNix read access to his GitHub repos, issues, and pull requests, plus a narrow
 set of write actions: commenting, labeling, opening pull requests as DRAFTS ONLY, and —
-narrowly, only for Admin's skill-proposal pilot — writing a new file under
-${PROPOSED_SKILL_PATH_PREFIX} on a skill-proposal/* branch.
+narrowly, only for each agent's own skill-proposal pilot — writing a new file under that
+agent's own proposed/ staging directory on a skill-proposal/* branch.
 
 BOUNDARIES (non-negotiable, enforced in code — do not attempt to work around them):
 - You never merge or close an issue or pull request. issue_write can update an issue's
@@ -28,9 +40,9 @@ BOUNDARIES (non-negotiable, enforced in code — do not attempt to work around t
   can submit an APPROVE or REQUEST_CHANGES review — you only ever leave a COMMENT-only
   review, or work with pending/resolve-thread actions.
 - You never push commits, delete anything, or push multiple files at once (push_files is
-  not available to you). create_or_update_file only works for paths under
-  ${PROPOSED_SKILL_PATH_PREFIX} — nowhere else in the repo. create_branch only works for
-  branch names starting with skill-proposal/ — never any other branch.
+  not available to you). create_or_update_file only works for paths under one of the 6
+  agents' own proposed/ staging directories — nowhere else in the repo. create_branch only
+  works for branch names starting with skill-proposal/ — never any other branch.
 - You never open a pull request as anything but a draft (create_pull_request with
   draft: true, always).
 - Every write action requires JNix's explicit approval before it happens — you propose,
@@ -43,6 +55,12 @@ BOUNDARIES (non-negotiable, enforced in code — do not attempt to work around t
 Read tools execute immediately since they can't change anything. Write tools always wait
 for approval, even for something that seems obviously fine — there is no "auto-approve"
 exception for this agent.
+
+SELF-IMPROVEMENT:
+If the user is asking you to build yourself a new capability — "draft a skill that...", "can you
+make yourself able to...", anything where the point is growing what you can do, not just doing
+one thing with what you already have — call propose_skill_skill instead of hand-writing
+pseudocode or prose describing the idea.
 
 DELEGATION:
 If the request needs something outside GitHub repo work — email/calendar (Admin), a written
@@ -72,6 +90,7 @@ export class GitHubAgent extends BaseAgent {
       tools: [],
       toolSchemas: {
         ...buildGithubToolSchemas(deps.authorizedTools),
+        propose_skill_skill: PROPOSE_SKILL_SCHEMA,
         [DELEGATE_TOOL_NAME]: buildDelegateToolSchema('github'),
       },
       maxTokens: 4096,
@@ -103,6 +122,15 @@ export class GitHubAgent extends BaseAgent {
     try {
       if (call.name === DELEGATE_TOOL_NAME) {
         return this.executeDelegateToAgent(task, call);
+      }
+
+      if (GITHUB_SKILL_TOOLS.has(call.name)) {
+        // propose_skill_skill self-gates its own mutation via an internal
+        // proposeAction() call — dispatch immediately rather than
+        // approval-gating a second time, same as every other agent's
+        // skill-tools.
+        const skillName = call.name.replace(/_skill$/, '');
+        return { result: await this.invokeSkill(task, skillName, call.input), isError: false };
       }
 
       // Defense-in-depth — toolSchemas should already only ever contain
@@ -146,17 +174,19 @@ export class GitHubAgent extends BaseAgent {
         };
       }
 
-      // New file content is only ever allowed under Admin's proposed-skill
-      // staging directory — never anywhere else in the repo, regardless of
-      // what the model asks for. A file sitting there is inert (never
-      // imported, never registered) until a human moves it out as a
-      // separate, deliberate step.
+      // New file content is only ever allowed under one of the 6 agents'
+      // own proposed-skill staging directories — never anywhere else in the
+      // repo, regardless of what the model asks for. A file sitting there
+      // is inert (never imported, never registered) until a human moves it
+      // out as a separate, deliberate step.
       if (
         call.name === 'create_or_update_file' &&
-        !String(call.input.path ?? '').startsWith(PROPOSED_SKILL_PATH_PREFIX)
+        !PROPOSED_SKILL_PATH_PREFIXES.some((prefix) =>
+          String(call.input.path ?? '').startsWith(prefix)
+        )
       ) {
         return {
-          result: `create_or_update_file is only allowed under ${PROPOSED_SKILL_PATH_PREFIX}`,
+          result: `create_or_update_file is only allowed under one of: ${PROPOSED_SKILL_PATH_PREFIXES.join(', ')}`,
           isError: true,
         };
       }
