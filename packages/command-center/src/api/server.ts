@@ -332,6 +332,9 @@ events.on('agent:proactive_insights_complete', (p) => broadcast('proactive_insig
 events.on('agent:budget_warning_complete', (p) => broadcast('budget_warning_complete', p));
 events.on('agent:stale_approvals_complete', (p) => broadcast('stale_approvals_complete', p));
 events.on('agent:meeting_prep_complete', (p) => broadcast('meeting_prep_complete', p));
+events.on('agent:objective_health_check_complete', (p) =>
+  broadcast('objective_health_check_complete', p)
+);
 events.on('agent:publish_due_posts_complete', (p) => broadcast('publish_due_posts_complete', p));
 events.on('agent:post_published', (p) => broadcast('post_published', p));
 
@@ -655,6 +658,25 @@ app.post('/api/tasks/meeting-prep', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const hoursAhead = Number.isFinite(body.hoursAhead) && body.hoursAhead >= 0 ? body.hoursAhead : 2;
   const task = AdminTasks.meetingPrep(hoursAhead);
+  queueAgentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// No anthropicConfigured() gate — the summary is a fixed template, not
+// think()-phrased (see objective-health-check.ts), so it works even before
+// an Anthropic key is configured, matching publish_due_posts' precedent.
+app.post('/api/tasks/objective-health-check', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  const body = await c.req.json().catch(() => ({}));
+  const daysStale = Number.isFinite(body.daysStale) && body.daysStale >= 0 ? body.daysStale : 5;
+  const activeObjectives = await objectiveStore.listObjectives({ status: 'active' });
+  const objectives = await Promise.all(
+    activeObjectives.map(async (o) => {
+      const [latest] = await objectiveStore.listEvents({ objectiveId: o.id, limit: 1 });
+      return { id: o.id, title: o.title, latestEventAt: latest?.createdAt ?? null };
+    })
+  );
+  const task = AdminTasks.objectiveHealthCheck(objectives, daysStale);
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });

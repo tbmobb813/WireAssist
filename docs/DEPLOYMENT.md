@@ -665,7 +665,31 @@ credentials for the platforms you actually plan to auto-publish to; a
 scheduled post for a platform with no credentials configured will fail
 with a clear "missing credential" error rather than blocking the others.
 
-## 15. Meeting prep
+## 15. Objective health-check nudge
+
+`dev/objective-health-check.sh` triggers the Admin Agent's
+`objective_health_check_nudge` task — it scans every active Objective and
+flags any that have gone 5+ days without any agent activity recorded
+against it (or that have never had any activity recorded at all). Unlike
+stale-approval nudges (which watch a single stuck request), this watches
+whether work toward a stated Objective has kept happening at all. It only
+reads and reports — it never changes an Objective's status. If nothing is
+stale, it says so and skips pinging Telegram.
+
+**Cron entry** (weekly — Objectives drift slower than an individual
+approval sitting unread):
+
+```bash
+crontab -e
+# add:
+0 8 * * 1 cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/objective-health-check.sh >> /var/log/wireassist-objective-health-check.log 2>&1
+```
+
+No `jq` needed (no request body). Run it manually once first
+(`WIREASSIST_API_URL=http://localhost:3002 ./dev/objective-health-check.sh`)
+to confirm it queues successfully before trusting it to cron.
+
+## 16. Meeting prep
 
 `dev/meeting-prep.sh` triggers the Admin Agent's `meeting_prep` task — it
 scans the calendar for meetings starting within the next 2 hours (default)
