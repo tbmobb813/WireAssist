@@ -8,6 +8,7 @@ import {
   createProactiveInsightsTask,
   createBudgetWarningTask,
   createStaleApprovalsTask,
+  createMeetingPrepTask,
   createObjectiveHealthCheckTask,
 } from './task-factory';
 import type { ObjectiveHealthCheckCandidate } from './skills/objective-health-check';
@@ -50,6 +51,10 @@ export const AdminTasks = {
 
   staleApprovals(daysStale = 3, objectiveId?: string) {
     return createStaleApprovalsTask({ daysStale, objectiveId });
+  },
+
+  meetingPrep(hoursAhead = 2, objectiveId?: string) {
+    return createMeetingPrepTask({ hoursAhead, objectiveId });
   },
 
   objectiveHealthCheck(
