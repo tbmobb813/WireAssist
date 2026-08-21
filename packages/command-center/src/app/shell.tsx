@@ -10,17 +10,54 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-const NAV_ITEMS: { href: string; label: string }[] = [
-  { href: '/', label: 'Dashboard' },
-  { href: '/objectives', label: 'Objectives' },
-  { href: '/content', label: 'Content' },
-  { href: '/research', label: 'Research' },
-  { href: '/gtm', label: 'GTM' },
-  { href: '/ops', label: 'Ops' },
-  { href: '/github', label: 'GitHub' },
-  { href: '/approvals', label: 'Approvals' },
-  { href: '/chat', label: 'Chat' },
-  { href: '/memory', label: 'Memory' },
+interface NavItem {
+  href: string;
+  label: string;
+}
+
+interface NavGroup {
+  department: string;
+  items: NavItem[];
+}
+
+// Departments, not individual agents, are the top-level nav concept — each
+// agent-specific page lives inside the department it belongs to. "Overview"
+// isn't a real department (nothing here is agent-specific), so it renders
+// without the department-heading treatment the real departments get below.
+const NAV_GROUPS: NavGroup[] = [
+  {
+    department: 'Overview',
+    items: [
+      { href: '/', label: 'Dashboard' },
+      { href: '/objectives', label: 'Objectives' },
+      { href: '/approvals', label: 'Approvals' },
+      { href: '/chat', label: 'Chat' },
+      { href: '/memory', label: 'Memory' },
+    ],
+  },
+  {
+    department: 'Administration',
+    items: [{ href: '/admin', label: 'Admin' }],
+  },
+  {
+    department: 'Marketing',
+    items: [
+      { href: '/content', label: 'Content' },
+      { href: '/gtm', label: 'GTM' },
+    ],
+  },
+  {
+    department: 'Research',
+    items: [{ href: '/research', label: 'Research' }],
+  },
+  {
+    department: 'Engineering',
+    items: [{ href: '/github', label: 'GitHub' }],
+  },
+  {
+    department: 'Operations',
+    items: [{ href: '/ops', label: 'Ops' }],
+  },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -29,22 +66,31 @@ function isActive(pathname: string, href: string): boolean {
 
 function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   return (
-    <nav className="flex flex-col gap-1">
-      {NAV_ITEMS.map((item) => {
-        const active = isActive(pathname, item.href);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={onNavigate}
-            className={`rounded-lg px-3 py-2 text-sm tracking-wide transition-colors ${
-              active ? 'bg-accent/10 text-accent' : 'text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
+    <nav className="flex flex-col gap-4">
+      {NAV_GROUPS.map((group) => (
+        <div key={group.department} className="flex flex-col gap-1">
+          {group.department !== 'Overview' && (
+            <div className="px-3 text-[10px] font-semibold tracking-widest text-gray-600 uppercase">
+              {group.department}
+            </div>
+          )}
+          {group.items.map((item) => {
+            const active = isActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onNavigate}
+                className={`rounded-lg px-3 py-2 text-sm tracking-wide transition-colors ${
+                  active ? 'bg-accent/10 text-accent' : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+      ))}
     </nav>
   );
 }
