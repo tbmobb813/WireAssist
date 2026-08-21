@@ -11,6 +11,10 @@ import {
   createDetectSkillOpportunitiesTask,
   createMeetingPrepTask,
   createObjectiveHealthCheckTask,
+  createTravelItineraryTask,
+  createExpenseDigestTask,
+  createMeetingFollowupTask,
+  createDraftDocumentTask,
 } from './task-factory';
 import type { ObjectiveHealthCheckCandidate } from './skills/objective-health-check';
 
@@ -68,5 +72,21 @@ export const AdminTasks = {
     objectiveId?: string
   ) {
     return createObjectiveHealthCheckTask({ objectives, daysStale, objectiveId });
+  },
+
+  travelItinerary(daysAhead = 14, objectiveId?: string) {
+    return createTravelItineraryTask({ daysAhead, objectiveId });
+  },
+
+  expenseDigest(daysAgo = 30, objectiveId?: string) {
+    return createExpenseDigestTask({ daysAgo, objectiveId });
+  },
+
+  meetingFollowup(hoursBack = 3, objectiveId?: string) {
+    return createMeetingFollowupTask({ hoursBack, objectiveId });
+  },
+
+  draftDocument(brief: string, title?: string, objectiveId?: string) {
+    return createDraftDocumentTask({ brief, title, objectiveId });
   },
 };

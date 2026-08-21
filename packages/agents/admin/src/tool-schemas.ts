@@ -278,6 +278,53 @@ export const ADMIN_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
       required: ['spreadsheetId', 'range', 'values'],
     },
   },
+  drive_create_file: {
+    name: 'drive_create_file',
+    description:
+      'Create a new Google Doc in Drive from plain-text content. Requires human approval.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        content: { type: 'string' },
+        folderId: { type: 'string', description: 'Optional parent folder id.' },
+      },
+      required: ['title', 'content'],
+    },
+  },
+  drive_update_file: {
+    name: 'drive_update_file',
+    description: 'Overwrite the content of an existing Drive file. Requires human approval.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileId: { type: 'string' },
+        content: { type: 'string' },
+      },
+      required: ['fileId', 'content'],
+    },
+  },
+  drive_read_file: {
+    name: 'drive_read_file',
+    description: 'Read the plain-text content of a Google Doc in Drive.',
+    inputSchema: {
+      type: 'object',
+      properties: { fileId: { type: 'string' } },
+      required: ['fileId'],
+    },
+  },
+  drive_search_files: {
+    name: 'drive_search_files',
+    description: "Search Drive files by a Drive query string (e.g. name contains '…').",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+        maxResults: { type: 'number' },
+      },
+      required: ['query'],
+    },
+  },
   // ── Skills, exposed as composable tools (dispatched via invokeSkill(),
   // not useTool() — see AdminAgent.executeToolCall()). These run genuine
   // multi-step work internally (list -> analyze -> categorize -> propose)
@@ -352,4 +399,6 @@ export const READ_ONLY_ADMIN_TOOLS = new Set<string>([
   'calendar_list_calendars',
   'calendar_find_availability',
   'sheets_read',
+  'drive_read_file',
+  'drive_search_files',
 ]);

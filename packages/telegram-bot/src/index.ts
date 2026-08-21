@@ -500,6 +500,27 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
       await send(`🎯 ${String(p.summary ?? '').slice(0, 3000)}\n\nUse /objectives to review.`);
       break;
     }
+    case 'travel_itinerary_digest_complete': {
+      if (!p.hasTravel) break;
+      await send(`✈️ ${String(p.summary ?? '').slice(0, 3000)}`);
+      break;
+    }
+    case 'expense_digest_complete': {
+      if (!p.hasExpenses) break;
+      await send(`🧾 ${String(p.summary ?? '').slice(0, 3000)}`);
+      break;
+    }
+    case 'meeting_followup_complete': {
+      const followedUp = Array.isArray(p.followedUp) ? p.followedUp : [];
+      if (followedUp.length === 0) break;
+      await send(`📝 ${String(p.summary ?? '').slice(0, 3000)}`);
+      break;
+    }
+    case 'draft_document_complete': {
+      const link = typeof p.webViewLink === 'string' ? p.webViewLink : '';
+      await send(`📄 Drafted "${String(p.title ?? '')}"${link ? `\n\n${link}` : ''}`);
+      break;
+    }
     case 'publish_due_posts_complete': {
       const published = Array.isArray(p.published) ? p.published : [];
       const failed = Array.isArray(p.failed) ? p.failed : [];

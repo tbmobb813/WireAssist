@@ -134,6 +134,11 @@ const ADMIN_TOOLS = [
   'sheets_read',
   'sheets_append',
   'sheets_update',
+  // Drive
+  'drive_create_file',
+  'drive_update_file',
+  'drive_read_file',
+  'drive_search_files',
 ];
 
 export class AdminAgent extends BaseAgent {
@@ -309,6 +314,10 @@ function describeToolCall(call: ProviderToolCall): string {
       return `Append rows to spreadsheet ${input.spreadsheetId}`;
     case 'sheets_update':
       return `Update range ${input.range} in spreadsheet ${input.spreadsheetId}`;
+    case 'drive_create_file':
+      return `Create Google Doc: "${input.title}"`;
+    case 'drive_update_file':
+      return `Overwrite Drive file ${input.fileId}`;
     case 'email_triage_skill':
       return 'Triage inbox';
     case 'calendar_review_skill':

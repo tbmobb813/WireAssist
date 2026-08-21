@@ -803,6 +803,97 @@ No `jq` needed (no request body). Run it manually once first
 (`WIREASSIST_API_URL=http://localhost:3002 ./dev/detect-skill-opportunities.sh`)
 to confirm it queues successfully before trusting it to cron.
 
+## 20. Travel itinerary digest
+
+`dev/travel-itinerary.sh` triggers the Admin Agent's `travel_itinerary_digest`
+task — it scans Gmail for travel-confirmation emails and cross-references
+Calendar events in the next 14 days (default), then compiles a single
+itinerary via `think()`. If nothing looks like travel, it says so and skips
+pinging Telegram.
+
+Requires `ANTHROPIC_API_KEY` and Gmail/Calendar credentials already
+configured.
+
+**Cron entry** (daily — travel plans can surface any day, same reasoning as
+the stale-PR nudge):
+
+```bash
+crontab -e
+# add:
+0 7 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/travel-itinerary.sh >> /var/log/wireassist-travel-itinerary.log 2>&1
+```
+
+No `jq` needed (no request body). Run it manually once first
+(`WIREASSIST_API_URL=http://localhost:3002 ./dev/travel-itinerary.sh`) to
+confirm it queues successfully before trusting it to cron.
+
+## 21. Expense digest
+
+`dev/expense-digest.sh` triggers the Admin Agent's `expense_digest` task —
+it scans Gmail for receipt and invoice emails in the last 30 days (default)
+and summarizes spend by category via `think()`. Distinct from
+`budget_warning_nudge`, which tracks WireAssist's own AI-spend cap, not real
+personal or business expenses. If nothing is found, it says so and skips
+pinging Telegram.
+
+Requires `ANTHROPIC_API_KEY` and Gmail credentials already configured.
+
+**Cron entry** (monthly — a spend summary needs a longer window than any
+daily/weekly nudge, same reasoning as content-retro above):
+
+```bash
+crontab -e
+# add:
+0 8 2 * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/expense-digest.sh >> /var/log/wireassist-expense-digest.log 2>&1
+```
+
+No `jq` needed (no request body). Run it manually once first
+(`WIREASSIST_API_URL=http://localhost:3002 ./dev/expense-digest.sh`) to
+confirm it queues successfully before trusting it to cron.
+
+## 22. Meeting follow-up
+
+`dev/meeting-followup.sh` triggers the Admin Agent's `meeting_followup`
+task — the other half of `meeting_prep` (section 17): instead of prep notes
+before a meeting, it drafts a summary and likely action items for meetings
+that ended in the last 3 hours (default). Idempotent by the same
+remembered-marker trick `meeting_prep` uses, so re-running it never
+follows up on the same meeting twice.
+
+Requires `ANTHROPIC_API_KEY` and Gmail/Calendar credentials already
+configured.
+
+**Cron entry** (every 30 minutes — same sub-daily cadence as
+`meeting-prep.sh`, for the same reason: only useful shortly after a
+meeting ends, not once a day at an arbitrary time):
+
+```bash
+crontab -e
+# add:
+*/30 * * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/meeting-followup.sh >> /var/log/wireassist-meeting-followup.log 2>&1
+```
+
+No `jq` needed (no request body). Run it manually once first
+(`WIREASSIST_API_URL=http://localhost:3002 ./dev/meeting-followup.sh`) to
+confirm it queues successfully before trusting it to cron.
+
+## 23. Document drafting (Drive)
+
+Unlike the nudges above, `draft_document` (Admin) is on-demand, not
+cron-driven — trigger it via `POST /api/tasks/draft-document` with a
+`{"brief": "..."}` body (`title` optional), the same way `send_email` and
+`schedule_event` are triggered from the dashboard rather than a schedule.
+Given a brief, `think()` drafts the content and creates a Google Doc via a
+new `DriveClient`, gated by approval like every other write action.
+
+**One-time note:** this is the first skill to use Google Drive. It needs
+the `drive.file` scope (access limited to files WireAssist itself creates —
+not your whole Drive), which wasn't part of the original OAuth token. The
+first Admin-agent task that touches Drive triggers one automatic
+re-authorization — same `hasRequiredScopes()` check that already handles
+the Calendar and Sheets scope additions in section 4. No manual action
+needed beyond completing that one re-auth prompt when it appears.
+
 ## Updating after a code change
 
 ```bash
