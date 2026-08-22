@@ -34,9 +34,6 @@ out/
 # OS
 Thumbs.db
 
-# Tauri
-src-tauri/target/
-
 # Tests
 coverage/
 .nyc_output/
@@ -52,5 +49,5 @@ coverage/
 *.sqlite3
 
 # Temporary files
-*.tmp
-temp/
+# *.tmp
+# temp/

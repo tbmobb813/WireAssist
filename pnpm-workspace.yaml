@@ -1,6 +1,5 @@
 packages:
   - 'wireassist/core'
-  - 'wireassist/aia'
   - 'packages/agents/admin'
   - 'packages/agents/content'
   - 'packages/trendpost-mcp'
