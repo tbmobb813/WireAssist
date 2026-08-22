@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { logger } from '@wireassist/core/logger';
 import { database, type Conversation, type Message, type Tag } from '../lib/api/database';
 import {
   Search,
@@ -99,7 +100,7 @@ export const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({
       const tags = await database.tags.getAll();
       setAvailableTags(tags);
     } catch (err) {
-      console.error('Failed to load tags:', err);
+      logger.error('Failed to load tags:', err);
     }
   };
 
@@ -111,12 +112,12 @@ export const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({
         try {
           setSavedSearches(JSON.parse(saved));
         } catch (parseErr) {
-          console.error('Corrupted saved searches in localStorage:', parseErr);
+          logger.error('Corrupted saved searches in localStorage:', parseErr);
           setSavedSearches([]);
         }
       }
     } catch (err) {
-      console.error('Failed to load saved searches:', err);
+      logger.error('Failed to load saved searches:', err);
     }
   };
 
@@ -158,7 +159,7 @@ export const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({
       setResults(searchResults);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
-      console.error('Search error:', err);
+      logger.error('Search error:', err);
     } finally {
       setLoading(false);
     }

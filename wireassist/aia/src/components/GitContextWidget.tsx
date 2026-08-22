@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { logger } from '@wireassist/core/logger';
 import { getInvoke } from '../lib/tauri-shim';
 import { FadeIn } from './Animations';
 
@@ -57,7 +58,7 @@ export default function GitContextWidget({ projectPath, onIncludeContext }: GitC
       });
       setGitContext(context);
     } catch (error) {
-      console.debug('Failed to load git context:', error);
+      logger.debug('Failed to load git context:', error);
       setGitContext(null);
     } finally {
       setIsLoading(false);
@@ -77,7 +78,7 @@ export default function GitContextWidget({ projectPath, onIncludeContext }: GitC
       });
       setProjectInfo(info);
     } catch (error) {
-      console.debug('Failed to detect project type:', error);
+      logger.debug('Failed to detect project type:', error);
       setProjectInfo(null);
     }
   };
@@ -117,7 +118,7 @@ export default function GitContextWidget({ projectPath, onIncludeContext }: GitC
 
       onIncludeContext(fullContext);
     } catch (error) {
-      console.debug('Failed to format git context:', error);
+      logger.debug('Failed to format git context:', error);
     }
   };
   if (isLoading) {

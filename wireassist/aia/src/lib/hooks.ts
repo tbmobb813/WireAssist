@@ -21,7 +21,6 @@ export const useKeyboardShortcuts = ({
       // - Ctrl/Cmd+/ (rarely reserved)
       if ((e.altKey && key === 'k') || ((e.ctrlKey || e.metaKey) && (key === 'k' || key === '/'))) {
         e.preventDefault();
-        console.log('🚀 Command Palette shortcut triggered!');
         onCommandPalette?.();
         return;
       }
@@ -30,7 +29,6 @@ export const useKeyboardShortcuts = ({
       // Keep it, but add Alt+N as a safer fallback
       if (((e.ctrlKey || e.metaKey) && key === 'n') || (e.altKey && key === 'n')) {
         e.preventDefault();
-        console.log('✨ New Conversation shortcut triggered!');
         onNewConversation?.();
         return;
       }
@@ -41,13 +39,11 @@ export const useKeyboardShortcuts = ({
       // - Alt+, or Alt+S (safe fallbacks)
       if ((e.ctrlKey || e.metaKey) && (key === ',' || key === '.')) {
         e.preventDefault();
-        console.log('⚙️ Settings shortcut triggered!');
         onSettings?.();
         return;
       }
       if (e.altKey && (key === ',' || key === 's')) {
         e.preventDefault();
-        console.log('⚙️ Settings shortcut (Alt) triggered!');
         onSettings?.();
         return;
       }
@@ -67,9 +63,7 @@ export const useCommandPalette = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   const open = () => {
-    console.log('📂 useCommandPalette.open() called');
     startTransition(() => {
-      console.log('📂 Setting isOpen to true');
       setIsOpen(true);
     });
   };

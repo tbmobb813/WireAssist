@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { logger } from '@wireassist/core/logger';
 import { database, type Conversation, type Tag } from '../lib/api/database';
 import { Search, Clock, Hash, MessageCircle, Sparkles } from 'lucide-react';
 
@@ -50,7 +51,7 @@ export const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
       setAvailableTags(tags);
       setRecentConversations(conversations);
     } catch (err) {
-      console.error('Failed to load search data:', err);
+      logger.error('Failed to load search data:', err);
     } finally {
       setLoading(false);
     }

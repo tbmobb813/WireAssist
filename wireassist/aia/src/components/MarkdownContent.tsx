@@ -4,6 +4,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import { useState, useRef, useEffect } from 'react';
+import { logger } from '@wireassist/core/logger';
 import { useUiStore } from '../lib/stores/uiStore';
 import { isTauriEnvironment, invokeSafe } from '../lib/utils/tauri';
 import 'katex/dist/katex.min.css';
@@ -77,7 +78,7 @@ function CodeBlock({ inline, className, children, ...props }: CodeProps) {
       addToast({ message: 'Code copied', type: 'success', ttl: 1500 });
       setTimeout(() => setCopied(false), 2000);
     } catch (e) {
-      console.error('Failed to copy code:', e);
+      logger.error('Failed to copy code:', e);
       addToast({ message: 'Failed to copy', type: 'error', ttl: 2000 });
     }
   };
@@ -100,7 +101,7 @@ function CodeBlock({ inline, className, children, ...props }: CodeProps) {
 
       addToast({ message: `Saved as ${filename}`, type: 'success', ttl: 2000 });
     } catch (e) {
-      console.error('Failed to save code:', e);
+      logger.error('Failed to save code:', e);
       addToast({ message: 'Failed to save file', type: 'error', ttl: 2000 });
     }
   };
@@ -152,7 +153,7 @@ function CodeBlock({ inline, className, children, ...props }: CodeProps) {
           timed_out: !!timed_out,
         });
       } catch (e) {
-        console.error('run snippet failed', e);
+        logger.error('run snippet failed', e);
         addToast({ message: 'Run failed', type: 'error', ttl: 3000 });
       }
     })();

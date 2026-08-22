@@ -30,6 +30,7 @@ import { useLogStore } from './lib/stores/logStore';
 import { useMemoryStore } from './lib/stores/memoryStore';
 import { useBranchStore } from './lib/stores/branchStore';
 import { withErrorHandling } from './lib/utils/errorHandler';
+import { logger } from '@wireassist/core/logger';
 const CodeReviewPanel = lazy(() => import('./components/CodeReviewPanel'));
 const LogViewerPanel = lazy(() => import('./components/LogViewerPanel'));
 const MemoryViewer = lazy(() => import('./components/MemoryViewer'));
@@ -46,17 +47,17 @@ export default function App(): JSX.Element {
 
   // Memoize callbacks to prevent recreating listeners on every render
   const handleCommandPalette = useCallback(() => {
-    console.log('🎯 Opening Command Palette from App.tsx');
+    logger.info('🎯 Opening Command Palette from App.tsx');
     open();
   }, [open]);
 
   const handleNewConversation = useCallback(() => {
-    console.log('🎯 Creating new conversation from App.tsx');
+    logger.info('🎯 Creating new conversation from App.tsx');
     createConversation('New conversation', 'gpt-4', 'local');
   }, [createConversation]);
 
   const handleSettings = useCallback(() => {
-    console.log('🎯 Opening settings from App.tsx');
+    logger.info('🎯 Opening settings from App.tsx');
     startTransition(() => setShowSettings(true));
   }, []);
 
@@ -112,7 +113,7 @@ export default function App(): JSX.Element {
       try {
         await registerGlobalShortcut(globalShortcut);
       } catch (e) {
-        console.error('rebind shortcut failed', e);
+        logger.error('rebind shortcut failed', e);
       }
     })();
   }, [globalShortcut, registerGlobalShortcut]);
@@ -179,7 +180,7 @@ export default function App(): JSX.Element {
               try {
                 await chat.createConversation(title, model, provider);
               } catch (err) {
-                console.error('failed to create conversation from CLI ask', err);
+                logger.error('failed to create conversation from CLI ask', err);
                 useUiStore.getState().addToast({
                   message: 'Failed to start a conversation',
                   type: 'error',
@@ -196,7 +197,7 @@ export default function App(): JSX.Element {
                 ttl: 1200,
               });
             } catch (err) {
-              console.error('failed to send CLI ask message', err);
+              logger.error('failed to send CLI ask message', err);
               useUiStore.getState().addToast({
                 message: 'Failed to send CLI prompt',
                 type: 'error',
@@ -211,7 +212,7 @@ export default function App(): JSX.Element {
           try {
             await createConversation('New conversation', 'gpt-4', 'local');
           } catch (e) {
-            console.error('failed to create conversation from tray', e);
+            logger.error('failed to create conversation from tray', e);
           }
         });
         // project file events
@@ -427,7 +428,7 @@ export default function App(): JSX.Element {
                     try {
                       await database.window.toggle();
                     } catch (e) {
-                      console.error('failed to toggle window', e);
+                      logger.error('failed to toggle window', e);
                     }
                   }}
                   variant="secondary"

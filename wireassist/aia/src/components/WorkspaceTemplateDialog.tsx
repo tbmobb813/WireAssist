@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { logger } from '@wireassist/core/logger';
 import { database, type WorkspaceTemplate } from '../lib/api/database';
 import type { NewWorkspaceTemplate } from '../lib/api/types';
 import { X, Save, AlertCircle } from 'lucide-react';
@@ -84,7 +85,7 @@ export const WorkspaceTemplateDialog: React.FC<WorkspaceTemplateDialogProps> = (
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save template');
-      console.error('Failed to save workspace template:', err);
+      logger.error('Failed to save workspace template:', err);
     } finally {
       setLoading(false);
     }

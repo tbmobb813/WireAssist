@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { logger } from '@wireassist/core/logger';
 import { useUiStore } from '../lib/stores/uiStore';
 import { invokeSafe } from '../lib/utils/tauri';
 import { useSettingsStore } from '../lib/stores/settingsStore';
@@ -29,7 +30,7 @@ export default function ExecutionAuditModal() {
       const content = (await invokeSafe<string>('read_audit', { lines: 200 })) || '';
       showAudit(content);
     } catch (e) {
-      console.error('rotate audit failed', e);
+      logger.error('rotate audit failed', e);
     } finally {
       setRotating(false);
     }

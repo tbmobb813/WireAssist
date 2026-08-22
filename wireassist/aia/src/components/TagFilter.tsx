@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { logger } from '@wireassist/core/logger';
 import { database } from '../lib/api/database';
 import type { Tag } from '../lib/api/database';
 
@@ -21,7 +22,7 @@ export default function TagFilter({ selectedTags, onTagsChange, className = '' }
         const tags = await database.tags.getAll();
         setAllTags(tags);
       } catch (error) {
-        console.error('Failed to load tags:', error);
+        logger.error('Failed to load tags:', error);
       } finally {
         setIsLoading(false);
       }
