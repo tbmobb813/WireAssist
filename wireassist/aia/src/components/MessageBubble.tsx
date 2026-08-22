@@ -475,7 +475,7 @@ export default function MessageBubble({ message, isHighlighted = false }: Props)
         <BranchDialog
           messageId={message.id}
           onClose={() => setShowBranchDialog(false)}
-          onBranchCreated={(branchId: string) => {
+          onBranchCreated={async (branchId: string) => {
             try {
               const { logger } = await import('@wireassist/core/logger');
               logger.info('Branch created:', branchId);
