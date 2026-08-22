@@ -27,7 +27,7 @@ export class MemoryStore {
   private queryEmbCache = new Map<string, Float32Array>();
 
   constructor(dbPath: string) {
-    this.db = new Database(dbPath);
+    this.db = new Database(dbPath, { timeout: 5000 });
     this.init();
     // See ApprovalQueue's constructor — every store sharing this file must
     // agree on journal mode (WAL), set only after init() finishes creating

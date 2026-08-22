@@ -10,6 +10,7 @@ import {
   MemoryStore,
   MCPClient,
   EventBus,
+  TaskStore,
   type AgentRole,
   type AgentTask,
   type ImageAttachment,
@@ -74,6 +75,7 @@ const events = new EventBus();
 
 let approval: ApprovalQueue;
 let memory: MemoryStore;
+let taskStore: TaskStore;
 let agent: AdminAgent;
 let contentAgent: ContentAgent;
 let researchAgent: ResearchAgent;
@@ -115,12 +117,48 @@ function logAgentTaskError(err: unknown) {
 /** Run one admin task at a time so events and status stay coherent. */
 let adminTaskChain: Promise<void> = Promise.resolve();
 
+function saveTaskToDb(task: AgentTask, error?: string) {
+  try {
+    taskStore.save(task, error);
+  } catch (err) {
+    logger.error('Failed to save task to DB:', err);
+  }
+}
+
+function updateTaskStatus(taskId: string, status: AgentTask['status'], error?: string) {
+  try {
+    const t = taskStore.get(taskId);
+    if (t) {
+      t.status = status;
+      t.updatedAt = new Date();
+      taskStore.save(t, error);
+    }
+  } catch (err) {
+    logger.error(`Failed to update task status ${taskId} to ${status}:`, err);
+  }
+}
+
+function updateTaskOutput(taskId: unknown, payload: unknown) {
+  if (typeof taskId !== 'string') return;
+  try {
+    const t = taskStore.get(taskId);
+    if (t) {
+      t.output = payload as Record<string, unknown>;
+      t.updatedAt = new Date();
+      taskStore.save(t);
+    }
+  } catch (err) {
+    logger.error(`Failed to update task output for ${taskId}:`, err);
+  }
+}
+
 // Emitted before a task is handed to its agent's serialized queue — the
 // only signal a task exists prior to actually starting (there's no other
 // "queued" event anywhere in the codebase). Unconditional, same as
 // BaseAgent.run()'s own emits; broadcast() is what gates the ledger write
 // on objectiveId presence, not the emit itself.
 function emitTaskQueued(task: AgentTask) {
+  saveTaskToDb(task);
   events.emit('agent:task_queued', {
     agentRole: task.agentRole,
     taskId: task.id,
@@ -304,6 +342,7 @@ function openStores() {
     fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
     approval = new ApprovalQueue(DB_PATH);
     memory = new MemoryStore(DB_PATH);
+    taskStore = new TaskStore(DB_PATH);
     trendpostStorage = new TrendPostStorage(DB_PATH);
   } catch (err) {
     logger.error(`❌ ${sqliteSetupHint()}`);
@@ -341,6 +380,41 @@ function broadcast(event: string, payload: unknown) {
 
   pushSSE(event, payload);
 }
+
+// Wire EventBus → SQLite DB updates
+events.on('agent:task_started', (p: any) => updateTaskStatus(p.taskId, 'running'));
+events.on('agent:task_complete', (p: any) => updateTaskStatus(p.taskId, 'complete'));
+events.on('agent:task_failed', (p: any) => updateTaskStatus(p.taskId, 'failed', p.error));
+events.on('agent:waiting_approval', (p: any) => {
+  try {
+    const t = taskStore.get(p.taskId);
+    if (t) {
+      t.status = 'awaiting_approval';
+      t.approvalRequired = true;
+      t.approvalAction = p.action;
+      t.updatedAt = new Date();
+      taskStore.save(t);
+    }
+  } catch (err) {
+    logger.error('Failed to update task for awaiting_approval:', err);
+  }
+});
+events.on('agent:approval_resolved', (p: any) => {
+  updateTaskStatus(p.taskId, p.approved ? 'approved' : 'rejected');
+});
+
+// Capture task outputs in DB
+events.on('agent:triage_complete', (p: any) => updateTaskOutput(p.taskId, p));
+events.on('agent:calendar_review_complete', (p: any) => updateTaskOutput(p.taskId, p));
+events.on('agent:freeform_response', (p: any) => updateTaskOutput(p.taskId, p));
+events.on('agent:ops_freeform_response', (p: any) => updateTaskOutput(p.taskId, p));
+events.on('agent:github_freeform_response', (p: any) => updateTaskOutput(p.taskId, p));
+events.on('agent:content_generated', (p: any) => updateTaskOutput(p.taskId, p));
+events.on('agent:content_plan_generated', (p: any) => updateTaskOutput(p.taskId, p));
+events.on('agent:research_complete', (p: any) => updateTaskOutput(p.taskId, p));
+events.on('agent:gtm_generated', (p: any) => updateTaskOutput(p.taskId, p));
+events.on('agent:gtm_psych_generated', (p: any) => updateTaskOutput(p.taskId, p));
+events.on('agent:ops_run_complete', (p: any) => updateTaskOutput(p.taskId, p));
 
 // Wire EventBus → SSE broadcasts
 events.on('agent:task_queued', (p) => broadcast('task_queued', p));
@@ -417,6 +491,7 @@ events.on('agent:handoff_requested', (p) => {
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 async function bootstrap() {
   openStores();
+  taskStore.failInterruptedTasks();
 
   // Content Agent tools
   registerTrendPostTools(mcp, trendpostStorage);
@@ -597,6 +672,22 @@ app.get('/api/activity', (c) => {
     return p?.taskId === taskId;
   });
   return c.json(filtered);
+});
+
+// Tasks history & status
+app.get('/api/tasks', (c) => {
+  if (!agentReady) return c.json([]);
+  const limit = parseInt(c.req.query('limit') || '50', 10);
+  const status = c.req.query('status') as any;
+  const agentRole = c.req.query('agentRole') as any;
+  return c.json(taskStore.list({ status, agentRole, limit }));
+});
+
+app.get('/api/tasks/:id', (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  const task = taskStore.get(c.req.param('id'));
+  if (!task) return c.json({ error: 'Task not found' }, 404);
+  return c.json(task);
 });
 
 // ── APPROVAL QUEUE ────────────────────────────────────────────────────────

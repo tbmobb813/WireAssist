@@ -4,7 +4,7 @@
 export { AIClient } from './client';
 
 // Storage
-export { ConversationStore, MessageStore, SettingsStore, SearchEngine } from './storage';
+export { ConversationStore, MessageStore, SettingsStore, SearchEngine, TaskStore } from './storage';
 
 // Context building
 export { ContextBuilder } from './context';

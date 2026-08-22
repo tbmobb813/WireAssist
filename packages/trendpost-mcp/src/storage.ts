@@ -46,7 +46,7 @@ export class TrendPostStorage {
 
   constructor(dbPath?: string) {
     const resolvedPath = dbPath ?? path.join(os.homedir(), '.wireassist', 'wireassist.db');
-    this.db = new Database(resolvedPath);
+    this.db = new Database(resolvedPath, { timeout: 5000 });
     this.init();
     // Every store sharing this file (ApprovalQueue, MemoryStore,
     // ConversationStore, etc.) must agree on journal mode (WAL), set only

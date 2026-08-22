@@ -13,7 +13,7 @@ export class SearchEngine {
   private db: Database.Database;
 
   constructor(storagePath: string = './data/aia.db') {
-    this.db = new Database(storagePath);
+    this.db = new Database(storagePath, { timeout: 5000 });
   }
 
   async searchAll(

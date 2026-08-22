@@ -101,7 +101,7 @@ export class PortfolioStore {
   private db: Database.Database;
 
   constructor(storagePath: string = './data/aia.db') {
-    this.db = new Database(storagePath);
+    this.db = new Database(storagePath, { timeout: 5000 });
     this.db.pragma('foreign_keys = ON');
     this.initTables();
     // See ApprovalQueue's constructor — every store sharing this file must

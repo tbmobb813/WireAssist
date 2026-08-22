@@ -5,8 +5,9 @@ export class SettingsStore {
   private db: Database.Database;
 
   constructor(storagePath: string = './data/aia.db') {
-    this.db = new Database(storagePath);
+    this.db = new Database(storagePath, { timeout: 5000 });
     this.initTables();
+    this.db.pragma('journal_mode = WAL');
   }
 
   private initTables(): void {

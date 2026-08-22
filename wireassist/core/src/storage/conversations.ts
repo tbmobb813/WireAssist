@@ -11,7 +11,7 @@ export class ConversationStore {
   private db: Database.Database;
 
   constructor(storagePath: string = './data/aia.db') {
-    this.db = new Database(storagePath);
+    this.db = new Database(storagePath, { timeout: 5000 });
     this.initTables();
     // WAL mode is the correct configuration once more than one connection
     // opens the same file — ConversationStore and MessageStore each open

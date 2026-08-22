@@ -11,7 +11,7 @@ export class MessageStore {
   private db: Database.Database;
 
   constructor(storagePath: string = './data/aia.db') {
-    this.db = new Database(storagePath);
+    this.db = new Database(storagePath, { timeout: 5000 });
     // See the matching comment in ConversationStore's constructor — this
     // class's create() writes into the `conversations` table (bumping
     // updated_at) from a connection independent of ConversationStore's own,

@@ -7,7 +7,7 @@ export class ApprovalQueue {
   private db: Database.Database;
 
   constructor(dbPath: string) {
-    this.db = new Database(dbPath);
+    this.db = new Database(dbPath, { timeout: 5000 });
     this.init();
     // Multiple stores (ApprovalQueue, MemoryStore, ConversationStore, etc.)
     // each open an independent connection to this same shared file — WAL is

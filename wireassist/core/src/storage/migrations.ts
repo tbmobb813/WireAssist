@@ -69,7 +69,7 @@ const migrations: Migration[] = [
 ];
 
 export function runMigrations(storagePath: string): void {
-  const db = new Database(storagePath);
+  const db = new Database(storagePath, { timeout: 5000 });
 
   // Create migrations table
   db.exec(`

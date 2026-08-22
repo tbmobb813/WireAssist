@@ -33,17 +33,32 @@
       "@wireassist/agent-content": ["packages/agents/content/src"],
       "@wireassist/agent-content/*": ["packages/agents/content/src/*"],
       "@wireassist/agent-research": ["packages/agents/research/src"],
-      "@wireassist/agent-research/*": ["packages/agents/research/src/*"]
+      "@wireassist/agent-research/*": ["packages/agents/research/src/*"],
+      "@wireassist/agent-ops": ["packages/agents/ops/src"],
+      "@wireassist/agent-ops/*": ["packages/agents/ops/src/*"],
+      "@wireassist/agent-gtm": ["packages/agents/gtm/src"],
+      "@wireassist/agent-gtm/*": ["packages/agents/gtm/src/*"],
+      "@wireassist/agent-github": ["packages/agents/github/src"],
+      "@wireassist/agent-github/*": ["packages/agents/github/src/*"]
     }
   },
-  "include": ["wireassist", "packages/agents", "packages/trendpost-mcp", "packages/command-center"],
+  "include": [
+    "wireassist",
+    "packages/agents",
+    "packages/trendpost-mcp",
+    "packages/command-center",
+    "packages/telegram-bot"
+  ],
   "references": [
     { "path": "./wireassist/core" },
-    { "path": "./wireassist/aia" },
     { "path": "./packages/agents/admin" },
     { "path": "./packages/trendpost-mcp" },
     { "path": "./packages/agents/content" },
     { "path": "./packages/agents/research" },
-    { "path": "./packages/command-center" }
+    { "path": "./packages/agents/ops" },
+    { "path": "./packages/agents/gtm" },
+    { "path": "./packages/agents/github" },
+    { "path": "./packages/command-center" },
+    { "path": "./packages/telegram-bot" }
   ]
 }

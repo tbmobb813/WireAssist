@@ -33,6 +33,30 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
+# Validate server health and API credentials before launching unattended runs
+if ! health=$(curl -fsS "$API_URL/health" 2>/dev/null); then
+  echo "[heartbeat] ERROR: WireAssist API server is unreachable at $API_URL" >&2
+  exit 1
+fi
+
+agent_ready=$(echo "$health" | jq -r '.agentReady')
+gmail_ready=$(echo "$health" | jq -r '.gmailReady')
+anthropic_ready=$(echo "$health" | jq -r '.anthropicConfigured')
+
+if [[ "$agent_ready" != "true" ]]; then
+  echo "[heartbeat] ERROR: WireAssist Agent is not ready." >&2
+  exit 1
+fi
+
+if [[ "$anthropic_ready" != "true" ]]; then
+  echo "[heartbeat] ERROR: Anthropic API Key is not configured." >&2
+  exit 1
+fi
+
+if [[ "$gmail_ready" != "true" ]]; then
+  echo "[heartbeat] WARNING: Gmail/Calendar integration is not ready. Workflows requiring email/calendar tools may fail." >&2
+fi
+
 workflows=$(curl -fsS "$API_URL/api/ops/workflows" | jq -r '.workflows[]')
 if [[ -z "$workflows" ]]; then
   echo "[heartbeat] No workflows found."
