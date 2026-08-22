@@ -1,10 +1,12 @@
 import Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
+import { EventEmitter } from 'events';
 import type { ApprovalRequest } from './types';
 import type { AgentRole } from '../agents/types';
 
 export class ApprovalQueue {
   private db: Database.Database;
+  private notifier = new EventEmitter();
 
   constructor(dbPath: string) {
     this.db = new Database(dbPath, { timeout: 5000 });
@@ -15,6 +17,7 @@ export class ApprovalQueue {
     // the full incident notes (a transient, non-corrupting error observed
     // while building /chat persistence, and how callers should handle it).
     this.db.pragma('journal_mode = WAL');
+    this.db.pragma('synchronous = NORMAL');
   }
 
   private init(): void {
@@ -33,7 +36,7 @@ export class ApprovalQueue {
     `);
   }
 
-  // Agent calls this and awaits — resolves when user approves/rejects (max 10 min)
+  // Agent calls this and awaits — resolves instantly when user approves/rejects (max 10 min)
   request(params: {
     taskId: string;
     agentRole: AgentRole;
@@ -58,28 +61,30 @@ export class ApprovalQueue {
       );
 
     return new Promise((resolve) => {
-      const maxAttempts = 300;
-      let attempts = 0;
+      let timer: NodeJS.Timeout;
 
-      const poll = setInterval(() => {
-        attempts++;
+      const onResolved = (approved: boolean) => {
+        clearTimeout(timer);
+        this.notifier.removeListener(`resolved:${id}`, onResolved);
+        resolve(approved);
+      };
+
+      this.notifier.once(`resolved:${id}`, onResolved);
+
+      // Safety timeout after 10 minutes (600,000 ms) in case process restarts or event is lost
+      timer = setTimeout(() => {
+        this.notifier.removeListener(`resolved:${id}`, onResolved);
         const row = this.db.prepare('SELECT status FROM approval_queue WHERE id = ?').get(id) as
           | { status: string }
           | undefined;
-
-        if (row?.status === 'approved') {
-          clearInterval(poll);
-          resolve(true);
-        } else if (row?.status === 'rejected' || attempts >= maxAttempts) {
-          clearInterval(poll);
-          resolve(false);
-        }
-      }, 2000);
+        resolve(row?.status === 'approved');
+      }, 600000);
     });
   }
 
   // Command Center UI calls this when user taps Approve or Reject
   resolve(id: string, approved: boolean): void {
+    const status = approved ? 'approved' : 'rejected';
     this.db
       .prepare(
         `
@@ -88,7 +93,9 @@ export class ApprovalQueue {
       WHERE id = ?
     `
       )
-      .run(approved ? 'approved' : 'rejected', new Date().toISOString(), id);
+      .run(status, new Date().toISOString(), id);
+
+    this.notifier.emit(`resolved:${id}`, approved);
   }
 
   getPending(): ApprovalRequest[] {

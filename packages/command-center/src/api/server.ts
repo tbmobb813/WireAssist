@@ -32,6 +32,7 @@ import {
   NixOpsAgent,
   OpsTasks,
   loadWorkflow,
+  parseWorkflowFrontmatter,
   getTrustStage,
   setTrustStage,
   MIN_TRUST_STAGE,
@@ -1341,7 +1342,13 @@ app.get('/api/ops/workflows/:name', (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   try {
     const name = c.req.param('name');
-    return c.json({ workflow: name, content: applyWorkflowSettings(loadWorkflow(name), name) });
+    const raw = loadWorkflow(name);
+    const { frontmatter } = parseWorkflowFrontmatter(raw);
+    return c.json({
+      workflow: name,
+      frontmatter,
+      content: applyWorkflowSettings(raw, name),
+    });
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : 'Unknown workflow' }, 404);
   }

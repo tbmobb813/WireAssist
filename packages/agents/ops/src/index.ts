@@ -12,7 +12,10 @@ export {
   getWorkflowSummary,
   loadWorkflow,
   parsePublishTarget,
+  parseWorkflowFrontmatter,
   type PublishTarget,
+  type WorkflowFrontmatter,
+  type WorkflowInputSpec,
 } from './context-loader';
 export { setupOpsMCP } from './mcp-setup';
 export {

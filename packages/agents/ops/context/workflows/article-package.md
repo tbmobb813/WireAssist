@@ -1,3 +1,40 @@
+---
+name: article-package
+trust_stage: 2
+publish_target: wordpress
+inputs:
+  starting_point:
+    type: string
+    required: true
+    periodic: false
+    description: EITHER a topic/seed keyword OR a news source article link
+  target_audience:
+    type: string
+    required: false
+    periodic: false
+    description: Target audience and tone
+  house_style:
+    type: string
+    required: false
+    periodic: false
+    description: House style guide or example past articles to mirror
+  site_brand:
+    type: string
+    required: false
+    periodic: false
+    description: Target site/brand (e.g. TechTrendWire)
+  byline:
+    type: string
+    required: false
+    periodic: false
+    description: Byline / author attribution to use
+  target_community:
+    type: string
+    required: false
+    periodic: false
+    description: Target subreddits/communities for crosspost summary
+---
+
 # Workflow: Article package (SEO + TechTrendWire)
 
 **Use when:** you need a blog article — either built from scratch around a topic/keyword, or written to react to a specific news source — optionally repackaged for social. State which starting point in the brief.
@@ -14,8 +51,8 @@ OUTCOME: A topic/seed keyword OR a news source article/link goes in; a publish-r
 
 An article package is DONE when all of these exist in `output/article-package/<slug>/`:
 
-- [ ] `article.md` — full long-form body: one H1, logical H2/H3 hierarchy, primary keyword or topic in the H1 and first 100 words, short paragraphs (2-4 sentences), at least one list or table, key terms bolded on first meaningful use, `[IMAGE SUGGESTION: ...]` placeholders where visuals help, `[INTERNAL LINK: anchor text → page type]` for 2-4 internal links, `[EXTERNAL LINK: anchor text → source type]` for 1-3 citations, FAQ section, clear conclusion — every factual claim traceable to real source material — written with the humanization rules below, not corporate-clean prose
-- [ ] `meta.md` — title tag (≤60 chars), meta description (≤160 chars), URL slug, OG title, OG description, focus keyword/topic
+- [ ] `article.md` — full long-form body: one H1, logical H2/H3 hierarchy (including secondary/LSI keywords in at least 2 H2 subheadings), primary keyword or topic in the H1 and first 100 words, short paragraphs (2-4 sentences), at least one list or table, key terms bolded on first meaningful use, `[IMAGE SUGGESTION: ...]` placeholders where visuals help, `[INTERNAL LINK: anchor text → page type]` for 2-4 internal links, `[EXTERNAL LINK: anchor text → source type]` for 1-3 citations, FAQ section, clear conclusion — every factual claim traceable to real source material — written with the humanization rules below, not corporate-clean prose
+- [ ] `meta.md` — title tag (≤60 chars), meta description (≤160 chars), URL slug, OG title, OG description, focus keyword/topic, WordPress Category, and comma-separated WordPress Tags
 - [ ] **Keyword-driven path only:** `keyword-research.md` (primary keyword, estimated search volume and difficulty low/medium/high, search intent, 5-8 secondary keywords, 10-15 NLP/LSI terms, People Also Ask questions) and `content-brief.md` (working title, target keyword, secondary keywords, word count target, tone, target audience, search intent, competitors-to-beat description, full outline including an FAQ section and a conclusion, internal/external link opportunities, featured snippet opportunity) — produced and approved internally before `article.md` is written, never skipped straight to a draft
 - [ ] **News-source path, or whenever social distribution is requested:** `shorts-script.md` (45-60s vertical video script: hook in the first 3 seconds, 3-4 beats, closing CTA) and `crosspost.md` (a 5-7 tweet X/Twitter thread, a LinkedIn post, and a summary framed for the relevant community)
 - [ ] Self-assessed against every checklist item that applies to this run's path; gaps fixed before reporting done

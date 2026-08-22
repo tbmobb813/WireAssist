@@ -1,3 +1,30 @@
+---
+name: mindtype-weekly-queue
+trust_stage: 2
+publish_target: none
+inputs:
+  weekly_theme:
+    type: string
+    required: true
+    periodic: false
+    description: Weekly theme or emotional focus (e.g. boundaries, rest as productivity)
+  past_examples:
+    type: string
+    required: false
+    periodic: false
+    description: 2-3 best-performing past posts to mirror
+  hashtag_bank:
+    type: string
+    required: false
+    periodic: true
+    description: Current hashtag bank
+  campaign_tie_in:
+    type: string
+    required: false
+    periodic: false
+    description: Current campaign or launch to tie into
+---
+
 # Workflow: MindType.Studio weekly content queue
 
 **Use when:** you need this week's MindType.Studio post queue (carousel, quote, story) from a weekly theme or emotional focus.
@@ -13,11 +40,11 @@ OUTCOME: A weekly theme or emotional focus goes in; three ready-to-design posts 
 
 A week's queue is DONE when all of these exist in `output/mindtype/<week-slug>/`:
 
-- [ ] `carousel.md` — 5-7 slide carousel: each slide's on-image text (short, poetic — per IDENTITY.md's MindType voice) plus the post caption
-- [ ] `quote.md` — one quote-graphic line (≤25 words) plus its caption
-- [ ] `story.md` — 3-5 frame Story sequence: on-screen text per frame, plus a suggested sticker/poll where it fits naturally
-- [ ] `captions.md` — all three captions consolidated, each with its own hashtag set — not the same set copy-pasted three times
-- [ ] Self-assessed against every checklist item; gaps fixed before reporting
+- [ ] `carousel.md` — 5-7 slide carousel: 4:5 vertical portrait aspect ratio; each slide's on-image text (short, poetic — per IDENTITY.md's MindType voice), post caption, and a Save/Share CTA
+- [ ] `quote.md` — one quote-graphic line (≤25 words) formatted for 1:1 square or 4:5, plus its caption and a Comment/Engagement CTA
+- [ ] `story.md` — 3-5 frame Story sequence: 9:16 full-screen vertical aspect ratio; on-screen text per frame, suggested sticker/poll, and an Interactive Link/Poll CTA
+- [ ] `captions.md` — all three captions consolidated, each with its own hashtag set (unique broad, niche, and brand tags per post) — not the same set copy-pasted three times
+- [ ] Self-assessed against every checklist item; CTA diversity verified across all 3 posts; gaps fixed before reporting
 
 ## Inputs (Camcorder Method — fill from a recorded run)
 

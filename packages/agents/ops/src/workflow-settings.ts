@@ -1,25 +1,8 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { homedir } from 'os';
-import { loadWorkflow } from './context-loader';
-
-// A workflow file's "- Label: _SETTING: instruction_" bullets are shop-level
-// constants (variant naming, cost sheets, brand voice examples) that
-// shouldn't be re-typed on every run. This stores the filled value once in a
-// JSON store under $WIREASSIST_HOME (a real persistent volume in the Docker
-// deployment) and merges it into the workflow's text in memory whenever it's
-// read — never written back into the workflow .md file itself, which lives
-// inside the app's own source tree and gets rebuilt from git on every
-// deploy, wiping any on-disk edit. (An earlier version of this file did
-// write the value into the .md file — that's exactly why settings kept
-// reverting after a redeploy.)
-//
-// A "_SETTING_PERIODIC:_" placeholder (same syntax, different tag) marks a
-// setting whose real-world value drifts over time — a cost sheet, a rate
-// card — as opposed to a static brand fact that never changes. Both tags
-// substitute identically; the distinction only matters for staleness
-// tracking (see StoredSetting.updatedAt below and run-workflow.ts's Diagnose
-// staleness note).
+import Database from 'better-sqlite3';
+import { loadWorkflow, parseWorkflowFrontmatter } from './context-loader';
 
 interface StoredSetting {
   value: string;
@@ -28,7 +11,15 @@ interface StoredSetting {
 
 type StoredWorkflow = Record<string, StoredSetting>;
 
-function filePath(): string {
+function getDbPath(): string {
+  if (process.env.WIREASSIST_OPS_SETTINGS_FILE) {
+    return join(dirname(process.env.WIREASSIST_OPS_SETTINGS_FILE), 'ops-settings-test.db');
+  }
+  const base = process.env.WIREASSIST_HOME ?? homedir();
+  return process.env.DB_PATH ?? join(base, '.wireassist', 'wireassist.db');
+}
+
+function jsonFilePath(): string {
   const base = process.env.WIREASSIST_HOME ?? homedir();
   return (
     process.env.WIREASSIST_OPS_SETTINGS_FILE ??
@@ -36,11 +27,73 @@ function filePath(): string {
   );
 }
 
-// Older on-disk files stored bare strings per label (pre-dating updatedAt
-// tracking). Normalize both shapes on read so nothing on a live deployment
-// breaks the moment this ships — an old entry just has no known update time.
+function initDb(): Database.Database | null {
+  try {
+    const dbPath = getDbPath();
+    mkdirSync(dirname(dbPath), { recursive: true });
+    const db = new Database(dbPath, { timeout: 5000 });
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS ops_settings (
+        workflow TEXT NOT NULL,
+        key TEXT NOT NULL,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (workflow, key)
+      );
+    `);
+
+    // Auto-migrate legacy JSON settings if present
+    const legacyPath = jsonFilePath();
+    if (existsSync(legacyPath)) {
+      try {
+        const raw = JSON.parse(readFileSync(legacyPath, 'utf-8'));
+        const stmt = db.prepare(
+          'INSERT OR REPLACE INTO ops_settings (workflow, key, value, updated_at) VALUES (?, ?, ?, ?)'
+        );
+        for (const [workflow, settings] of Object.entries(raw)) {
+          for (const [label, entry] of Object.entries(settings as Record<string, any>)) {
+            const val = typeof entry === 'string' ? entry : entry.value;
+            const updated = typeof entry === 'string' ? '' : (entry.updatedAt ?? '');
+            stmt.run(workflow, label, val, updated);
+          }
+        }
+      } catch {
+        // Ignore legacy migration errors
+      }
+    }
+    return db;
+  } catch {
+    return null;
+  }
+}
+
 function readAll(): Record<string, StoredWorkflow> {
-  const path = filePath();
+  const db = initDb();
+  if (db) {
+    try {
+      const rows = db
+        .prepare('SELECT workflow, key, value, updated_at FROM ops_settings')
+        .all() as {
+        workflow: string;
+        key: string;
+        value: string;
+        updated_at: string;
+      }[];
+      db.close();
+
+      const result: Record<string, StoredWorkflow> = {};
+      for (const row of rows) {
+        if (!result[row.workflow]) result[row.workflow] = {};
+        result[row.workflow][row.key] = { value: row.value, updatedAt: row.updated_at };
+      }
+      return result;
+    } catch {
+      db.close();
+    }
+  }
+
+  // Fallback to JSON file if SQLite fails or in pure mock environments
+  const path = jsonFilePath();
   if (!existsSync(path)) return {};
   try {
     const raw = JSON.parse(readFileSync(path, 'utf-8')) as Record<
@@ -76,26 +129,43 @@ export function getWorkflowSettingsMeta(workflow: string): Record<string, { upda
 }
 
 export function setWorkflowSettings(workflow: string, values: Record<string, string>): void {
-  const all = readAll();
   const updatedAt = new Date().toISOString();
+  const db = initDb();
+  if (db) {
+    try {
+      const stmt = db.prepare(
+        'INSERT OR REPLACE INTO ops_settings (workflow, key, value, updated_at) VALUES (?, ?, ?, ?)'
+      );
+      const transaction = db.transaction(() => {
+        for (const [label, value] of Object.entries(values)) {
+          stmt.run(workflow, label, value, updatedAt);
+        }
+      });
+      transaction();
+      db.close();
+    } catch {
+      db.close();
+    }
+  }
+
+  // Also sync JSON fallback file for compatibility
+  const all = readAll();
   const existing = all[workflow] ?? {};
   const merged: StoredWorkflow = { ...existing };
   for (const [label, value] of Object.entries(values)) {
     merged[label] = { value, updatedAt };
   }
   all[workflow] = merged;
-  const path = filePath();
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(all, null, 2));
+  const path = jsonFilePath();
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify(all, null, 2));
+  } catch {
+    // Ignore JSON fallback write errors
+  }
 }
 
-// Parses a workflow's raw, unmerged markdown for every `_SETTING:_` /
-// `_SETTING_PERIODIC:_` label. Deliberately reads the raw file rather than
-// the merged preview text: once a setting is filled, its placeholder
-// disappears from the merged text, so periodic-ness can't be re-derived from
-// what the UI currently shows. The raw file never changes (nothing writes
-// back to it), so it's the only stable source for "was this ever tagged
-// periodic."
+// Parses a workflow for both Frontmatter input schemas AND legacy `_SETTING:_` labels.
 export function getWorkflowSettingLabels(workflow: string): { label: string; periodic: boolean }[] {
   let markdown: string;
   try {
@@ -103,29 +173,59 @@ export function getWorkflowSettingLabels(workflow: string): { label: string; per
   } catch {
     return [];
   }
+
+  const { frontmatter, body } = parseWorkflowFrontmatter(markdown);
   const labels: { label: string; periodic: boolean }[] = [];
+  const seen = new Set<string>();
+
+  // Extract from Frontmatter inputs if present
+  if (frontmatter?.inputs) {
+    for (const [name, spec] of Object.entries(frontmatter.inputs)) {
+      seen.add(name);
+      labels.push({ label: name, periodic: Boolean(spec.periodic) });
+    }
+  }
+
+  // Extract legacy `_SETTING:_` / `_SETTING_PERIODIC:_` placeholders
   const re = /^-\s*(.+?):\s*_SETTING(_PERIODIC)?:\s*.+?_\s*$/gm;
   let match: RegExpExecArray | null;
-  while ((match = re.exec(markdown)) !== null) {
-    labels.push({ label: match[1].trim(), periodic: Boolean(match[2]) });
+  while ((match = re.exec(body)) !== null) {
+    const label = match[1].trim();
+    if (!seen.has(label)) {
+      seen.add(label);
+      labels.push({ label, periodic: Boolean(match[2]) });
+    }
   }
   return labels;
 }
 
-// Substitutes every saved setting into a loaded workflow file's text — call
-// this on the result of loadWorkflow() before feeding it to the model or
-// showing it in a preview, so a genuinely-unfilled setting still shows its
-// real "_SETTING:_"/"_SETTING_PERIODIC:_" placeholder (and Diagnose can
-// correctly treat it as missing) while a filled one reads as if it had
-// always been in the file.
 export function applyWorkflowSettings(markdown: string, workflow: string): string {
   const values = getWorkflowSettings(workflow);
-  let content = markdown;
+  const { frontmatter, body } = parseWorkflowFrontmatter(markdown);
+
+  let content = body;
+
+  // Substitute values for legacy placeholders
   for (const [label, value] of Object.entries(values)) {
     if (!value) continue;
     const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const re = new RegExp(`^(-\\s*${escapedLabel}:)\\s*_SETTING(?:_PERIODIC)?:\\s*.+?_\\s*$`, 'm');
     content = content.replace(re, `$1 ${value}`);
   }
+
+  // If frontmatter defines inputs, append structured context block for prompt clarity
+  if (frontmatter?.inputs) {
+    const filledContext: string[] = [];
+    for (const [name, spec] of Object.entries(frontmatter.inputs)) {
+      const val = values[name];
+      if (val) {
+        filledContext.push(`- **${name}** (${spec.description}): ${val}`);
+      }
+    }
+    if (filledContext.length > 0) {
+      content = `## Configured Workflow Inputs\n${filledContext.join('\n')}\n\n${content}`;
+    }
+  }
+
   return content;
 }

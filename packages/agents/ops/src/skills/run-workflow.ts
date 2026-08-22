@@ -1,7 +1,13 @@
 import type { Skill, SkillAgentHandle } from '@wireassist/core';
-import { loadWorkflow, parseSheetRef, parsePublishTarget } from '../context-loader';
+import {
+  loadWorkflow,
+  parseSheetRef,
+  parsePublishTarget,
+  parseWorkflowFrontmatter,
+} from '../context-loader';
 import {
   applyWorkflowSettings,
+  getWorkflowSettings,
   getWorkflowSettingsMeta,
   getWorkflowSettingLabels,
 } from '../workflow-settings';
@@ -28,7 +34,36 @@ export const runWorkflowSkill: Skill<RunWorkflowInput, void> = {
   requiresApproval: true,
 
   async execute({ agent, task, input }) {
-    const workflow = applyWorkflowSettings(loadWorkflow(input.workflow), input.workflow);
+    const rawWorkflow = loadWorkflow(input.workflow);
+    const { frontmatter } = parseWorkflowFrontmatter(rawWorkflow);
+    const currentSettings = getWorkflowSettings(input.workflow);
+
+    // Programmatic Pre-Flight Gate: Validate required frontmatter inputs (0 token waste)
+    if (frontmatter?.inputs) {
+      const missingRequired: string[] = [];
+      for (const [key, spec] of Object.entries(frontmatter.inputs)) {
+        if (spec.required) {
+          const val =
+            currentSettings[key] ||
+            (input.brief && input.brief.trim().length > 0 ? input.brief : undefined);
+          if (!val) {
+            missingRequired.push(`"${key}" (${spec.description})`);
+          }
+        }
+      }
+      if (missingRequired.length > 0) {
+        agent.emit('agent:ops_blocked', {
+          agentRole: task.agentRole,
+          taskId: task.id,
+          reason: `Missing required workflow inputs: ${missingRequired.join(', ')}. Please configure them in the Ops Settings tab or brief.`,
+        });
+        throw new Error(
+          `Pre-flight check failed: Missing required workflow inputs: ${missingRequired.join(', ')}.`
+        );
+      }
+    }
+
+    const workflow = applyWorkflowSettings(rawWorkflow, input.workflow);
     const priorRuns = await agent.loadContext(`workflow ${input.workflow}`);
     const stages: StageResult[] = [];
 

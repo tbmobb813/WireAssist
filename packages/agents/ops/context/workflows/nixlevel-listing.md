@@ -1,3 +1,30 @@
+---
+name: nixlevel-listing
+trust_stage: 2
+publish_target: none
+inputs:
+  product_concepts:
+    type: string
+    required: true
+    periodic: false
+    description: Product concept(s) and design description
+  existing_example:
+    type: string
+    required: false
+    periodic: false
+    description: Existing best-performing listing example to mirror
+  variant_naming:
+    type: string
+    required: false
+    periodic: false
+    description: Variant naming conventions
+  printify_costs:
+    type: string
+    required: false
+    periodic: true
+    description: Current Printify cost sheet link or table
+---
+
 # Workflow: NixLevel product listing generation
 
 **Use when:** you have one or more Etsy product concepts and need a full, upload-ready listing package (title, description, tags, variants, margin, marketing angles) for each.
@@ -15,10 +42,11 @@ For EACH product concept in the brief, a listing is DONE when all of these exist
 
 - [ ] `title.txt` — ≤140 chars, front-loaded keywords
 - [ ] `description.md` — template-consistent: hook, product details, size/variant table, care instructions, shop CTA
-- [ ] `tags.txt` — exactly 13 Etsy tags, ≤20 chars each, no duplicates of title words wasted
+- [ ] `tags.txt` — exactly 13 Etsy tags, ≤20 chars each, no special symbols/punctuation (`&`, `/`, `-`), no duplicates of title words wasted
 - [ ] `variants.md` — variant naming matching existing NixLevel conventions
-- [ ] `margin.md` — Printify base cost, target price, computed margin % (flag if <30%)
+- [ ] `margin.md` — Printify base cost, print provider name (e.g. Monster Digital), target price, computed margin % (flag if <30%)
 - [ ] `marketing.md` — 3 mockup/lifestyle photo angles + 2 marketing hooks
+- [ ] **Multi-product batches only:** `batch-summary.md` in `output/nixlevel/` consolidating target prices, Printify costs, and computed margins across all products in the batch
 - [ ] Self-assessed against this checklist, per product; gaps fixed before reporting
 
 ## Inputs (Camcorder Method — fill from a recorded run)

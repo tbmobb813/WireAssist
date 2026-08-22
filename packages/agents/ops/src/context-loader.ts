@@ -102,3 +102,81 @@ export function parsePublishTarget(workflowMarkdown: string): PublishTarget | nu
   const target = match[1].toLowerCase();
   return target === 'wordpress' ? 'wordpress' : null;
 }
+
+export interface WorkflowInputSpec {
+  type: 'string' | 'multiline' | 'boolean' | 'number';
+  required?: boolean;
+  periodic?: boolean;
+  description: string;
+}
+
+export interface WorkflowFrontmatter {
+  name?: string;
+  trust_stage?: number;
+  publish_target?: string;
+  inputs?: Record<string, WorkflowInputSpec>;
+}
+
+export function parseWorkflowFrontmatter(markdown: string): {
+  frontmatter: WorkflowFrontmatter | null;
+  body: string;
+} {
+  const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+  if (!match) return { frontmatter: null, body: markdown };
+
+  const yamlStr = match[1];
+  const body = match[2];
+
+  try {
+    const frontmatter: WorkflowFrontmatter = {};
+    const lines = yamlStr.split('\n');
+    let currentKey: string | null = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.trim() || line.trim().startsWith('#')) continue;
+
+      if (!line.startsWith(' ') && line.includes(':')) {
+        const [k, ...v] = line.split(':');
+        const key = k.trim();
+        const val = v.join(':').trim();
+        currentKey = key;
+
+        if (key === 'name') frontmatter.name = val;
+        else if (key === 'trust_stage') frontmatter.trust_stage = parseInt(val, 10);
+        else if (key === 'publish_target') frontmatter.publish_target = val;
+        else if (key === 'inputs') frontmatter.inputs = {};
+      } else if (
+        currentKey === 'inputs' &&
+        line.startsWith('  ') &&
+        !line.startsWith('    ') &&
+        line.includes(':')
+      ) {
+        const [inputName] = line.split(':');
+        const name = inputName.trim();
+        if (!frontmatter.inputs) frontmatter.inputs = {};
+        frontmatter.inputs[name] = { type: 'string', description: '' };
+
+        let j = i + 1;
+        while (j < lines.length && lines[j].startsWith('    ')) {
+          const subLine = lines[j].trim();
+          if (subLine.includes(':')) {
+            const [propK, ...propV] = subLine.split(':');
+            const propKey = propK.trim();
+            const propVal = propV.join(':').trim();
+            if (propKey === 'type') frontmatter.inputs[name].type = propVal as any;
+            else if (propKey === 'required') frontmatter.inputs[name].required = propVal === 'true';
+            else if (propKey === 'periodic') frontmatter.inputs[name].periodic = propVal === 'true';
+            else if (propKey === 'description') frontmatter.inputs[name].description = propVal;
+          }
+          j++;
+        }
+        i = j - 1;
+      }
+    }
+
+    return { frontmatter, body };
+  } catch {
+    return { frontmatter: null, body: markdown };
+  }
+}

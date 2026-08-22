@@ -4,6 +4,7 @@ import { tmpdir } from 'os';
 import type { AgentTask, SkillAgentHandle } from '@wireassist/core';
 
 jest.mock('../../context-loader', () => ({
+  ...jest.requireActual('../../context-loader'),
   loadWorkflow: jest.fn(),
   parseSheetRef: jest.fn().mockReturnValue(null),
   parsePublishTarget: jest.fn().mockReturnValue(null),
