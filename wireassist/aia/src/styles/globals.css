@@ -1,0 +1,357 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+  height: 100vh;
+}
+
+/* Enhanced Code Block Styling - Tokyo Night Theme */
+.hljs {
+  background: #1a1b26 !important;
+  color: #c0caf5 !important;
+  border-radius: 0 !important;
+}
+
+/* Improved syntax highlighting colors for Tokyo Night */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in {
+  color: #bb9af7 !important;
+  /* Purple for keywords */
+}
+
+.hljs-string,
+.hljs-doctag {
+  color: #9ece6a !important;
+  /* Green for strings */
+}
+
+.hljs-title,
+.hljs-section,
+.hljs-selector-id {
+  color: #7aa2f7 !important;
+  /* Blue for titles/functions */
+}
+
+.hljs-comment {
+  color: #565f89 !important;
+  /* Muted blue for comments */
+  font-style: italic;
+}
+
+.hljs-number,
+.hljs-literal {
+  color: #ff9e64 !important;
+  /* Orange for numbers */
+}
+
+.hljs-attr,
+.hljs-variable,
+.hljs-template-variable {
+  color: #7dcfff !important;
+  /* Cyan for attributes */
+}
+
+.hljs-meta {
+  color: #e0af68 !important;
+  /* Yellow for meta */
+}
+
+/* Scrollbar styling for code blocks */
+pre::-webkit-scrollbar {
+  height: 8px;
+}
+
+pre::-webkit-scrollbar-track {
+  background: #24283b;
+  border-radius: 4px;
+}
+
+pre::-webkit-scrollbar-thumb {
+  background: #414868;
+  border-radius: 4px;
+}
+
+pre::-webkit-scrollbar-thumb:hover {
+  background: #565f89;
+}
+
+/* Custom Animations for Loading States */
+@keyframes toast-slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes typing-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Animation utilities */
+.animate-in {
+  animation-fill-mode: both;
+}
+
+.slide-in-from-right-5 {
+  animation: toast-slide-in 200ms ease-out;
+}
+
+.fade-in {
+  animation: fadeIn 200ms ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* Smooth pulse animation at 530ms */
+@keyframes pulse-530 {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-530 {
+  animation: pulse-530 530ms cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Custom Easing Curves for 60fps Smooth Animations */
+:root {
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --ease-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* GPU-Accelerated Base Classes */
+.gpu-accelerated {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Smooth Scroll Behavior */
+.smooth-scroll {
+  scroll-behavior: smooth;
+}
+
+/* Message Scroll Container with Momentum */
+.message-scroll {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+/* Panel Transition Animations (250ms) */
+@keyframes panel-slide-in-left {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes panel-slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes panel-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.panel-slide-in-left {
+  animation: panel-slide-in-left 250ms var(--ease-out);
+}
+
+.panel-slide-in-right {
+  animation: panel-slide-in-right 250ms var(--ease-out);
+}
+
+.panel-fade-in {
+  animation: panel-fade-in 250ms var(--ease-out);
+}
+
+/* Message Appear Animation */
+@keyframes message-appear {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.message-appear {
+  animation: message-appear 200ms var(--ease-out);
+}
+
+/* Hover Scale with GPU Acceleration */
+.hover-scale {
+  transition: transform 150ms var(--ease-out);
+  will-change: transform;
+}
+
+.hover-scale:hover {
+  transform: scale(1.02) translateZ(0);
+}
+
+/* Button Press Animation */
+.button-press {
+  transition: transform 100ms var(--ease-out);
+  will-change: transform;
+}
+
+.button-press:active {
+  transform: scale(0.95) translateZ(0);
+}
+
+/* Smooth Opacity Transitions */
+.transition-opacity-smooth {
+  transition: opacity 150ms var(--ease-out);
+}
+
+/* Background Transitions */
+.transition-bg-smooth {
+  transition: background-color 150ms var(--ease-out);
+}
+
+/* Color Transitions */
+.transition-colors-smooth {
+  transition:
+    color 150ms var(--ease-out),
+    background-color 150ms var(--ease-out),
+    border-color 150ms var(--ease-out);
+}
+
+/* Transform Transitions */
+.transition-transform-smooth {
+  transition: transform 250ms var(--ease-out);
+  will-change: transform;
+}
+
+/* Reduce Motion for Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .gpu-accelerated {
+    will-change: auto;
+  }
+}
+
+/* Smooth Focus States */
+*:focus-visible {
+  outline: 2px solid #7aa2f7;
+  outline-offset: 2px;
+  transition: outline-offset 150ms var(--ease-out);
+}
+
+/* Enhanced Scrollbar for All Containers */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #414868 #24283b;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #24283b;
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #414868;
+  border-radius: 4px;
+  transition: background 150ms var(--ease-out);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #565f89;
+}
+
+/* Performance Optimization for Large Lists */
+.optimize-rendering {
+  contain: layout style paint;
+  content-visibility: auto;
+}

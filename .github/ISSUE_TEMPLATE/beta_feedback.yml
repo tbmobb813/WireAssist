@@ -1,0 +1,37 @@
+name: Beta feedback
+description: General beta feedback (what’s great, what’s rough)
+labels: [feedback]
+assignees: []
+body:
+  - type: textarea
+    id: role
+    attributes:
+      label: Your role/workflow
+      placeholder: Backend dev on Fedora + GNOME; mainly terminal + VS Code
+  - type: input
+    id: distro
+    attributes:
+      label: Distro/version
+      placeholder: Fedora 40 / Ubuntu 24.04 / etc.
+  - type: input
+    id: de
+    attributes:
+      label: Desktop environment
+      placeholder: GNOME / KDE / Other
+  - type: textarea
+    id: likes
+    attributes:
+      label: Top 3 things you like
+  - type: textarea
+    id: pain
+    attributes:
+      label: Top 3 pain points
+  - type: textarea
+    id: features
+    attributes:
+      label: Features you want next
+      placeholder: Rich message editing; multiple global hotkeys; command preview
+  - type: textarea
+    id: misc
+    attributes:
+      label: Anything else

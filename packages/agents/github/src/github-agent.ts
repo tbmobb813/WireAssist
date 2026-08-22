@@ -1,0 +1,194 @@
+import {
+  type AgentConfig,
+  type AgentTask,
+  type IApprovalQueue,
+  type MemoryStore,
+  type MCPClient,
+  type EventBus,
+  type ProviderToolCall,
+} from '@wireassist/core';
+import { BaseAgent, buildDelegateToolSchema, DELEGATE_TOOL_NAME } from '@wireassist/agent-admin';
+import { GITHUB_SKILLS } from './skills';
+import { GITHUB_TOOL_ALLOWLIST, READ_ONLY_GITHUB_TOOLS } from './tool-policy';
+import { buildGithubToolSchemas } from './tool-schemas';
+import type { GitHubMcpClient, RemoteToolDefinition } from './github-client';
+
+const PROPOSED_SKILL_PATH_PREFIX = 'packages/agents/admin/src/skills/proposed/';
+
+const GITHUB_SYSTEM_PROMPT = `You are the GitHub Dev Agent for WireAssist.
+You give JNix read access to his GitHub repos, issues, and pull requests, plus a narrow
+set of write actions: commenting, labeling, opening pull requests as DRAFTS ONLY, and —
+narrowly, only for Admin's skill-proposal pilot — writing a new file under
+${PROPOSED_SKILL_PATH_PREFIX} on a skill-proposal/* branch.
+
+BOUNDARIES (non-negotiable, enforced in code — do not attempt to work around them):
+- You never merge or close an issue or pull request. issue_write can update an issue's
+  state to "closed" — you never do this, regardless of what's asked.
+- You never approve or request changes on a pull request review. pull_request_review_write
+  can submit an APPROVE or REQUEST_CHANGES review — you only ever leave a COMMENT-only
+  review, or work with pending/resolve-thread actions.
+- You never push commits, delete anything, or push multiple files at once (push_files is
+  not available to you). create_or_update_file only works for paths under
+  ${PROPOSED_SKILL_PATH_PREFIX} — nowhere else in the repo. create_branch only works for
+  branch names starting with skill-proposal/ — never any other branch.
+- You never open a pull request as anything but a draft (create_pull_request with
+  draft: true, always).
+- Every write action requires JNix's explicit approval before it happens — you propose,
+  he decides. This approval gate is automatic and built into every write tool call itself:
+  call the tool directly, and it pauses for his real approval before anything actually
+  happens. Do NOT ask for confirmation in plain text before calling a write tool — you have
+  no way to hear a reply after a single-shot request like this one, so a text question
+  instead of a real tool call just ends the task with nothing done and nothing to approve.
+
+Read tools execute immediately since they can't change anything. Write tools always wait
+for approval, even for something that seems obviously fine — there is no "auto-approve"
+exception for this agent.
+
+DELEGATION:
+If the request needs something outside GitHub repo work — email/calendar (Admin), a written
+post (Content), web research (Research), a business workflow (NixOps), or a go-to-market
+strategy (GTM) — use delegate_to_agent instead of guessing or doing a worse version yourself.
+Never delegate something you can already do with your own tools.`;
+
+export class GitHubAgent extends BaseAgent {
+  private githubClient: GitHubMcpClient;
+
+  constructor(deps: {
+    approval: IApprovalQueue;
+    memory: MemoryStore;
+    mcp: MCPClient;
+    events: EventBus;
+    githubClient: GitHubMcpClient;
+    authorizedTools: RemoteToolDefinition[];
+  }) {
+    const config: AgentConfig = {
+      role: 'github',
+      name: 'GitHub Dev Agent',
+      systemPrompt: GITHUB_SYSTEM_PROMPT,
+      // Deliberately empty — GitHub calls go through the real MCP client
+      // (this.githubClient), bypassing the fake in-process MCPClient/useTool()
+      // entirely. `tools` only gates the old registry, so it has nothing to
+      // authorize here.
+      tools: [],
+      toolSchemas: {
+        ...buildGithubToolSchemas(deps.authorizedTools),
+        [DELEGATE_TOOL_NAME]: buildDelegateToolSchema('github'),
+      },
+      maxTokens: 4096,
+    };
+    super(config, deps);
+    this.githubClient = deps.githubClient;
+    for (const skill of GITHUB_SKILLS) this.skills.registerSkill(skill);
+  }
+
+  protected isReadOnlyTool(toolName: string): boolean {
+    return READ_ONLY_GITHUB_TOOLS.has(toolName);
+  }
+
+  // Lets a plain HTTP route call an allowlisted read-only GitHub tool
+  // directly — bypassing agent.think()/the LLM tool-loop entirely — for
+  // deterministic lookups (e.g. listing repos for a UI picker) that don't
+  // need conversational reasoning and shouldn't cost a model call.
+  async callReadOnlyTool(name: string, input: Record<string, unknown> = {}): Promise<unknown> {
+    if (!this.isReadOnlyTool(name)) {
+      throw new Error(`"${name}" is not an allowlisted read-only GitHub tool`);
+    }
+    return this.githubClient.callTool(name, input);
+  }
+
+  protected async executeToolCall(
+    task: AgentTask,
+    call: ProviderToolCall
+  ): Promise<{ result: unknown; isError: boolean }> {
+    try {
+      if (call.name === DELEGATE_TOOL_NAME) {
+        return this.executeDelegateToAgent(task, call);
+      }
+
+      // Defense-in-depth — toolSchemas should already only ever contain
+      // allowlisted names (built from resolveAuthorizedGithubTools()'s
+      // intersection) plus delegate_to_agent (handled above), so the model
+      // should never see anything else. This guard protects against a
+      // future refactor accidentally widening exposure, not against a
+      // normal code path.
+      if (!GITHUB_TOOL_ALLOWLIST.has(call.name)) {
+        return {
+          result: `Tool "${call.name}" is outside this agent's allowed scope.`,
+          isError: true,
+        };
+      }
+
+      // Hard code-level enforcement of "draft only" — not just a system-prompt
+      // instruction the model could ignore or be prompt-injected around.
+      if (call.name === 'create_pull_request' && call.input.draft !== true) {
+        return { result: 'create_pull_request must be called with draft: true.', isError: true };
+      }
+
+      // issue_write is a consolidated create/update tool — state: 'closed'
+      // closes the issue, which is explicitly forbidden regardless of
+      // approval. create/update/comment/label/assign are all fine.
+      if (call.name === 'issue_write' && call.input.state === 'closed') {
+        return { result: 'issue_write must not be called with state: "closed".', isError: true };
+      }
+
+      // pull_request_review_write's event decides whether the review
+      // actually gatekeeps the PR — APPROVE/REQUEST_CHANGES is a real human
+      // decision this agent never makes on its own. Commenting, submitting a
+      // pending comment-only review, and resolving/unresolving threads are
+      // all fine.
+      if (
+        call.name === 'pull_request_review_write' &&
+        (call.input.event === 'APPROVE' || call.input.event === 'REQUEST_CHANGES')
+      ) {
+        return {
+          result: `pull_request_review_write must not be called with event: "${call.input.event}".`,
+          isError: true,
+        };
+      }
+
+      // New file content is only ever allowed under Admin's proposed-skill
+      // staging directory — never anywhere else in the repo, regardless of
+      // what the model asks for. A file sitting there is inert (never
+      // imported, never registered) until a human moves it out as a
+      // separate, deliberate step.
+      if (
+        call.name === 'create_or_update_file' &&
+        !String(call.input.path ?? '').startsWith(PROPOSED_SKILL_PATH_PREFIX)
+      ) {
+        return {
+          result: `create_or_update_file is only allowed under ${PROPOSED_SKILL_PATH_PREFIX}`,
+          isError: true,
+        };
+      }
+
+      // Branches created by this agent are only ever for a proposed-skill
+      // PR — never a generically-named branch that could be confused with
+      // real work.
+      if (
+        call.name === 'create_branch' &&
+        !String(call.input.branch ?? call.input.ref ?? '').startsWith('skill-proposal/')
+      ) {
+        return {
+          result: 'create_branch is only allowed for branch names starting with skill-proposal/',
+          isError: true,
+        };
+      }
+
+      if (this.isReadOnlyTool(call.name)) {
+        return { result: await this.githubClient.callTool(call.name, call.input), isError: false };
+      }
+
+      const approved = await this.proposeAction(
+        task,
+        `Call GitHub tool "${call.name}"`,
+        call.input
+      );
+      if (!approved) {
+        return { result: 'User declined this action.', isError: true };
+      }
+      return { result: await this.githubClient.callTool(call.name, call.input), isError: false };
+    } catch (error) {
+      return { result: error instanceof Error ? error.message : String(error), isError: true };
+    }
+  }
+}

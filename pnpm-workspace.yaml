@@ -1,0 +1,24 @@
+packages:
+  - 'wireassist/core'
+  - 'wireassist/aia'
+  - 'packages/agents/admin'
+  - 'packages/agents/content'
+  - 'packages/trendpost-mcp'
+  - 'packages/command-center'
+  - 'packages/marketing'
+  - 'packages/agents/research'
+  - 'packages/agents/ops'
+  - 'packages/agents/gtm'
+  - 'packages/agents/github'
+  - 'packages/telegram-bot'
+
+allowBuilds:
+  '@swc/core': true
+  better-sqlite3: true
+  esbuild: true
+  protobufjs: true
+  sharp: true
+
+onlyBuiltDependencies:
+  - better-sqlite3
+  - '@swc/core'

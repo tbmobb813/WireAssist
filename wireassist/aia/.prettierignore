@@ -1,0 +1,16 @@
+node_modules
+dist
+build
+src-tauri/target
+**/target
+.vscode
+.idea
+*.lock
+.git
+pnpm-lock.yaml
+.gitignore
+coverage
+coverage/**
+public
+tmp
+**/*.json

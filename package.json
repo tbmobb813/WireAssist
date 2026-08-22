@@ -1,0 +1,48 @@
+{
+  "name": "wireassist",
+  "version": "0.1.0",
+  "description": "WireAssist monorepo — AI core, Linux assistant, agents, and Command Center",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r --filter '!synqagent' build",
+    "build:all": "pnpm -r build",
+    "build:core": "pnpm --filter @wireassist/core build",
+    "build:aia": "pnpm --filter synqagent build",
+    "build:admin": "pnpm --filter @wireassist/agent-admin build",
+    "build:trendpost-mcp": "pnpm --filter @wireassist/trendpost-mcp build",
+    "build:content": "pnpm --filter @wireassist/agent-content build",
+    "build:gtm": "pnpm --filter @wireassist/agent-gtm build",
+    "build:command-center": "pnpm --filter @wireassist/command-center build",
+    "dev": "pnpm -r --parallel dev",
+    "dev:core": "pnpm --filter @wireassist/core dev",
+    "dev:aia": "pnpm --filter synqagent dev",
+    "dev:command-center": "pnpm --filter @wireassist/command-center dev",
+    "test": "pnpm -r --filter '!synqagent' --if-present test",
+    "test:core": "pnpm --filter @wireassist/core test",
+    "test:aia": "pnpm --filter synqagent test",
+    "lint": "pnpm -r --if-present lint",
+    "build:libs": "pnpm -r --filter '!synqagent' --filter '!@wireassist/marketing' --filter '!@wireassist/command-center' build",
+    "typecheck": "pnpm build:libs && pnpm -r --filter '!synqagent' --if-present typecheck",
+    "format": "pnpm -r --if-present format",
+    "smoke": "bash dev/smoke_api.sh",
+    "e2e": "pnpm exec playwright test --config packages/command-center/playwright-e2e/playwright.config.ts",
+    "prepare": "husky || true",
+    "clean": "pnpm -r --if-present clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^22.19.0",
+    "eslint": "^8.57.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.9.3"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,json,css,md}": [
+      "prettier --write"
+    ]
+  },
+  "packageManager": "pnpm@11.3.0"
+}

@@ -1,0 +1,224 @@
+name: 🐛 Bug Report
+description: Report a bug to help us improve the WireAssist
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a bug! This helps us improve the WireAssist for everyone.
+
+        Please fill out the sections below to help us understand and reproduce the issue.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I've searched existing issues and haven't found a duplicate
+          required: true
+        - label: I've checked the [Troubleshooting Guide](https://github.com/tbmobb813/Linux-AI-Assistant---Project/blob/main/linux-ai-assistant/TROUBLESHOOTING.md)
+          required: true
+        - label: I'm using a supported Linux distribution
+          required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is
+      placeholder: "Describe the bug you encountered..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Clear steps to reproduce the behavior
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Scroll down to '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen
+      placeholder: "What should have happened instead?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: What actually happened
+      placeholder: "What actually happened?"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: installation-method
+    attributes:
+      label: Installation Method
+      description: How did you install the WireAssist?
+      options:
+        - AppImage
+        - DEB package (apt)
+        - RPM package (dnf/yum)
+        - Built from source
+        - Other (please specify in additional info)
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: Application Version
+      description: What version of the WireAssist are you using?
+      placeholder: "e.g., 0.1.0, v1.0.0-beta.1, or commit hash"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: linux-distro
+    attributes:
+      label: Linux Distribution
+      description: Which Linux distribution are you using?
+      options:
+        - Ubuntu
+        - Debian
+        - Fedora
+        - RHEL/CentOS
+        - Arch Linux
+        - openSUSE
+        - Pop!_OS
+        - Linux Mint
+        - Other (please specify in additional info)
+    validations:
+      required: true
+
+  - type: input
+    id: distro-version
+    attributes:
+      label: Distribution Version
+      description: What version of your distribution?
+      placeholder: "e.g., Ubuntu 22.04, Fedora 38"
+    validations:
+      required: true
+
+  - type: input
+    id: desktop-env
+    attributes:
+      label: Desktop Environment
+      description: Which desktop environment are you using?
+      placeholder: "e.g., GNOME, KDE Plasma, XFCE, i3"
+    validations:
+      required: false
+
+  - type: input
+    id: kernel-version
+    attributes:
+      label: Kernel Version
+      description: Output of `uname -r`
+      placeholder: "e.g., 6.5.0-14-generic"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: ai-provider
+    attributes:
+      label: AI Provider
+      description: Which AI provider were you using when the bug occurred?
+      options:
+        - OpenAI
+        - Anthropic (Claude)
+        - Google Gemini
+        - Ollama (Local)
+        - Multiple providers
+        - Not applicable
+    validations:
+      required: false
+
+  - type: input
+    id: ai-model
+    attributes:
+      label: AI Model
+      description: Which specific model were you using?
+      placeholder: "e.g., gpt-4, claude-sonnet-4.5, llama3"
+    validations:
+      required: false
+
+  - type: textarea
+    id: error-messages
+    attributes:
+      label: Error Messages
+      description: Any error messages you saw (copy and paste exact text)
+      placeholder: "Paste any error messages here..."
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Debug Logs
+      description: |
+        If possible, include debug logs. You can get these by:
+        1. Running: `RUST_LOG=debug pnpm -w -C linux-ai-assistant run tauri -- dev`
+        2. Or checking console output in the application
+        3. For CLI issues: `RUST_LOG=debug cargo run -- <command>`
+      placeholder: "Paste debug logs here..."
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: system-info
+    attributes:
+      label: System Information
+      description: |
+        Please provide system information. You can get this by running:
+        ```
+        uname -a
+        ldd --version
+        ```
+      placeholder: "Paste system information here..."
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots/Videos
+      description: If applicable, add screenshots or videos to help explain the problem
+      placeholder: "You can paste images directly here or provide links"
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other context about the problem here
+      placeholder: "Add any other context about the problem here..."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Impact Level
+      description: How does this bug affect you?
+      options:
+        - label: Critical - Prevents core functionality from working
+        - label: High - Causes data loss or corruption
+        - label: Medium - Performance issue or significant inconvenience
+        - label: Low - UI/UX issue or minor inconvenience

@@ -1,0 +1,199 @@
+name: Build and Release Packages
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: "Create GitHub Release"
+        required: true
+        default: "true"
+
+jobs:
+  build:
+    name: Build Packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./linux-ai-assistant/src-tauri"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libssl-dev \
+            libsqlite3-dev \
+            libdbus-1-dev \
+            libglib2.0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            librsvg2-dev
+
+      - name: Build packages
+        working-directory: ./linux-ai-assistant
+        run: |
+          npm install
+          npm run build
+          cd src-tauri
+          cargo tauri build
+          cd ..
+
+      - name: Prepare artifacts
+        working-directory: ./linux-ai-assistant
+        run: |
+          mkdir -p dist/packages
+
+          # Copy AppImage
+          if [ -d "src-tauri/target/release/bundle/appimage" ]; then
+            cp src-tauri/target/release/bundle/appimage/*.AppImage dist/packages/ 2>/dev/null || true
+          fi
+
+          # Copy DEB
+          if [ -d "src-tauri/target/release/bundle/deb" ]; then
+            cp src-tauri/target/release/bundle/deb/*.deb dist/packages/ 2>/dev/null || true
+          fi
+
+          # Copy RPM
+          if [ -d "src-tauri/target/release/bundle/rpm" ]; then
+            cp src-tauri/target/release/bundle/rpm/*.rpm dist/packages/ 2>/dev/null || true
+          fi
+
+          # Generate checksums
+          cd dist/packages
+          sha256sum * > SHA256SUMS
+          md5sum * > MD5SUMS
+          cd ../../..
+
+      - name: Display built artifacts
+        working-directory: ./linux-ai-assistant
+        run: |
+          echo "=== Built Artifacts ==="
+          ls -lh dist/packages/
+          echo ""
+          echo "=== File Sizes ==="
+          du -sh dist/packages/*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: linux-ai-assistant-packages
+          path: linux-ai-assistant/dist/packages/
+          retention-days: 90
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: linux-ai-assistant/dist/packages/*
+          draft: false
+          prerelease: false
+          body: |
+            ## Linux AI Assistant Release
+
+            ### Download Packages
+
+            - **AppImage**: Universal Linux package (recommended)
+            - **DEB**: For Debian/Ubuntu and derivatives
+            - **RPM**: For Fedora/RHEL and derivatives
+
+            ### Installation
+
+            **AppImage:**
+            ```bash
+            chmod +x linux-ai-assistant_*.AppImage
+            ./linux-ai-assistant_*.AppImage
+            ```
+
+            **Debian/Ubuntu:**
+            ```bash
+            sudo apt install ./linux-ai-assistant_*.deb
+            ```
+
+            **Fedora/RHEL:**
+            ```bash
+            sudo dnf install ./linux-ai-assistant-*.rpm
+            ```
+
+            ### Checksums
+
+            Verify package integrity:
+            ```bash
+            sha256sum -c SHA256SUMS
+            ```
+
+            ### What's New
+
+            See [CHANGELOG](CHANGELOG.md) for details.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: linux-ai-assistant/dist/packages/SHA256SUMS
+          asset_name: SHA256SUMS
+          asset_content_type: text/plain
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-packages:
+    name: Test Packages
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            test-cmd: "sudo apt install -y ./linux-ai-assistant_*.deb && linux-ai-assistant --version"
+          - os: ubuntu-20.04
+            test-cmd: "sudo apt install -y ./linux-ai-assistant_*.deb && linux-ai-assistant --version"
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v6
+        with:
+          name: linux-ai-assistant-packages
+          path: packages
+
+      - name: Test on ${{ matrix.os }}
+        run: |
+          cd packages
+          ${{ matrix.test-cmd }}
+
+  publish-notification:
+    name: Publish Notification
+    needs: [build, test-packages]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Create deployment status
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const tag = context.ref.replace('refs/tags/', '');
+            console.log(`✅ Release ${tag} published successfully!`);
+            console.log(`📦 Packages available at: https://github.com/${{ github.repository }}/releases/tag/${tag}`);

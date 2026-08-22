@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+body {
+  background:
+    radial-gradient(ellipse 1200px 600px at 20% -10%, rgba(79, 195, 247, 0.06), transparent),
+    radial-gradient(ellipse 900px 500px at 100% 0%, rgba(192, 132, 252, 0.05), transparent), #080810;
+  /* Defensive: a flex/grid child without min-width:0 can force the whole
+     page wider than the viewport on mobile (see DashboardActivityTile) —
+     this keeps that class of bug from making the page itself scroll
+     sideways, even if a future row hits the same issue. */
+  overflow-x: hidden;
+}

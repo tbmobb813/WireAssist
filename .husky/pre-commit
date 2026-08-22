@@ -1,0 +1,8 @@
+#!/bin/sh
+
+# Ensure we use Node 22+ for lint-staged (requires top-level await support)
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+# Run lint-staged on staged files. Requires project devDeps: husky + lint-staged + prettier
+npx --no-install lint-staged
