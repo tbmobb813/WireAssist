@@ -44,5 +44,16 @@
       "prettier --write"
     ]
   },
+  "pnpm": {
+    "overrides": {
+      "@typescript-eslint/eslint-plugin": "^8.67.0",
+      "@typescript-eslint/parser": "^8.67.0",
+      "esbuild": "^0.28.2",
+      "eslint": "^8.57.1",
+      "typescript": "^5.9.3",
+      "vitest": "^4.1.9",
+      "@vitest/coverage-v8": "^4.1.9"
+    }
+  },
   "packageManager": "pnpm@11.3.0"
 }
