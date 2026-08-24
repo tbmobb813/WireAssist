@@ -1,5 +1,5 @@
 import { BudgetTracker, BudgetExceededError } from '../budget';
-import { mkdtempSync, existsSync } from 'fs';
+import { mkdtempSync, existsSync, readFileSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -34,6 +34,57 @@ describe('BudgetTracker', () => {
   it('allows calls while under budget', () => {
     const t = new BudgetTracker({ filePath: file(), monthlyBudget: 30 });
     expect(() => t.assertWithinBudget()).not.toThrow();
+  });
+
+  it('throws when spend-so-far is under the cap but adding a worst-case estimate would exceed it', () => {
+    // The gap this closes: without an estimate, this call would pass the
+    // check (spent $29 < $30 cap) and only get caught *after* it actually
+    // cost $5, overshooting to $34.
+    const t = new BudgetTracker({ filePath: file(), monthlyBudget: 30 });
+    t.record('strategy', 'claude-sonnet-5', 1_000_000 * (29 / 3), 0); // sonnet-5 input is $3/1M -> ~$29
+    expect(() => t.assertWithinBudget(5)).toThrow(BudgetExceededError);
+  });
+
+  it('does not throw when spend + estimate stays under the cap', () => {
+    const t = new BudgetTracker({ filePath: file(), monthlyBudget: 30 });
+    t.record('strategy', 'claude-sonnet-5', 1_000_000, 0); // $3
+    expect(() => t.assertWithinBudget(5)).not.toThrow();
+  });
+
+  it('prunes entries older than the start of last month on every record()', () => {
+    const path = file();
+    const t = new BudgetTracker({ filePath: path, monthlyBudget: 30 });
+    const now = new Date();
+    const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 15).toISOString();
+    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15).toISOString();
+    writeFileSync(
+      path,
+      JSON.stringify([
+        {
+          ts: twoMonthsAgo,
+          agentRole: 'admin',
+          model: 'claude-sonnet-5',
+          inputTokens: 1,
+          outputTokens: 1,
+          cost: 0.01,
+        },
+        {
+          ts: lastMonth,
+          agentRole: 'admin',
+          model: 'claude-sonnet-5',
+          inputTokens: 1,
+          outputTokens: 1,
+          cost: 0.01,
+        },
+      ])
+    );
+
+    t.record('strategy', 'claude-sonnet-5', 1000, 1000); // triggers the prune
+
+    const stored = JSON.parse(readFileSync(path, 'utf-8'));
+    expect(stored.some((e: { ts: string }) => e.ts === twoMonthsAgo)).toBe(false);
+    expect(stored.some((e: { ts: string }) => e.ts === lastMonth)).toBe(true);
+    expect(stored).toHaveLength(2); // last-month entry kept + the new one just recorded
   });
 
   describe('default file path', () => {

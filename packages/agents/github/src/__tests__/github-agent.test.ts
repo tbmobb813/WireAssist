@@ -264,6 +264,27 @@ describe('GitHubAgent.executeToolCall', () => {
     expect(deps.githubClient.callTool).not.toHaveBeenCalled();
   });
 
+  it('rejects a path that starts with an allowed prefix but traverses out of it via ".."', async () => {
+    // A plain `.startsWith(prefix)` check would pass this — the raw string
+    // literally starts with an allowed prefix — even though it resolves
+    // outside every one of them once normalized.
+    const deps = makeDeps();
+    const agent = new GitHubAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c7b',
+      name: 'create_or_update_file',
+      input: {
+        path: 'packages/agents/admin/src/skills/proposed/../../../../../../malicious.ts',
+        content: 'x',
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(deps.approval.request).not.toHaveBeenCalled();
+    expect(deps.githubClient.callTool).not.toHaveBeenCalled();
+  });
+
   it('allows create_or_update_file under the proposed-skill staging directory, still gated by approval', async () => {
     const deps = makeDeps();
     const agent = new GitHubAgent(deps);

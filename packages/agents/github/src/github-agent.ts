@@ -7,6 +7,7 @@ import {
   type EventBus,
   type ProviderToolCall,
 } from '@wireassist/core';
+import { posix } from 'path';
 import { BaseAgent, buildDelegateToolSchema, DELEGATE_TOOL_NAME } from '@wireassist/agent-admin';
 import { GITHUB_SKILLS } from './skills';
 import { GITHUB_TOOL_ALLOWLIST, READ_ONLY_GITHUB_TOOLS } from './tool-policy';
@@ -26,6 +27,22 @@ const PROPOSED_SKILL_PATH_PREFIXES = [
   'packages/agents/ops/src/skills/proposed/',
   'packages/agents/github/src/skills/proposed/',
 ];
+
+// A plain `.startsWith(prefix)` check on the raw path string passes for
+// something like "packages/agents/ops/src/skills/proposed/../../../../../malicious.ts" —
+// it literally starts with an allowed prefix even though it resolves
+// outside every one of them. GitHub's Contents API operates on git tree
+// paths, not real filesystem paths, so it's unclear whether `..` segments
+// even have traversal semantics there — but this check should hold
+// regardless of that, defensively. Normalizes first, then requires BOTH
+// that the normalized path still starts with an allowed prefix AND that it
+// has no remaining `..` segment or leading slash (normalize() alone can
+// still leave a leading "../" if the path climbs above where it started).
+function isAllowedProposedSkillPath(rawPath: unknown): boolean {
+  const normalized = posix.normalize(String(rawPath ?? ''));
+  if (normalized.startsWith('..') || normalized.startsWith('/')) return false;
+  return PROPOSED_SKILL_PATH_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
 
 const GITHUB_SYSTEM_PROMPT = `You are the GitHub Dev Agent for WireAssist.
 You give JNix read access to his GitHub repos, issues, and pull requests, plus a narrow
@@ -179,12 +196,7 @@ export class GitHubAgent extends BaseAgent {
       // repo, regardless of what the model asks for. A file sitting there
       // is inert (never imported, never registered) until a human moves it
       // out as a separate, deliberate step.
-      if (
-        call.name === 'create_or_update_file' &&
-        !PROPOSED_SKILL_PATH_PREFIXES.some((prefix) =>
-          String(call.input.path ?? '').startsWith(prefix)
-        )
-      ) {
+      if (call.name === 'create_or_update_file' && !isAllowedProposedSkillPath(call.input.path)) {
         return {
           result: `create_or_update_file is only allowed under one of: ${PROPOSED_SKILL_PATH_PREFIXES.join(', ')}`,
           isError: true,

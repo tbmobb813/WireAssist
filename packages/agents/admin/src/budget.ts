@@ -82,8 +82,18 @@ export class BudgetTracker {
       outputTokens,
       cost,
     });
+    // Every record() call re-reads and rewrites this file in full, forever
+    // — with no pruning, its size (and the cost of every future call) grows
+    // without bound across the life of a deployment. spentThisMonth()/
+    // status() only ever look at the current month, so anything older than
+    // the *start of last month* (one month of grace past the current month,
+    // so a read right at a month boundary never loses data those methods
+    // might still want) is safe to drop here.
+    const now = new Date();
+    const retentionStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const pruned = entries.filter((e) => new Date(e.ts) >= retentionStart);
     mkdirSync(dirname(this.filePath), { recursive: true });
-    writeFileSync(this.filePath, JSON.stringify(entries, null, 2));
+    writeFileSync(this.filePath, JSON.stringify(pruned, null, 2));
     return cost;
   }
 
@@ -97,10 +107,20 @@ export class BudgetTracker {
     return this.monthEntries().reduce((sum, e) => sum + e.cost, 0);
   }
 
-  /** Throws BudgetExceededError when month-to-date spend has reached the cap. */
-  assertWithinBudget(): void {
+  /**
+   * Throws BudgetExceededError when month-to-date spend — plus, optionally,
+   * a worst-case estimate for the call about to be made — would reach the
+   * cap. This check and record()'s post-call write are still not atomic
+   * (no cross-process lock), but passing the imminent call's worst-case
+   * cost here closes the real gap: without it, spend is only checked
+   * *before* a call and only recorded *after* it completes, so a call made
+   * right at the edge of the cap could push spend past it before the next
+   * check ever runs. Defaults to 0 (today's exact behavior) for any caller
+   * that doesn't have an estimate handy.
+   */
+  assertWithinBudget(estimatedNextCallCost = 0): void {
     const spent = this.spentThisMonth();
-    if (spent >= this.monthlyBudget) {
+    if (spent + estimatedNextCallCost >= this.monthlyBudget) {
       throw new BudgetExceededError(spent, this.monthlyBudget);
     }
   }

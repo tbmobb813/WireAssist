@@ -1,4 +1,4 @@
-import { budgetTracker } from './budget';
+import { budgetTracker, BudgetTracker } from './budget';
 import {
   type AgentConfig,
   type AgentRole,
@@ -228,17 +228,28 @@ export abstract class BaseAgent {
     extraContext?: string,
     maxTokensOverride?: number
   ): Promise<string> {
-    budgetTracker.assertWithinBudget();
-
     const model = this.resolveModel();
+    // Per-call override for stages whose output genuinely needs more room
+    // than the agent's default (e.g. NixOps re-emitting a full article
+    // as one JSON blob) — the default stays put for every other call.
+    const maxTokens = maxTokensOverride ?? this.config.maxTokens ?? 2048;
+    // Rough input-token estimate (chars/4 is a standard approximation, not
+    // a real tokenizer) plus this call's own output ceiling — checking
+    // against the worst case this call could cost, not just current spend,
+    // closes the overshoot gap between "checked before" and "recorded
+    // after" (see assertWithinBudget's own comment).
+    const estimatedNextCallCost = BudgetTracker.estimateCost(
+      model,
+      Math.ceil((userMessage.length + (extraContext?.length ?? 0)) / 4),
+      maxTokens
+    );
+    budgetTracker.assertWithinBudget(estimatedNextCallCost);
+
     const response = await this.completeWithFallback({
       prompt: userMessage,
       systemPrompt: this.buildSystemPrompt(extraContext),
       model,
-      // Per-call override for stages whose output genuinely needs more room
-      // than the agent's default (e.g. NixOps re-emitting a full article
-      // as one JSON blob) — the default stays put for every other call.
-      maxTokens: maxTokensOverride ?? this.config.maxTokens ?? 2048,
+      maxTokens,
     });
 
     // response.model, not the pre-resolved `model` — completeWithFallback()
@@ -316,15 +327,29 @@ export abstract class BaseAgent {
       },
     ];
 
+    const maxTokens = this.config.maxTokens ?? 2048;
     for (let i = 0; i < maxIterations; i++) {
-      budgetTracker.assertWithinBudget();
+      // Same worst-case-estimate reasoning as think() — approximate this
+      // iteration's prompt size (system + accumulated messages, which grow
+      // each iteration as tool results are appended) rather than just
+      // checking spend-so-far against the cap.
+      const messagesLength = messages.reduce(
+        (sum, m) => sum + (typeof m.content === 'string' ? m.content.length : 0),
+        0
+      );
+      const estimatedNextCallCost = BudgetTracker.estimateCost(
+        model,
+        Math.ceil((system.length + messagesLength) / 4),
+        maxTokens
+      );
+      budgetTracker.assertWithinBudget(estimatedNextCallCost);
       const response = await this.completeWithFallback({
         prompt: userMessage,
         messages,
         tools,
         systemPrompt: system,
         model,
-        maxTokens: this.config.maxTokens ?? 2048,
+        maxTokens,
       });
       // response.model, not the pre-resolved `model` — completeWithFallback()
       // may have served this via OpenRouter under a different model string.

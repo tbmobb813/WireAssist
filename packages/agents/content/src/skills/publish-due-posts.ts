@@ -35,9 +35,27 @@ export const publishDuePostsSkill: Skill<PublishDuePostsInput, void> = {
     const failed: ScheduledPost[] = [];
 
     for (const post of due) {
-      const result = (await agent.useTool('content_publish_post', {
-        postId: post.id,
-      })) as ScheduledPost;
+      let result: ScheduledPost;
+      try {
+        result = (await agent.useTool('content_publish_post', {
+          postId: post.id,
+        })) as ScheduledPost;
+      } catch (err) {
+        // content_publish_post only swallows a *publisher* failure into the
+        // post's own errorMessage (see its own comment) — it still throws
+        // for a genuinely missing post (e.g. deleted between the listing
+        // above and this loop reaching it, a real race in a multi-post
+        // sweep with real network time between iterations). An uncaught
+        // throw here used to abort the whole loop mid-sweep: no completion
+        // event fired at all, silently losing the outcome for every post
+        // already published earlier in that same run. Record it as a
+        // failure for this post specifically and keep going instead.
+        result = {
+          ...post,
+          status: 'failed',
+          errorMessage: err instanceof Error ? err.message : String(err),
+        };
+      }
       (result.status === 'published' ? published : failed).push(result);
 
       // The task that actually publishes a post (this cron sweep) is never

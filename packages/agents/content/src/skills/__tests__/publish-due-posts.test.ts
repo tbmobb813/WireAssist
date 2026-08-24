@@ -171,4 +171,41 @@ describe('publishDuePostsSkill', () => {
       })
     );
   });
+
+  it('does not abort the sweep when content_publish_post throws instead of returning a failed status', async () => {
+    // content_publish_post itself only swallows a *publisher* error into
+    // errorMessage — it still throws for a genuinely missing post (e.g.
+    // deleted between the listing call and this loop reaching it). Before
+    // the fix, an uncaught throw here aborted the whole loop: no
+    // agent:publish_due_posts_complete event at all, silently losing the
+    // outcome for post-a (already published earlier in the same sweep).
+    const postA = post({ id: 'post-a', platform: 'instagram' });
+    const postB = post({ id: 'post-b', platform: 'twitter' });
+    const publishedA = post({ id: 'post-a', platform: 'instagram', status: 'published' });
+
+    const useTool = jest
+      .fn()
+      .mockResolvedValueOnce([postA, postB])
+      .mockResolvedValueOnce(publishedA)
+      .mockRejectedValueOnce(new Error('No post found with id post-b'));
+    const agent = makeAgentHandle({ useTool });
+
+    await expect(
+      publishDuePostsSkill.execute({ agent, task: makeTask(), input: {} })
+    ).resolves.not.toThrow();
+
+    expect(agent.emit).toHaveBeenCalledWith(
+      'agent:publish_due_posts_complete',
+      expect.objectContaining({
+        published: [publishedA],
+        failed: [
+          expect.objectContaining({
+            id: 'post-b',
+            status: 'failed',
+            errorMessage: 'No post found with id post-b',
+          }),
+        ],
+      })
+    );
+  });
 });

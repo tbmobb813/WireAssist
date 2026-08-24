@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { budgetTracker } from '@wireassist/agent-admin';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { extractJson } from './skills/extract-json';
 
 const PREFILL_MODEL = 'claude-haiku-4-5';
 const MAX_DOC_CHARS = 8000;
@@ -28,11 +29,6 @@ function findDoc(repoPath: string): { path: string; content: string } | null {
     }
   }
   return null;
-}
-
-function extractJson<T>(raw: string): T {
-  const clean = raw.replace(/```json|```/g, '').trim();
-  return JSON.parse(clean) as T;
 }
 
 /**
