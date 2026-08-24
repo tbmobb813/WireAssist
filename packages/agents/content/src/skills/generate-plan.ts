@@ -39,9 +39,12 @@ export const generatePlanSkill: Skill<GeneratePlanInput, void> = {
       totalGenerated: result.totalGenerated,
     });
 
+    // Same wording caution as generate-post.ts: this only saves the plan's
+    // ideas to memory, it doesn't schedule any of them — scheduling is a
+    // separate, later step per idea.
     const approved = await agent.proposeAction(
       task,
-      `Approve content plan: ${result.totalGenerated} posts across ${platforms.join(', ')}`,
+      `Save these ${result.totalGenerated} content ideas across ${platforms.join(', ')}? (still need to be scheduled individually)`,
       { ideas: result.ideas }
     );
 

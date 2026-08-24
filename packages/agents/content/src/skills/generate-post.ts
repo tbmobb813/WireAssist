@@ -42,9 +42,15 @@ export const generatePostSkill: Skill<GeneratePostInput, void> = {
       platform,
     })) as { score: number; estimatedEngagement: string; suggestion: string };
 
+    // Wording matters here: approving this only saves the draft to memory —
+    // it does NOT schedule or post anything (that's schedule_post_skill, a
+    // separate approval with its own scheduledAt). Earlier phrasing ("Post
+    // to {platform}: ...") implied this approval alone would publish, which
+    // it never did — approved drafts just sat in memory with no scheduled
+    // slot and no visible next step.
     const approved = await agent.proposeAction(
       task,
-      `Post to ${platform}: "${result.content.slice(0, 80)}..."`,
+      `Save this ${platform} draft? (still needs to be scheduled separately): "${result.content.slice(0, 80)}..."`,
       { content: result.content, platform, analysis }
     );
 

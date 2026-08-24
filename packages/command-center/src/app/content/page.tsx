@@ -3,37 +3,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAgentEvents } from '@/hooks/useAgentEvents';
 import { consumeContentHandoff } from '@/lib/content-handoff';
 import { ObjectivePicker, useActiveObjectives } from '../objective-picker';
-
-const PLATFORMS = ['twitter', 'linkedin', 'instagram', 'threads'] as const;
-type Platform = (typeof PLATFORMS)[number];
-
-interface ScheduledPost {
-  id: string;
-  content: string;
-  platform: Platform;
-  scheduledAt: string;
-  status: string;
-  tags: string[];
-  campaignId?: string;
-}
-
-interface ContentIdea {
-  id: string;
-  topic: string;
-  angle: string;
-  platform: Platform;
-  status: string;
-  createdAt: string;
-  scheduledFor?: string;
-  campaignId?: string;
-}
-
-interface Campaign {
-  id: string;
-  name: string;
-  source: 'manual' | 'gtm';
-  createdAt: string;
-}
+import { PLATFORMS, platformColor } from './types';
+import type { Platform, ScheduledPost, ContentIdea, Campaign } from './types';
+import { CalendarGrid, type CalendarGridMode } from './calendar-grid';
 
 interface ContentApproval {
   id: string;
@@ -50,18 +22,12 @@ interface ContentApproval {
   createdAt: string;
 }
 
-const platformColor: Record<string, string> = {
-  twitter: '#1da1f2',
-  linkedin: '#0077b5',
-  instagram: '#e1306c',
-  threads: '#94a3b8',
-};
-
 export default function ContentPage() {
   const [posts, setPosts] = useState<ScheduledPost[]>([]);
   const [ideas, setIdeas] = useState<ContentIdea[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | CalendarGridMode>('list');
   const [pending, setPending] = useState<ContentApproval[]>([]);
   const [acting, setActing] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -601,8 +567,32 @@ export default function ContentPage() {
           )}
 
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-xs tracking-widest text-gray-500">CONTENT CALENDAR</div>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <div className="flex items-center gap-4">
+                <div className="text-xs tracking-widest text-gray-500">CONTENT CALENDAR</div>
+                <div className="flex gap-1">
+                  {(['list', 'week', '2week', 'month'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setViewMode(m)}
+                      className="text-xs px-2.5 py-1 rounded transition-colors"
+                      style={{
+                        background: viewMode === m ? '#4fc3f720' : 'transparent',
+                        border: `1px solid ${viewMode === m ? '#4fc3f740' : '#1e2040'}`,
+                        color: viewMode === m ? '#4fc3f7' : '#475569',
+                      }}
+                    >
+                      {m === 'list'
+                        ? 'List'
+                        : m === 'week'
+                          ? 'Week'
+                          : m === '2week'
+                            ? '2 Weeks'
+                            : 'Month'}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {campaigns.length > 0 && (
                 <div className="flex gap-2 flex-wrap">
                   {campaigns.map((c) => (
@@ -623,7 +613,15 @@ export default function ContentPage() {
               )}
             </div>
 
-            {Object.keys(itemsByDate).length === 0 ? (
+            {viewMode !== 'list' ? (
+              <CalendarGrid
+                mode={viewMode}
+                items={calendarItems}
+                onMarkPublished={markPublished}
+                actingId={acting}
+                campaignName={campaignName}
+              />
+            ) : Object.keys(itemsByDate).length === 0 ? (
               <div
                 className="rounded-lg border p-12 text-center"
                 style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
