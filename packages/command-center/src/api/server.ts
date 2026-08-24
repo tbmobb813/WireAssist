@@ -45,6 +45,7 @@ import {
   registerWordPressTools,
   registerImageTools,
   registerYouTubeTools,
+  listWorkflowSummaries,
 } from '@wireassist/agent-ops';
 import {
   GtmAgent,
@@ -1270,7 +1271,8 @@ app.post('/api/tasks/content-freeform', async (c) => {
 app.post('/api/tasks/research-topic', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
-  const { query, depth, contentDraftPlatform, contentDraftTone, objectiveId } = await c.req.json();
+  const { query, depth, contentDraftPlatform, contentDraftTone, opsHandoffWorkflow, objectiveId } =
+    await c.req.json();
   if (!query || typeof query !== 'string') return c.json({ error: 'query required' }, 400);
   const offerContentDraft = isValidPlatform(contentDraftPlatform)
     ? {
@@ -1278,11 +1280,21 @@ app.post('/api/tasks/research-topic', async (c) => {
         tone: typeof contentDraftTone === 'string' ? contentDraftTone : undefined,
       }
     : undefined;
+  // Mirrors offerContentDraft above, pointed at NixOps instead — the skill
+  // (research-topic.ts) has always supported this second handoff, but this
+  // route never read or passed it through, so it was unreachable from the
+  // actual API/dashboard despite being documented in the ops workflow files.
+  const isValidWorkflow = (name: unknown): name is string =>
+    typeof name === 'string' && listWorkflowSummaries().some((w) => w.name === name);
+  const offerOpsHandoff = isValidWorkflow(opsHandoffWorkflow)
+    ? { workflow: opsHandoffWorkflow }
+    : undefined;
   const task = ResearchTasks.researchTopic(
     query,
     depth === 'deep' ? 'deep' : 'quick',
     offerContentDraft,
-    typeof objectiveId === 'string' ? objectiveId : undefined
+    typeof objectiveId === 'string' ? objectiveId : undefined,
+    offerOpsHandoff
   );
   queueResearchTask(task);
   return c.json({ taskId: task.id, status: 'queued' });

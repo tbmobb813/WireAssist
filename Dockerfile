@@ -18,7 +18,6 @@ WORKDIR /app
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc ./
 COPY wireassist/core/package.json wireassist/core/package.json
-COPY wireassist/aia/package.json wireassist/aia/package.json
 COPY packages/agents/admin/package.json packages/agents/admin/package.json
 COPY packages/agents/content/package.json packages/agents/content/package.json
 COPY packages/agents/research/package.json packages/agents/research/package.json
