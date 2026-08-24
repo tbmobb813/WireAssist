@@ -17,7 +17,9 @@ allowBuilds:
   esbuild: true
   protobufjs: true
   sharp: true
+  unrs-resolver: true
 
 onlyBuiltDependencies:
   - better-sqlite3
   - '@swc/core'
+  - unrs-resolver
