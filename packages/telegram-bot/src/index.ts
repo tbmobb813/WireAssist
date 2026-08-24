@@ -275,7 +275,12 @@ async function handleCommand(text: string): Promise<string> {
 
     case '/reauth': {
       const r = (await api('/api/admin/gmail/reauth-url')) as { url: string };
-      return `🔐 Tap to re-authorize Gmail/Calendar:\n${r.url}\n\n(Must be connected to Tailscale.)`;
+      // Legacy Telegram Markdown treats bare underscores as italic delimiters
+      // — a raw Google OAuth URL (response_type, access_type, client_id, ...)
+      // pasted as plain text gets its underscores eaten on render, breaking
+      // required query params ("required parameter is missing: response_type").
+      // Markdown link syntax doesn't re-parse the URL portion, so it survives intact.
+      return `🔐 [Tap to re-authorize Gmail/Calendar](${r.url})\n\n(Must be connected to Tailscale.)`;
     }
 
     case '/ask':
@@ -439,7 +444,9 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
         : days !== null
           ? `expires in ~${days.toFixed(1)} day(s)`
           : 'is expiring soon';
-      await send(`🔐 Gmail/Calendar authorization ${when}. Tap to fix:\n${String(p.url ?? '')}`);
+      // Same Markdown-link-not-raw-URL fix as /reauth above — a bare OAuth
+      // URL loses characters to Telegram's underscore-as-italic parsing.
+      await send(`🔐 Gmail/Calendar authorization ${when}. [Tap to fix](${String(p.url ?? '')})`);
       break;
     }
     case 'task_failed':
