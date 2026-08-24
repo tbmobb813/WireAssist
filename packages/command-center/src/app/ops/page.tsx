@@ -31,14 +31,19 @@ function parseWorkflowTodos(markdown: string | null): WorkflowTodo[] {
 }
 
 // Shop-level constants (variant naming, cost sheets, style guides) marked
-// `- Label: _SETTING: instruction_` — set once via the settings panel below,
-// not re-typed on every run. See workflow-settings.ts for how a saved value
-// gets synced back into the workflow file itself, which is what makes the
-// placeholder disappear from this parse on the next load.
+// `- Label: _SETTING: instruction_` or `_SETTING_PERIODIC: instruction_` —
+// set once via the settings panel below, not re-typed on every run. See
+// workflow-settings.ts for how a saved value gets synced back into the
+// workflow file itself, which is what makes the placeholder disappear from
+// this parse on the next load. Must match both tags (see
+// getWorkflowSettingLabels in workflow-settings.ts, the backend's version of
+// this same parse) — a plain `_SETTING:` regex here previously left every
+// `_SETTING_PERIODIC:` field (e.g. Printify costs, hashtag banks) unable to
+// render an input box at all, silently blocking runs that depended on it.
 function parseWorkflowSettings(markdown: string | null): WorkflowTodo[] {
   if (!markdown) return [];
   const settings: WorkflowTodo[] = [];
-  const re = /^-\s*(.+?):\s*_SETTING:\s*(.+?)_\s*$/gm;
+  const re = /^-\s*(.+?):\s*_SETTING(?:_PERIODIC)?:\s*(.+?)_\s*$/gm;
   let match: RegExpExecArray | null;
   while ((match = re.exec(markdown)) !== null) {
     settings.push({ label: match[1].trim(), instruction: match[2].trim() });
