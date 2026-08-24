@@ -1300,6 +1300,24 @@ app.post('/api/tasks/research-topic', async (c) => {
   return c.json({ taskId: task.id, status: 'queued' });
 });
 
+app.post('/api/tasks/market-gap-discovery', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const { marketFocus, opsHandoffWorkflow, objectiveId } = await c.req.json();
+  const isValidWorkflow = (name: unknown): name is string =>
+    typeof name === 'string' && listWorkflowSummaries().some((w) => w.name === name);
+  const offerOpsHandoff = isValidWorkflow(opsHandoffWorkflow)
+    ? { workflow: opsHandoffWorkflow }
+    : undefined;
+  const task = ResearchTasks.marketGapDiscovery(
+    typeof marketFocus === 'string' ? marketFocus : undefined,
+    offerOpsHandoff,
+    typeof objectiveId === 'string' ? objectiveId : undefined
+  );
+  queueResearchTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
 app.post('/api/tasks/synthesize', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);

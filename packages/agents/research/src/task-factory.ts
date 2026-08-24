@@ -69,6 +69,24 @@ export const ResearchTasks = {
     };
   },
 
+  marketGapDiscovery(
+    marketFocus?: string,
+    offerOpsHandoff?: { workflow: string },
+    objectiveId?: string
+  ): AgentTask {
+    return {
+      id: randomUUID(),
+      agentRole: 'research',
+      description: `Market-gap discovery: ${marketFocus ?? '(default focus)'}`,
+      status: 'queued',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      input: { type: 'market_gap_discovery', marketFocus, offerOpsHandoff },
+      approvalRequired: true,
+      objectiveId,
+    };
+  },
+
   freeform(
     prompt: string,
     history?: ProviderMessage[],
