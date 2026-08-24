@@ -167,12 +167,26 @@ export const runWorkflowSkill: Skill<RunWorkflowInput, void> = {
       transcript()
     );
 
+    // Independent-critic Assess: pass only the produced artifacts (Take
+    // Action's output), not the full transcript. think() is stateless per
+    // call — nothing here has any memory of having written this work, so
+    // withholding Diagnose/Assemble's reasoning trail is what actually
+    // makes this a cold review rather than the same reasoning re-confirming
+    // itself. Grading your own homework with full memory of writing it
+    // catches fewer real errors than a reviewer with no attachment to it —
+    // same reason code review works better done by someone other than the
+    // code's author.
+    const takeActionOutput = stages.find((s) => s.stage === 'take_action')?.content ?? '';
     const assessment = await stage(
       'assess',
-      'Grade the produced artifacts against every Definition of Done checkbox. Fix any gaps by ' +
+      'You did not produce this work. Review the produced artifacts below cold, as an ' +
+        'independent reviewer would — you have no visibility into how or why the assemble ' +
+        'plan or diagnose findings led to these choices, only the finished artifacts and the ' +
+        "workflow file's own Definition of Done. Grade every checkbox strictly against what's " +
+        'actually in the artifacts, not what you might assume was intended. Fix any gaps by ' +
         'restating the corrected artifact in full. Then give a run report: what was done, what was ' +
         'verified, unresolved items, and exactly one suggested improvement to the workflow file.',
-      transcript()
+      `### TAKE_ACTION\n${takeActionOutput}`
     );
 
     // Trust stage 2 (default): nothing is delivered until JNix approves.

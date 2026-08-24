@@ -139,3 +139,40 @@ describe('runWorkflowSkill — settings merge and Diagnose enforcement', () => {
     );
   });
 });
+
+describe('runWorkflowSkill — independent Assess critic', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'wireassist-ops-run-workflow-'));
+    process.env.WIREASSIST_OPS_SETTINGS_FILE = join(tempDir, 'ops-workflow-settings.json');
+    process.env.WIREASSIST_OPS_TRUST_FILE = join(tempDir, 'ops-trust.json');
+    (loadWorkflow as jest.Mock).mockReturnValue(RAW_WORKFLOW);
+  });
+
+  afterEach(() => {
+    delete process.env.WIREASSIST_OPS_SETTINGS_FILE;
+    delete process.env.WIREASSIST_OPS_TRUST_FILE;
+    rmSync(tempDir, { recursive: true, force: true });
+    jest.clearAllMocks();
+  });
+
+  it("gives Assess only Take Action's output, not Diagnose/Assemble's reasoning", async () => {
+    const think = jest
+      .fn()
+      .mockResolvedValueOnce('VERDICT: PROCEED — diagnose-only-reasoning-marker')
+      .mockResolvedValueOnce('assemble-only-plan-marker')
+      .mockResolvedValueOnce('take-action-artifact-marker')
+      .mockResolvedValueOnce('assess report');
+    const agent = makeAgentHandle({ think });
+
+    await runWorkflowSkill.execute({ agent, task: makeTask(), input: makeTask().input as any });
+
+    expect(think).toHaveBeenCalledTimes(4);
+    const assessPrompt = think.mock.calls[3][0] as string;
+    expect(assessPrompt).toContain('take-action-artifact-marker');
+    expect(assessPrompt).not.toContain('diagnose-only-reasoning-marker');
+    expect(assessPrompt).not.toContain('assemble-only-plan-marker');
+    expect(assessPrompt).toContain('You did not produce this work');
+  });
+});
