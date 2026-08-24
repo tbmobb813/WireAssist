@@ -10,8 +10,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "lint": "eslint \"src/**/*.ts\" --ignore-pattern \"**/*.d.ts\"",
-    "lint:fix": "eslint \"src/**/*.ts\" --ignore-pattern \"**/*.d.ts\" --fix",
+    "lint": "eslint \"src/**/*.ts\"",
+    "lint:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "clean": "rm -rf dist coverage",
@@ -44,7 +44,9 @@
     "jest": "^30.4.2",
     "@swc/core": "^1.15.47",
     "@swc/jest": "^0.2.39",
-    "eslint": "^8.57.1",
+    "eslint": "^10.8.1",
+    "@eslint/js": "^10.0.1",
+    "globals": "^17.11.0",
     "prettier": "^3.3.3"
   },
   "repository": {
