@@ -11,7 +11,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.27.0",
+    "@anthropic-ai/sdk": "^0.119.0",
     "@wireassist/agent-admin": "workspace:*",
     "@wireassist/agent-content": "workspace:*",
     "@wireassist/agent-ops": "workspace:*",
