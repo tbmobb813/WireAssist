@@ -21,13 +21,13 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4.37.6
+        uses: github/codeql-action/init@v4.37.8
         with:
           # JS/TS only — add rust if the desktop app is revived
           languages: javascript, typescript
 
       - name: Build (autodetect)
-        uses: github/codeql-action/autobuild@v4.37.6
+        uses: github/codeql-action/autobuild@v4.37.8
 
       - name: Run CodeQL analysis
-        uses: github/codeql-action/analyze@v4.37.6
+        uses: github/codeql-action/analyze@v4.37.8
