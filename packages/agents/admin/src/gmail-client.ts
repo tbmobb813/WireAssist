@@ -136,6 +136,31 @@ export class GmailClient {
       logger.info('\n🔐 Opening browser for Gmail authorization...');
       logger.info('If it does not open automatically, visit:\n', authUrl);
 
+      // No timeout here used to mean a headless/server environment (no
+      // browser to receive the redirect, e.g. a Docker container with a
+      // stale token whose scopes no longer match) hung this promise
+      // forever — never resolving, never rejecting. The caller
+      // (server.ts's startup sequence) awaits this specifically so a
+      // Gmail failure degrades gracefully instead of blocking the rest
+      // of the app; a hung promise defeats that try/catch entirely,
+      // since agentReady never got set either way. 90s is enough for a
+      // human at a real terminal to click through; short enough that a
+      // headless deploy fails fast into the graceful-degradation path
+      // instead of hanging indefinitely. The web-based counterpart
+      // (generateWebAuthUrl/completeWebAuth) is the actual intended path
+      // for re-authorizing a headless deployment — this timeout is what
+      // lets the app boot far enough to reach that dashboard flow at all.
+      const timeout = setTimeout(() => {
+        server.close();
+        reject(
+          new Error(
+            'Gmail OAuth callback timed out after 90s — no browser reachable, or the flow ' +
+              "was never completed. In a headless/server deployment, use the dashboard's " +
+              'web-based re-authorization flow instead (generateWebAuthUrl/completeWebAuth).'
+          )
+        );
+      }, 90_000);
+
       // Start a local server to catch the OAuth callback
       const server = http.createServer(async (req, res) => {
         if (!req.url?.startsWith(this.redirectUri.pathname)) return;
@@ -153,6 +178,7 @@ export class GmailClient {
             : '<h1>✅ WireAssist authorized. You can close this tab.</h1>'
         );
         server.close();
+        clearTimeout(timeout);
 
         if (error || !code) {
           reject(new Error(error ?? 'No OAuth code received'));
@@ -173,6 +199,7 @@ export class GmailClient {
           : 80;
 
       server.on('error', (error) => {
+        clearTimeout(timeout);
         if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
           reject(
             new Error(
