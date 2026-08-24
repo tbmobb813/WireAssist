@@ -30,6 +30,7 @@ An article package is DONE when all of these exist in `output/article-package/<s
 - Site/brand this article is for (affects internal link targets and voice — e.g. TechTrendWire vs. another property): _SETTING: JNix confirms the default property_
 - Byline / author attribution to use: _SETTING: JNix confirms current byline_
 - Target community/subreddit(s) for the crosspost summary, when social distribution applies: _SETTING: JNix pastes current go-to communities_
+- **Real keyword/search-volume grounding for the keyword path (recommended, not required to proceed):** NixOps has no web-search tool of its own, so `keyword-research.md` is otherwise the model's best guess, not verified search data — the escalation rule below already requires flagging it as such. For grounded numbers, start the run from the **Research agent** instead of typing the brief directly here; it hands off to this workflow with real findings attached, and Diagnose should treat that as real grounding rather than an estimate.
 
 ## DATA loop specifics
 

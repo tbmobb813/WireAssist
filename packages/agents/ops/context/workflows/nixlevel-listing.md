@@ -13,12 +13,12 @@ OUTCOME: One or more product ideas go in; one complete, upload-ready Etsy listin
 
 For EACH product concept in the brief, a listing is DONE when all of these exist in `output/nixlevel/<product-slug>/` (one full set per product):
 
-- [ ] `title.txt` — ≤140 chars, front-loaded keywords
-- [ ] `description.md` — template-consistent: hook, product details, size/variant table, care instructions, shop CTA
-- [ ] `tags.txt` — exactly 13 Etsy tags, ≤20 chars each, no duplicates of title words wasted
+- [ ] `title.txt` — ≤140 chars, structured as `[Primary keyword] | [Secondary keyword + modifier] | [Occasion/recipient]`, front-loaded with the term a real buyer would type first
+- [ ] `description.md` — template-consistent: **first 160 characters carry the primary keyword and the single most important detail** (this is Etsy's confirmed secondary ranking signal — most mobile buyers read no further), then hook, product details, size/variant table, care instructions, shop CTA
+- [ ] `tags.txt` — exactly 13 Etsy tags, ≤20 chars each, no duplicates of title words wasted, at least 4-5 built from buyer-intent terms ("personalized," "custom," "ready to ship," a specific occasion) rather than plain product-noun restatements
 - [ ] `variants.md` — variant naming matching existing NixLevel conventions
-- [ ] `margin.md` — Printify base cost, target price, computed margin % (flag if <30%)
 - [ ] `marketing.md` — 3 mockup/lifestyle photo angles + 2 marketing hooks
+- [ ] `margin.md` — **only produced when Printify base costs are available** (see Inputs); otherwise this file is skipped and the run report says exactly why, listing it as the one remaining manual step before upload
 - [ ] Self-assessed against this checklist, per product; gaps fixed before reporting
 
 ## Inputs (Camcorder Method — fill from a recorded run)
@@ -27,16 +27,19 @@ For EACH product concept in the brief, a listing is DONE when all of these exist
 - Existing listing example to mirror: _SETTING: JNix pastes one best-performing listing here_
 - Variant naming convention: _SETTING: JNix pastes current convention here_
 - Printify base costs: _SETTING_PERIODIC: link or paste current cost sheet_
+- **Real keyword/competitor grounding (recommended, not required to proceed):** NixOps has no web-search tool of its own, so title/tag keywords are otherwise the model's best guess, not verified search data. For grounded terms, start the run from the **Research agent** instead of typing the brief directly here — ask it to look up real competing Etsy listings and search-volume signals for the product concept; Research hands off to this workflow automatically with those findings attached, and Diagnose below treats that handoff data as real grounding rather than a guess.
 
 ## DATA loop specifics
 
-- **Diagnose:** Check inputs above are filled; if a SETTING is empty, escalate before generating. Also confirm every product concept in the brief is distinct and specific enough to generate a full listing from — flag (don't guess) any that's too vague.
-- **Assemble:** Plan the 6 artifacts for EACH product; number the plan by product so nothing gets merged or dropped. Reuse `tools/` templates if present.
-- **Take Action:** Generate all 6 artifacts for every product, clearly delimited by a `## Product N: <name>` heading — never merge two products' artifacts together.
+- **Diagnose:** Check inputs above are filled. A missing `_SETTING:_`/`_SETTING_PERIODIC:_` never blocks the whole run by itself — it only removes the one artifact that specifically depends on it (Printify costs → skip `margin.md` only; a missing "existing listing example" or "variant naming convention" is a quality gap to flag in the run report, not a hard stop, since the other 5 artifacts don't strictly need them). Note whether this run arrived via a Research handoff (real keyword/competitor data attached) or a raw brief (no external grounding) — a raw brief means title/tag keywords must be flagged as reasoned estimates, not presented as verified search data, per the escalation rule below. Also confirm every product concept in the brief is distinct and specific enough to generate a full listing from — flag (don't guess) any that's too vague.
+- **Assemble:** Plan the artifacts that apply for EACH product (5 always, `margin.md` conditionally); number the plan by product so nothing gets merged or dropped. Reuse `tools/` templates if present.
+- **Take Action:** Generate every applicable artifact for every product, clearly delimited by a `## Product N: <name>` heading — never merge two products' artifacts together.
 - **Assess:** Verify every Definition-of-Done box independently for EACH product; check tag lengths and title chars programmatically, not by eye.
 
 ## Escalation rules
 
-- Margin below 30% on any product → flag that product, don't pick the price yourself.
+- No Printify base costs available → skip `margin.md` for that product, don't guess a cost or invent a margin figure; say plainly in the run report that pricing is the one remaining manual step.
+- Margin below 30% on any product (when `margin.md` was produced) → flag that product, don't pick the price yourself.
+- Title/tag keywords produced without Research-handoff grounding → mark them as reasoned estimates in the run report, not verified search data — same principle as `article-package.md`'s keyword-research escalation rule.
 - Trademark-risky phrases in any product's title/tags → flag.
 - Nothing is uploaded to Etsy at this stage — JNix uploads after review.

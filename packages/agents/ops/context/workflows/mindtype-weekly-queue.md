@@ -25,6 +25,7 @@ A week's queue is DONE when all of these exist in `output/mindtype/<week-slug>/`
 - Brand voice examples — 2-3 best-performing past posts to mirror: _SETTING: JNix pastes examples_
 - Current hashtag bank (not a stale saved set): _SETTING_PERIODIC: JNix pastes current hashtags_
 - Any current campaign or launch to tie into, if applicable: _TODO: JNix notes it here, or leaves blank if none_
+- **Real hashtag/trend grounding (recommended, not required to proceed):** NixOps has no web-search tool of its own — without a fresh hashtag bank above, hashtags in `captions.md` are the model's best guess, not verified current-trend data. For grounded tags, start the run from the **Research agent** instead of typing the brief directly here; it hands off to this workflow with real findings attached.
 
 ## DATA loop specifics
 
