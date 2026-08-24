@@ -69,6 +69,39 @@ async function send(text: string): Promise<void> {
   }).catch((err) => logger.error('sendMessage failed:', err));
 }
 
+// Registers the command list with Telegram itself so its client shows a
+// tap-to-autocomplete menu after typing "/" — purely a client-side UI
+// feature, unrelated to handleCommand()'s own switch statement below (which
+// still does the real dispatching). Kept in sync with the /help text by
+// hand; Telegram enforces command names as lowercase with no leading slash,
+// max 32 chars, description max 256 chars.
+async function registerCommands(): Promise<void> {
+  const commands = [
+    { command: 'help', description: 'Show available commands' },
+    { command: 'status', description: 'Agent statuses' },
+    { command: 'budget', description: 'Spend vs monthly cap' },
+    { command: 'approvals', description: 'Pending approvals' },
+    { command: 'approve', description: 'Approve a pending item by id' },
+    { command: 'reject', description: 'Reject a pending item by id' },
+    { command: 'workflows', description: 'List NixOps workflows' },
+    { command: 'run', description: 'Run a NixOps workflow: /run <workflow> <brief>' },
+    { command: 'ask', description: 'Ask anything — routed to the right agent' },
+    { command: 'new', description: 'Start a fresh conversation' },
+    { command: 'reauth', description: 'Get a Gmail/Calendar re-authorization link' },
+  ];
+  const res = await fetch(`${TG}/setMyCommands`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ commands }),
+  }).catch((err) => {
+    logger.error('setMyCommands failed:', err);
+    return null;
+  });
+  if (res && !(await res.json().then((d) => d.ok))) {
+    logger.error('setMyCommands rejected by Telegram');
+  }
+}
+
 async function api(path: string, init?: RequestInit): Promise<unknown> {
   const res = await fetch(`${API_URL}${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -580,6 +613,7 @@ async function healthLoop(): Promise<never> {
 }
 
 logger.info(`WireAssist Telegram bot starting (API: ${API_URL})`);
+void registerCommands();
 void pollLoop();
 void sseLoop();
 void healthLoop();
