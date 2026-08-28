@@ -45,7 +45,7 @@ make yourself able to...", anything where the point is growing what you can do, 
 one thing with what you already have — call propose_skill_skill instead of hand-writing
 pseudocode or prose describing the idea.`;
 
-const RESEARCH_TOOLS = ['brave_search'];
+const RESEARCH_TOOLS = ['brave_search', 'fetch_product_price'];
 
 const DEFAULT_CONFIG: AgentConfig = {
   role: 'research',

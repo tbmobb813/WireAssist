@@ -26,6 +26,18 @@ export const RESEARCH_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
       required: ['query'],
     },
   },
+  fetch_product_price: {
+    name: 'fetch_product_price',
+    description:
+      "Fetch a specific product page URL and extract its live price from the page's own structured data (Schema.org JSON-LD, the same data retailers publish for Google's rich-snippet pricing). Use this AFTER brave_search/research_topic_skill has identified a specific, promising retailer product URL (e.g. an Amazon, Newegg, or Best Buy product page) — search result snippets do not contain live prices, only text crawled at some point in the past, so this is the only way to get an actually-current number. Returns found:false with a note if the page has no structured price data (e.g. price is only rendered client-side via JS, which this cannot see) — treat that as a real \"couldn't confirm,\" not a reason to guess.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'The specific product page URL to fetch.' },
+      },
+      required: ['url'],
+    },
+  },
   // ── Skills, exposed as composable tools (dispatched via invokeSkill(),
   // not useTool() — see ResearchAgent.executeToolCall()). These run genuine
   // multi-step work internally (search -> synthesize -> propose to
@@ -110,7 +122,7 @@ export const RESEARCH_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
 
 // MCP tool names that only ever read data — safe to execute immediately in
 // the chat tool loop without going through the approval queue.
-export const READ_ONLY_RESEARCH_TOOLS = new Set<string>(['brave_search']);
+export const READ_ONLY_RESEARCH_TOOLS = new Set<string>(['brave_search', 'fetch_product_price']);
 
 // Skill-tool names dispatched via invokeSkill() rather than useTool() — see
 // ResearchAgent.executeToolCall(). Kept separate from

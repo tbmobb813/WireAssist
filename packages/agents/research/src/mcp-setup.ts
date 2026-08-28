@@ -1,4 +1,5 @@
 import type { MCPClient } from '@wireassist/core';
+import { extractProductFromJsonLd } from './product-extraction';
 
 interface BraveSearchResult {
   title: string;
@@ -9,6 +10,17 @@ interface BraveSearchResult {
 interface BraveSearchResponse {
   web?: { results?: Array<{ title: string; url: string; description: string }> };
 }
+
+// A normal-browser User-Agent — most retailers actively serve their own
+// crawler-facing structured data (JSON-LD Product/Offer, meant for Google's
+// rich-snippet pricing) to anything that looks like a standard browser or
+// search-engine bot; a missing/suspicious UA is one of the cheapest signals
+// bot-detection uses to block a request outright, before it ever gets to
+// harder fingerprinting. Keeping this a plain server-side fetch (no headless
+// browser/JS execution) is deliberate — it's much closer to how a search
+// engine's own crawler behaves, and retailers want that traffic let through.
+const PRODUCT_FETCH_USER_AGENT = 'Mozilla/5.0 (compatible; WireAssistResearchBot/1.0)';
+const PRODUCT_FETCH_TIMEOUT_MS = 10_000;
 
 export function setupResearchMCP(mcp: MCPClient): void {
   mcp.register('brave_search', async (params) => {
@@ -58,5 +70,60 @@ export function setupResearchMCP(mcp: MCPClient): void {
     }));
 
     return { results, query };
+  });
+
+  mcp.register('fetch_product_price', async (params) => {
+    const targetUrl = params.url as string | undefined;
+    if (!targetUrl) {
+      throw new Error('fetch_product_price requires a url parameter.');
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), PRODUCT_FETCH_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(targetUrl, {
+        headers: {
+          'User-Agent': PRODUCT_FETCH_USER_AGENT,
+          Accept: 'text/html,application/xhtml+xml',
+        },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        return {
+          found: false,
+          url: targetUrl,
+          note: `Page returned ${response.status} ${response.statusText} — could not fetch.`,
+        };
+      }
+
+      const html = await response.text();
+      const product = extractProductFromJsonLd(html);
+
+      if (!product?.price) {
+        return {
+          found: false,
+          url: targetUrl,
+          note:
+            'No structured product price data (Schema.org JSON-LD) found on this page. The ' +
+            'price may only exist in JS-rendered content this fetch cannot see, or this ' +
+            "isn't a product page.",
+        };
+      }
+
+      return { found: true, url: targetUrl, ...product };
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        return {
+          found: false,
+          url: targetUrl,
+          note: `Request timed out after ${PRODUCT_FETCH_TIMEOUT_MS}ms.`,
+        };
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
   });
 }
