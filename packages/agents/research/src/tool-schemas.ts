@@ -17,6 +17,11 @@ export const RESEARCH_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
           type: 'number',
           description: "Max results to return, default 20 (Brave's own default and max).",
         },
+        freshness: {
+          type: 'string',
+          description:
+            'Recency filter: "pd" (past day), "pw" (past week), "pm" (past month), "py" (past year), or a custom "YYYY-MM-DDtoYYYY-MM-DD" range. Omitted by default (pure relevance ranking, no recency filter). Set this whenever the query is time-sensitive (current pricing, latest version, recent news) — otherwise stale-but-well-ranked pages (old comparison/aggregator sites) can dominate the results.',
+        },
       },
       required: ['query'],
     },
@@ -39,6 +44,11 @@ export const RESEARCH_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
         resultCount: {
           type: 'number',
           description: "Max search results to consider, default 20 (Brave's own default and max).",
+        },
+        freshness: {
+          type: 'string',
+          description:
+            'Recency filter: "pd"/"pw"/"pm"/"py" (past day/week/month/year) or a custom "YYYY-MM-DDtoYYYY-MM-DD" range. Set this whenever the query is time-sensitive (current pricing, latest version, recent news) — omitted by default, which lets stale-but-well-ranked pages dominate results for that kind of query.',
         },
       },
       required: ['query'],
@@ -71,6 +81,11 @@ export const RESEARCH_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
         resultCount: {
           type: 'number',
           description: "Max search results to consider, default 20 (Brave's own default and max).",
+        },
+        freshness: {
+          type: 'string',
+          description:
+            'Recency filter: "pd"/"pw"/"pm"/"py" (past day/week/month/year) or a custom "YYYY-MM-DDtoYYYY-MM-DD" range. Set this whenever the query is time-sensitive (current pricing, latest version, recent news).',
         },
       },
       required: ['query'],

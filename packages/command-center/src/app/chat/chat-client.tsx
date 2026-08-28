@@ -58,6 +58,16 @@ function payloadTaskId(payload: unknown): string | undefined {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// 1 poll/sec, so this is also the wall-clock ceiling in seconds. Was 120s
+// (2 min) — too tight for a multi-step freeform loop (up to 12 tool-call
+// iterations, several of which — research_topic_skill, synthesize_findings_skill
+// — are themselves a full search-then-LLM-synthesis round trip), which can
+// legitimately run past 2 minutes without anything being wrong. Task
+// processing itself has no request-bound timeout (it's a separate worker,
+// not tied to any HTTP lifecycle) — this is purely how long the UI stays
+// patient, so raising it costs nothing but a few more lightweight polls.
+const MAX_POLL_SECONDS = 300;
+
 function formatRelativeTime(ms: number): string {
   const diffSec = Math.max(0, Math.floor((Date.now() - ms) / 1000));
   if (diffSec < 60) return 'just now';
@@ -429,7 +439,7 @@ export default function ChatClient() {
   const pollForTask = useCallback(
     async (taskId: string) => {
       let completePolls = 0;
-      for (let i = 0; i < 120; i++) {
+      for (let i = 0; i < MAX_POLL_SECONDS; i++) {
         if (pendingTaskId.current !== taskId) return;
 
         const status = await scanActivity(taskId);

@@ -17,6 +17,12 @@ export function setupResearchMCP(mcp: MCPClient): void {
     // this used to override that down to 5, which just meant every search
     // saw a quarter of what Brave would return by default.
     const count = (params.count as number | undefined) ?? 20;
+    // Brave's `freshness` param: pd/pw/pm/py (past day/week/month/year) or a
+    // custom "YYYY-MM-DDtoYYYY-MM-DD" range. Omitted by default — Brave falls
+    // back to pure relevance ranking with no recency filter, which is exactly
+    // why time-sensitive queries (e.g. "current pricing") can surface
+    // multi-year-old comparison/aggregator pages that still rank well.
+    const freshness = params.freshness as string | undefined;
     const apiKey = process.env.BRAVE_API_KEY;
 
     if (!apiKey) {
@@ -30,6 +36,7 @@ export function setupResearchMCP(mcp: MCPClient): void {
     const url = new URL('https://api.search.brave.com/res/v1/web/search');
     url.searchParams.set('q', query);
     url.searchParams.set('count', String(count));
+    if (freshness) url.searchParams.set('freshness', freshness);
 
     const response = await fetch(url.toString(), {
       headers: {

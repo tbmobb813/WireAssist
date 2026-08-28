@@ -12,6 +12,12 @@ interface BraveResult {
 export interface ResearchTopicInput {
   query: string;
   resultCount?: number;
+  // Brave freshness filter: pd/pw/pm/py or "YYYY-MM-DDtoYYYY-MM-DD". Left
+  // undefined by default (pure relevance ranking) — the model should set
+  // this whenever the query is clearly time-sensitive (pricing, "current",
+  // "latest", recent news), since old comparison/aggregator pages otherwise
+  // rank well despite being stale.
+  freshness?: string;
   offerContentDraft?: { platform: Platform; tone?: string };
   offerOpsHandoff?: { workflow: string };
 }
@@ -24,11 +30,15 @@ export const researchTopicSkill: Skill<ResearchTopicInput, void> = {
 
   async execute({ agent, task, input }) {
     // Brave's own API default and max are both 20 (Web Search API docs).
-    const { query, resultCount = 20, offerContentDraft, offerOpsHandoff } = input;
+    const { query, resultCount = 20, freshness, offerContentDraft, offerOpsHandoff } = input;
 
     const context = await agent.loadContext(query);
 
-    const searchResult = (await agent.useTool('brave_search', { query, count: resultCount })) as {
+    const searchResult = (await agent.useTool('brave_search', {
+      query,
+      count: resultCount,
+      ...(freshness ? { freshness } : {}),
+    })) as {
       results: BraveResult[];
     };
     const { results } = searchResult;
