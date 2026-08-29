@@ -14,6 +14,11 @@ interface Message {
   // switch. See PendingImage/PendingDocument below for the shape before
   // it's sent.
   attachments?: { previewUrl?: string; filename?: string }[];
+  // Client-side only, like attachments — rendered as a collapsible list
+  // rather than inline text. Lost on reload same as attachments (persisted
+  // history stores sources as plain trailing text instead, so nothing is
+  // lost, just the interactive collapse).
+  sources?: string[];
 }
 
 interface PendingImage {
@@ -323,7 +328,7 @@ export default function ChatClient() {
     pendingTaskId.current = null;
   }, []);
 
-  const addProgressMessage = useCallback((content: string, taskId?: string) => {
+  const addProgressMessage = useCallback((content: string, taskId?: string, sources?: string[]) => {
     setMessages((prev) => [
       ...prev,
       {
@@ -332,18 +337,25 @@ export default function ChatClient() {
         content,
         time: new Date(),
         taskId,
+        sources,
       },
     ]);
   }, []);
 
   const addAgentMessage = useCallback(
-    (content: string, taskId?: string) => {
-      addProgressMessage(content, taskId);
+    (content: string, taskId?: string, sources?: string[]) => {
+      addProgressMessage(content, taskId, sources);
       if (conversationId) {
+        // Persisted history is plain text (same tradeoff as attachments,
+        // which also don't survive reload) — fold sources back in as
+        // trailing text so a reloaded conversation doesn't lose them
+        // outright, just the interactive collapse.
+        const persistedContent =
+          sources && sources.length > 0 ? `${content}\n\nSources:\n${sources.join('\n')}` : content;
         fetch(`/api/conversations/${conversationId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role: 'assistant', content }),
+          body: JSON.stringify({ role: 'assistant', content: persistedContent }),
         })
           .then(() => refreshConversationList())
           .catch((err) => console.warn('Failed to persist assistant message', err));
@@ -411,9 +423,7 @@ export default function ChatClient() {
         }
         case 'research_complete': {
           const p = payload as { summary?: string; sources?: string[] };
-          const sources =
-            p.sources && p.sources.length > 0 ? `\n\nSources:\n${p.sources.join('\n')}` : '';
-          addAgentMessage(`${p.summary ?? ''}${sources}`, taskId);
+          addAgentMessage(p.summary ?? '', taskId, p.sources);
           markHandled(taskId, event);
           return true;
         }
@@ -876,6 +886,27 @@ export default function ChatClient() {
                 </div>
               )}
               {msg.content}
+              {msg.sources && msg.sources.length > 0 && (
+                <details className="mt-2 text-xs">
+                  <summary className="cursor-pointer select-none" style={{ color: '#4fc3f7' }}>
+                    {msg.sources.length} source{msg.sources.length === 1 ? '' : 's'}
+                  </summary>
+                  <ul className="mt-1 space-y-0.5 pl-4" style={{ color: '#8890b5' }}>
+                    {msg.sources.map((s, i) => (
+                      <li key={i} className="break-all">
+                        <a
+                          href={s}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#4fc3f7' }}
+                        >
+                          {s}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
             </div>
           </div>
         ))}
