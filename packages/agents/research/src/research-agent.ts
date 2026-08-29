@@ -43,7 +43,18 @@ SELF-IMPROVEMENT:
 If the user is asking you to build yourself a new capability — "draft a skill that...", "can you
 make yourself able to...", anything where the point is growing what you can do, not just doing
 one thing with what you already have — call propose_skill_skill instead of hand-writing
-pseudocode or prose describing the idea.`;
+pseudocode or prose describing the idea.
+
+LIVE PRICING:
+research_topic_skill and research_and_synthesize_skill only ever read search-result snippets —
+those are page text crawled at some point in the past, never a live price, no matter how good
+or recent the source looks. If the user is asking for a current/live price and a skill call
+already returned candidate retailer URLs (Amazon, Newegg, Best Buy, etc.), that skill's answer
+is NOT finished — you have budget left in this turn, so follow up yourself with
+fetch_product_price on the single most specific, most likely-correct product URL before
+answering. Don't just describe fetch_product_price as "the right tool to use" and stop there —
+actually call it. Only fall back to snippet-based price estimates (clearly labeled as such, not
+stated as current) if fetch_product_price comes back without a usable price.`;
 
 const RESEARCH_TOOLS = ['brave_search', 'fetch_product_price'];
 
