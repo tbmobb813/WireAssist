@@ -68,6 +68,54 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // patient, so raising it costs nothing but a few more lightweight polls.
 const MAX_POLL_SECONDS = 300;
 
+// Curated phrasing for the tools/skills a user is most likely to actually
+// watch happen live. Anything not listed here still gets a readable message
+// via humanizeToolName() below — this is polish for the common cases, not
+// a hard requirement for every current or future tool name to appear here.
+const TOOL_CALL_LABELS: Record<string, string> = {
+  delegate_to_agent: 'Considering a hand-off to another agent...',
+  brave_search: 'Searching the web...',
+  fetch_product_price: 'Checking the live price on that page...',
+  research_topic_skill: 'Researching...',
+  research_and_synthesize_skill: 'Researching and pulling in what I already know...',
+  synthesize_findings_skill: 'Pulling together what I already know...',
+  email_triage_skill: 'Triaging your inbox...',
+  calendar_review_skill: 'Reviewing your calendar...',
+  generate_post_skill: 'Drafting the post...',
+  generate_plan_skill: 'Drafting a content plan...',
+  run_workflow_skill: 'Running the ops workflow...',
+  propose_skill_skill: 'Drafting a new skill for this...',
+};
+
+// snake_case fallback -> "Snake case..." for anything not in the curated
+// map above — never silently drops the message, just less polished.
+function humanizeToolName(toolName: string): string {
+  const spaced = toolName.replace(/_/g, ' ').trim();
+  const sentence = spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  return `${sentence}...`;
+}
+
+function toolCallLabel(toolName: string): string {
+  return TOOL_CALL_LABELS[toolName] ?? humanizeToolName(toolName);
+}
+
+// Mirrors ROLE_LABELS in packages/agents/admin/src/delegate.ts — kept as a
+// small local copy rather than a cross-package import since this is purely
+// display text, not shared logic. 'strategy' really is NixOps's internal
+// role name, not a display bug.
+const AGENT_ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  content: 'Content',
+  research: 'Research',
+  strategy: 'NixOps',
+  gtm: 'GTM',
+  github: 'GitHub Dev',
+};
+
+function agentRoleLabel(role: string): string {
+  return AGENT_ROLE_LABELS[role] ?? role;
+}
+
 function formatRelativeTime(ms: number): string {
   const diffSec = Math.max(0, Math.floor((Date.now() - ms) / 1000));
   if (diffSec < 60) return 'just now';
@@ -380,6 +428,33 @@ export default function ChatClient() {
           addAgentMessage(p.response ?? '', taskId);
           markHandled(taskId, event);
           return true;
+        }
+        case 'tool_call_started': {
+          const p = payload as { toolCallId?: string; toolName?: string };
+          const key = p.toolCallId ?? p.toolName ?? 'unknown';
+          // Keyed by toolCallId (not just taskId:event) — the same tool can
+          // legitimately be called more than once across a multi-iteration
+          // loop, and each call is its own distinct progress line.
+          if (!wasHandled(taskId, event, key) && p.toolName) {
+            addProgressMessage(toolCallLabel(p.toolName), taskId);
+            markHandled(taskId, event, key);
+          }
+          // Never terminal — purely a progress line, the real answer arrives
+          // on a later event (freeform_response, research_complete, etc.).
+          return false;
+        }
+        case 'handoff_queued': {
+          const p = payload as { task?: { agentRole?: string } };
+          const role = p.task?.agentRole;
+          if (role) {
+            addProgressMessage(`Handing off to the ${agentRoleLabel(role)} agent...`, taskId);
+          }
+          markHandled(taskId, event);
+          // Not terminal for THIS agent's turn — the delegated task runs
+          // separately (its own tab/Approvals), but the originating
+          // freeform_response for this turn (the tool_result summarizing
+          // the handoff) still arrives on this same taskId.
+          return false;
         }
         case 'ops_stage_complete': {
           const p = payload as { stage?: string };

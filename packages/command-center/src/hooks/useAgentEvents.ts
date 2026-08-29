@@ -205,7 +205,13 @@ export type AgentEvent =
   | { event: 'auto_approved'; payload: { agentRole: string; taskId: string; action: string } }
   | {
       event: 'handoff_queued';
-      payload: { task: { id: string; agentRole: string; description: string } };
+      // taskId is the ORIGINATING task, not task.id (the new delegated task) —
+      // that's what the UI is actually waiting on.
+      payload: { task: { id: string; agentRole: string; description: string }; taskId: string };
+    }
+  | {
+      event: 'tool_call_started';
+      payload: { taskId: string; toolCallId: string; toolName: string };
     }
   | {
       event: 'manual_card_created';

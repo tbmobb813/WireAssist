@@ -434,6 +434,7 @@ events.on('agent:post_scheduled', (p) => broadcast('post_scheduled', p));
 events.on('agent:content_analyzed', (p) => broadcast('content_analyzed', p));
 events.on('agent:scheduled_posts', (p) => broadcast('scheduled_posts', p));
 events.on('agent:research_complete', (p) => broadcast('research_complete', p));
+events.on('agent:tool_call_started', (p) => broadcast('tool_call_started', p));
 events.on('agent:ops_stage_complete', (p) => broadcast('ops_stage_complete', p));
 events.on('agent:ops_blocked', (p) => broadcast('ops_blocked', p));
 events.on('agent:ops_run_complete', (p) => broadcast('ops_run_complete', p));

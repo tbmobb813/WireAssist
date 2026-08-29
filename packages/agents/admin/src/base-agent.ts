@@ -366,6 +366,15 @@ export abstract class BaseAgent {
       });
 
       for (const call of response.toolCalls) {
+        // Fired before dispatch (including for calls still pending approval)
+        // so the chat UI can show what's actually happening turn-by-turn
+        // ("Searching the web...", "Handing off to Research...") instead of
+        // going silent until the whole loop finishes.
+        this.events.emit('agent:tool_call_started', {
+          taskId: task.id,
+          toolCallId: call.id,
+          toolName: call.name,
+        });
         const { result, isError } = await this.executeToolCall(task, call);
         messages.push({
           role: 'tool_result',
@@ -443,7 +452,11 @@ export abstract class BaseAgent {
 
     const history = (task.input as { history?: ProviderMessage[] } | undefined)?.history;
     const delegatedTask = buildDelegatedFreeformTask(task, targetRole, prompt.trim(), history);
-    this.events.emit('agent:handoff_requested', { task: delegatedTask });
+    // taskId here is the ORIGINATING task's id, not delegatedTask.id — the
+    // frontend's activity feed and live SSE routing both key off
+    // payload.taskId to find the conversation turn currently being watched,
+    // and that's the original task, not the new delegated one.
+    this.events.emit('agent:handoff_requested', { task: delegatedTask, taskId: task.id });
     return {
       result: `Handed off to the ${roleLabel(targetRole)} agent (task ${delegatedTask.id}). They'll work on it separately — check their tab or Approvals for the result.`,
       isError: false,
