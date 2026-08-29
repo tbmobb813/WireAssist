@@ -113,7 +113,8 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'research_topic',
-    description: 'User wants web research/synthesis on a topic, market, or competitor.',
+    description:
+      'User wants web research/synthesis on a topic, market, or competitor — OR wants a specific fact that changes over time and needs a live lookup (current price, stock/availability, latest version number, today\'s exchange rate, etc.), even if it sounds like a single quick lookup question rather than "research."',
     input_schema: {
       type: 'object',
       properties: {
@@ -210,6 +211,15 @@ Guidance:
   itself decide to check email or the calendar once it starts working. Only route directly to
   admin_triage/admin_calendar when the message itself names "email"/"inbox" or
   "calendar"/"schedule"/"meetings" as the explicit subject.
+- "General-knowledge" above means a stable fact the model already knows (history, how something
+  works, a well-established concept) — NOT a fact that changes over time. A question asking for
+  a CURRENT price, live stock/availability, the latest version of something, today's date-sensitive
+  info, or anything else that requires an actual live lookup to answer correctly is research, not
+  general knowledge, even when it's phrased as one short question rather than "research X for me."
+  Admin has no web-search or page-fetch tools of its own — routing this kind of question to
+  admin_freeform means it either gets a stale/wrong answer from the model's own training data,
+  or Admin has to notice the gap and delegate anyway, which just adds a slow, invisible extra hop.
+  Route these directly to research_topic/research_freeform instead.
 - Anything about a specific GitHub repo, issue, or pull request — "what are the open issues
   on X", "comment on PR #12", "what changed in the last commit" — routes to github_freeform,
   never research_freeform or admin_freeform, even if phrased like a lookup question. Only use
