@@ -61,13 +61,13 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: 'admin_triage',
     description:
-      'User EXPLICITLY asks to triage, review, clean up, or go through their email inbox — the message names "email"/"inbox" directly. Do not use this for vague productivity/status requests that might merely touch email as a side effect; those route to admin_freeform.',
+      'User EXPLICITLY asks to triage, review, clean up, or go through their email inbox, AND ONLY THAT — a single, cleanly-scoped ask naming "email"/"inbox" directly. Do not use this for vague productivity/status requests that might merely touch email as a side effect, and do not use this for a compound request that also asks about the calendar or anything else ("check my email and my calendar") — those route to admin_freeform instead.',
     input_schema: { type: 'object', properties: {} },
   },
   {
     name: 'admin_calendar',
     description:
-      'User EXPLICITLY asks to check, review, or look at their calendar/schedule/meetings/events — the message names "calendar"/"schedule"/"meetings" directly. Do not use this for vague productivity/status requests ("how are things", "what should I do today", "help me get organized") that don\'t name the calendar; those route to admin_freeform, where Admin can decide for itself whether checking the calendar is relevant.',
+      'User EXPLICITLY asks to check, review, or look at their calendar/schedule/meetings/events, AND ONLY THAT — a single, cleanly-scoped ask naming "calendar"/"schedule"/"meetings" directly. Do not use this for vague productivity/status requests ("how are things", "what should I do today", "help me get organized") that don\'t name the calendar, and do not use this for a compound request that also asks about email or anything else ("check my email and my calendar") — those route to admin_freeform, where Admin can decide for itself whether checking the calendar is relevant.',
     input_schema: {
       type: 'object',
       properties: {
@@ -78,7 +78,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: 'content_generate',
     description:
-      'User wants a single piece of social/marketing content written (a post, a tweet, an update) for one platform.',
+      'User wants a single piece of social/marketing content written (a post, a tweet, an update) for one platform. Infer the platform from context even if not stated explicitly — "tweet"/"X post" means twitter, "LinkedIn post"/"update" for a professional audience means linkedin, "story"/"reel" means instagram. If genuinely no platform can be inferred, default to twitter rather than falling back to content_freeform.',
     input_schema: {
       type: 'object',
       properties: {
