@@ -612,8 +612,69 @@ async function healthLoop(): Promise<never> {
   }
 }
 
+// One-shot, at bot startup only — not part of sseLoop()'s reconnect cycle.
+// docker-compose only starts this service once command-center passes its
+// healthcheck, which is well after bootstrap() already fired its one-time
+// 'restart_recovery' broadcast — a live SSE subscriber structurally cannot
+// see an event broadcast before it connected. GET /api/restart-recovery is
+// the durable copy of that same broadcast for exactly this case (see
+// server.ts's reportRestartRecovery()). A couple of retries in case the API
+// is technically listening but not fully warmed up yet.
+async function checkRestartRecovery(): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(`${API_URL}/api/restart-recovery`);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const { summary } = (await res.json()) as {
+        summary: {
+          interruptedTasks: Array<{ agentRole: string; description: string }>;
+          orphanedApprovals: Array<{ agentRole: string; action: string }>;
+          staleApprovalsRejected: Array<{ agentRole: string; action: string }>;
+        } | null;
+      };
+      if (!summary) return;
+
+      const lines: string[] = ['⚠️ *WireAssist restarted with unfinished work:*'];
+      if (summary.interruptedTasks.length > 0) {
+        lines.push(
+          `\n🔴 ${summary.interruptedTasks.length} task(s) interrupted mid-run and marked failed:`,
+          ...summary.interruptedTasks
+            .slice(0, 5)
+            .map((t) => `  • (${t.agentRole}) ${t.description}`)
+        );
+      }
+      if (summary.orphanedApprovals.length > 0) {
+        lines.push(
+          `\n🛑 ${summary.orphanedApprovals.length} approved action(s) never ran — you approved these, but the process restarted before anything could act on it. Re-trigger manually if still needed:`,
+          ...summary.orphanedApprovals.slice(0, 5).map((a) => `  • (${a.agentRole}) ${a.action}`)
+        );
+      }
+      if (summary.staleApprovalsRejected.length > 0) {
+        lines.push(
+          `\n🗑️ ${summary.staleApprovalsRejected.length} pending approval(s) auto-rejected — no live process was left to act on them, re-request if still needed:`,
+          ...summary.staleApprovalsRejected
+            .slice(0, 5)
+            .map((a) => `  • (${a.agentRole}) ${a.action}`)
+        );
+      }
+      await send(lines.join('\n'));
+      return;
+    } catch (err) {
+      if (attempt === 2) {
+        logger.error(
+          'Failed to check restart-recovery status:',
+          err instanceof Error ? err.message : err
+        );
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+}
+
 logger.info(`WireAssist Telegram bot starting (API: ${API_URL})`);
 void registerCommands();
 void pollLoop();
 void sseLoop();
 void healthLoop();
+void checkRestartRecovery();

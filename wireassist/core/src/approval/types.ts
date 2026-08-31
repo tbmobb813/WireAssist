@@ -9,6 +9,10 @@ export interface ApprovalRequest {
   status: 'pending' | 'approved' | 'rejected';
   createdAt: Date;
   resolvedAt?: Date;
+  /** Set the moment a live process observed status='approved' — see ApprovalQueue.getOrphanedApprovals(). */
+  consumedAt?: Date;
+  /** Set when a restart auto-rejects a stale pending/orphaned row — distinguishes that from a human rejection. */
+  resolutionNote?: string;
 }
 
 export interface IApprovalQueue {

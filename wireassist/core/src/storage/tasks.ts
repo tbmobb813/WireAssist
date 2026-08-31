@@ -115,19 +115,27 @@ export class TaskStore {
     return rows.map((r) => this.mapRow(r));
   }
 
-  failInterruptedTasks(): void {
+  /**
+   * Marks any task left queued/running/awaiting_approval by a previous
+   * process instance as failed, and rejects approvals tied to those task
+   * ids. Returns what it found so the caller (bootstrap()) can actually
+   * tell someone — this method itself only writes to the DB; before this
+   * return value existed, that write was as silent as the bug it was meant
+   * to fix (issue #184).
+   */
+  failInterruptedTasks(): Array<{ id: string; agentRole: string; description: string }> {
     const now = new Date().toISOString();
 
-    // 1. Get IDs of tasks that will be failed
+    // 1. Get the tasks that will be failed
     const activeTasks = this.db
       .prepare(
         `
-      SELECT id FROM tasks WHERE status IN ('queued', 'running', 'awaiting_approval')
+      SELECT id, agent_role, description FROM tasks WHERE status IN ('queued', 'running', 'awaiting_approval')
     `
       )
-      .all() as { id: string }[];
+      .all() as { id: string; agent_role: string; description: string }[];
 
-    if (activeTasks.length === 0) return;
+    if (activeTasks.length === 0) return [];
 
     const taskIds = activeTasks.map((t) => t.id);
 
@@ -156,6 +164,12 @@ export class TaskStore {
     `
       )
       .run(now, ...taskIds);
+
+    return activeTasks.map((t) => ({
+      id: t.id,
+      agentRole: t.agent_role,
+      description: t.description,
+    }));
   }
 
   private mapRow(r: any): AgentTask {

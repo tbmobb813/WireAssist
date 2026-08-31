@@ -97,3 +97,88 @@ describe('ApprovalQueue.getResolved()', () => {
     expect(queue.getResolved()).toEqual([]);
   });
 });
+
+describe('ApprovalQueue restart recovery (issue #184)', () => {
+  it('markConsumed sets consumed_at, visible via getResolved', () => {
+    const queue = freshQueue();
+    seed(queue, [{ agentRole: 'admin', action: 'A', status: 'approved' }]);
+
+    queue.markConsumed('id-1');
+
+    const [row] = queue.getResolved();
+    expect(row.consumedAt).toBeInstanceOf(Date);
+  });
+
+  it('getOrphanedApprovals finds approved rows never marked consumed', () => {
+    const queue = freshQueue();
+    seed(queue, [
+      { agentRole: 'ops', action: 'Run workflow X', status: 'approved' },
+      { agentRole: 'ops', action: 'Run workflow Y', status: 'approved' },
+      { agentRole: 'admin', action: 'Archive thread', status: 'rejected' },
+      { agentRole: 'admin', action: 'Send draft', status: 'pending' },
+    ]);
+    queue.markConsumed('id-1'); // Y consumed, X and the others are not
+
+    const orphaned = queue.getOrphanedApprovals();
+    expect(orphaned).toHaveLength(1);
+    expect(orphaned[0].action).toBe('Run workflow Y');
+  });
+
+  it('getOrphanedApprovals returns an empty array when nothing is orphaned', () => {
+    const queue = freshQueue();
+    seed(queue, [{ agentRole: 'admin', action: 'A', status: 'approved' }]);
+    queue.markConsumed('id-1');
+
+    expect(queue.getOrphanedApprovals()).toEqual([]);
+  });
+
+  it('rejectStalePending rejects every pending row and records the reason', () => {
+    const queue = freshQueue();
+    seed(queue, [
+      { agentRole: 'admin', action: 'Draft A', status: 'pending' },
+      { agentRole: 'content', action: 'Draft B', status: 'pending' },
+      { agentRole: 'ops', action: 'Already handled', status: 'approved' },
+    ]);
+
+    const rejected = queue.rejectStalePending('no live process left');
+
+    expect(rejected).toHaveLength(2);
+    expect(queue.getPending()).toEqual([]);
+    const resolved = queue.getResolved();
+    const stale = resolved.filter((r) => r.action === 'Draft A' || r.action === 'Draft B');
+    expect(stale.every((r) => r.status === 'rejected')).toBe(true);
+    expect(stale.every((r) => r.resolutionNote === 'no live process left')).toBe(true);
+    // The already-approved row is untouched.
+    expect(resolved.find((r) => r.action === 'Already handled')?.status).toBe('approved');
+  });
+
+  it('rejectStalePending is a no-op and returns [] when nothing is pending', () => {
+    const queue = freshQueue();
+    seed(queue, [{ agentRole: 'admin', action: 'A', status: 'approved' }]);
+
+    expect(queue.rejectStalePending('unused')).toEqual([]);
+    expect(queue.getResolved()[0].status).toBe('approved');
+  });
+
+  it('request() marks the approval consumed once it observes approval', async () => {
+    const queue = freshQueue();
+    const db = (queue as any).db;
+
+    const requestPromise = queue.request({
+      taskId: 'task-x',
+      agentRole: 'admin' as any,
+      action: 'Send email',
+      payload: {},
+    });
+
+    const [{ id }] = db.prepare('SELECT id FROM approval_queue').all() as { id: string }[];
+    queue.resolve(id, true);
+
+    await expect(requestPromise).resolves.toBe(true);
+    const row = db.prepare('SELECT consumed_at FROM approval_queue WHERE id = ?').get(id) as {
+      consumed_at: string | null;
+    };
+    expect(row.consumed_at).not.toBeNull();
+    expect(queue.getOrphanedApprovals()).toEqual([]);
+  }, 10000);
+});

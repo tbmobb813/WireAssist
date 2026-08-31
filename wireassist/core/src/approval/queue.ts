@@ -31,6 +31,20 @@ export class ApprovalQueue {
       );
       CREATE INDEX IF NOT EXISTS idx_approval_status ON approval_queue(status);
     `);
+
+    // consumed_at / resolution_note: added after the original table, so
+    // guard against re-running on a DB that already has them (SQLite has no
+    // ADD COLUMN IF NOT EXISTS).
+    const columns = this.db.prepare(`PRAGMA table_info(approval_queue)`).all() as {
+      name: string;
+    }[];
+    const columnNames = new Set(columns.map((c) => c.name));
+    if (!columnNames.has('consumed_at')) {
+      this.db.exec(`ALTER TABLE approval_queue ADD COLUMN consumed_at TEXT`);
+    }
+    if (!columnNames.has('resolution_note')) {
+      this.db.exec(`ALTER TABLE approval_queue ADD COLUMN resolution_note TEXT`);
+    }
   }
 
   // Agent calls this and awaits — resolves when user approves/rejects (max 10 min)
@@ -69,6 +83,17 @@ export class ApprovalQueue {
 
         if (row?.status === 'approved') {
           clearInterval(poll);
+          // A human can approve via the Command Center UI at any time — that
+          // write lands in the DB immediately, but nothing happens until
+          // *this* in-process poll notices it and resumes the waiting
+          // skill's await. If the process restarts between "human clicked
+          // approve" and this line running (the realistic gap: minutes, not
+          // microtasks — see issue #184), the original request() call and
+          // its poll are gone for good; nothing will ever resume that
+          // skill's continuation. markConsumed() records that a live
+          // process did see the approval, so getOrphanedApprovals() can
+          // find exactly the ones that never got the chance to.
+          this.markConsumed(id);
           resolve(true);
         } else if (row?.status === 'rejected' || attempts >= maxAttempts) {
           clearInterval(poll);
@@ -89,6 +114,63 @@ export class ApprovalQueue {
     `
       )
       .run(approved ? 'approved' : 'rejected', new Date().toISOString(), id);
+  }
+
+  markConsumed(id: string): void {
+    this.db
+      .prepare(`UPDATE approval_queue SET consumed_at = ? WHERE id = ?`)
+      .run(new Date().toISOString(), id);
+  }
+
+  /**
+   * Approvals that were granted (status='approved') but never observed by a
+   * live process (consumed_at IS NULL) — the exact failure mode in issue
+   * #184: a human approved a handoff, then a restart landed before the
+   * originating skill's request() poll ever noticed, so nothing downstream
+   * ever ran and nothing said so. Call on boot, right after
+   * TaskStore.failInterruptedTasks().
+   */
+  getOrphanedApprovals(): ApprovalRequest[] {
+    const rows = this.db
+      .prepare(
+        `
+      SELECT * FROM approval_queue
+      WHERE status = 'approved' AND consumed_at IS NULL
+      ORDER BY resolved_at ASC
+    `
+      )
+      .all() as any[];
+
+    return rows.map(mapRow);
+  }
+
+  /**
+   * Approvals still 'pending' from a previous process instance can never be
+   * consumed — the request() call and its poll loop that would have picked
+   * up an Approve tap both died with the old process. Left as 'pending',
+   * the Approvals UI would keep offering an Approve button that silently
+   * does nothing forever. Call on boot: rejects them with a distinguishing
+   * note so the UI reflects reality instead of a false affordance.
+   */
+  rejectStalePending(note: string): ApprovalRequest[] {
+    const stale = this.db
+      .prepare(`SELECT * FROM approval_queue WHERE status = 'pending'`)
+      .all() as any[];
+
+    if (stale.length === 0) return [];
+
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `
+      UPDATE approval_queue
+      SET status = 'rejected', resolved_at = ?, resolution_note = ?
+      WHERE status = 'pending'
+    `
+      )
+      .run(now, note);
+
+    return stale.map(mapRow);
   }
 
   getPending(): ApprovalRequest[] {
@@ -141,5 +223,7 @@ function mapRow(r: any): ApprovalRequest {
     status: r.status,
     createdAt: new Date(r.created_at),
     resolvedAt: r.resolved_at ? new Date(r.resolved_at) : undefined,
+    consumedAt: r.consumed_at ? new Date(r.consumed_at) : undefined,
+    resolutionNote: r.resolution_note ?? undefined,
   };
 }

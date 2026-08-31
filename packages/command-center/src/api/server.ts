@@ -490,10 +490,73 @@ events.on('agent:handoff_requested', (p) => {
   if (routed) broadcast('handoff_queued', p);
 });
 
+type RestartRecoverySummary = {
+  bootedAt: string;
+  interruptedTasks: Array<{ taskId: string; agentRole: string; description: string }>;
+  orphanedApprovals: Array<{ approvalId: string; agentRole: string; action: string }>;
+  staleApprovalsRejected: Array<{ approvalId: string; agentRole: string; action: string }>;
+};
+
+// docker-compose's telegram-bot only starts once command-center passes its
+// healthcheck (depends_on: condition: service_healthy) — by the time it
+// connects to /api/events, bootstrap() and its one-shot broadcast('
+// restart_recovery', ...) already fired and are gone; a live-SSE-only
+// client structurally cannot see it. This durable copy lets the bot fetch
+// GET /api/restart-recovery once on its own startup and catch up, same as
+// a browser opening the dashboard fresh would via recentActivity.
+let lastRestartRecovery: RestartRecoverySummary | null = null;
+
+// Runs once at boot, after openStores(). Surfaces exactly the three ways a
+// prior process instance can have left work in an unrecoverable state — see
+// issue #184. Each of these previously either wrote nothing durable, or
+// wrote a DB row nobody was ever notified about; this makes all three loud
+// (Command Center activity feed + Telegram) instead of requiring JNix to
+// notice a gap in output that never showed up.
+function reportRestartRecovery() {
+  const interruptedTasks = taskStore.failInterruptedTasks();
+  const orphanedApprovals = approval.getOrphanedApprovals();
+  const staleApprovalsRejected = approval.rejectStalePending(
+    'Rejected automatically: this approval survived a restart with no live process left to act on it. Re-trigger the original request if it is still needed.'
+  );
+
+  const total = interruptedTasks.length + orphanedApprovals.length + staleApprovalsRejected.length;
+  if (total === 0) return;
+
+  logger.error(
+    `⚠️ Restart recovery: ${interruptedTasks.length} interrupted task(s), ` +
+      `${orphanedApprovals.length} approved-but-never-run action(s), ` +
+      `${staleApprovalsRejected.length} stale pending approval(s) rejected.`
+  );
+
+  const summary: RestartRecoverySummary = {
+    bootedAt: new Date().toISOString(),
+    interruptedTasks: interruptedTasks.map((t) => ({
+      taskId: t.id,
+      agentRole: t.agentRole,
+      description: t.description,
+    })),
+    orphanedApprovals: orphanedApprovals.map((a) => ({
+      approvalId: a.id,
+      agentRole: a.agentRole,
+      action: a.action,
+    })),
+    staleApprovalsRejected: staleApprovalsRejected.map((a) => ({
+      approvalId: a.id,
+      agentRole: a.agentRole,
+      action: a.action,
+    })),
+  };
+  lastRestartRecovery = summary;
+  // Still broadcast live too — a browser already sitting on the dashboard
+  // at the moment of restart (rare, but possible) gets it immediately
+  // rather than waiting to poll.
+  broadcast('restart_recovery', summary);
+}
+
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 async function bootstrap() {
   openStores();
-  taskStore.failInterruptedTasks();
+  reportRestartRecovery();
 
   // Content Agent tools
   registerTrendPostTools(mcp, trendpostStorage);
@@ -1772,6 +1835,12 @@ app.post('/api/memory/onboard', async (c) => {
   }
   return c.json({ ok: true, stored });
 });
+
+// One-shot catch-up for anything a live-SSE-only client (the Telegram bot,
+// which only connects after command-center is already healthy) would
+// otherwise never see — see reportRestartRecovery() above for why this
+// can't just be a broadcast. Returns null once nothing is pending.
+app.get('/api/restart-recovery', (c) => c.json({ summary: lastRestartRecovery }));
 
 // ── SSE STREAM ────────────────────────────────────────────────────────────
 app.get('/api/events', (c) => {
