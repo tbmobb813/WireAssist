@@ -99,6 +99,27 @@ export const detectSkillOpportunitiesSkill: Skill<DetectSkillOpportunitiesInput,
     // agent's own propose_skill, which gates the actual drafted code
     // separately (gate 2), through the exact same Approvals-tab/Telegram
     // path as every other approval in this codebase.
+    //
+    // Hands the pattern description straight to the suggested agent's own
+    // propose_skill task — reuses that agent's real pathPrefix/few-shot
+    // config exactly as if Jason had asked it directly, rather than this
+    // skill needing to know every other agent's drafting config itself
+    // (which would mean agent-admin importing from every other agent
+    // package — a circular dependency, since they all depend on
+    // agent-admin for BaseAgent). Built now, before the approval wait, and
+    // passed as resumeTask so it survives a restart between approval and
+    // this continuation resuming — see ApprovalRequest.resumeTask.
+    const handoffTask: AgentTask = {
+      id: randomUUID(),
+      agentRole: parsed.suggestedRole,
+      description: `Draft a new ${parsed.suggestedRole} skill for detected pattern: ${parsed.description}`,
+      status: 'queued',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      input: { type: 'propose_skill', request: parsed.description },
+      approvalRequired: false,
+    };
+
     const approved = await agent.proposeAction(
       task,
       `Draft a skill for pattern: ${parsed.description}`,
@@ -106,7 +127,8 @@ export const detectSkillOpportunitiesSkill: Skill<DetectSkillOpportunitiesInput,
         patternDescription: parsed.description,
         exampleRequests: parsed.examples,
         suggestedRole: parsed.suggestedRole,
-      }
+      },
+      handoffTask
     );
 
     if (!approved) {
@@ -119,23 +141,6 @@ export const detectSkillOpportunitiesSkill: Skill<DetectSkillOpportunitiesInput,
       return;
     }
 
-    // Hands the pattern description straight to the suggested agent's own
-    // propose_skill task — reuses that agent's real pathPrefix/few-shot
-    // config exactly as if Jason had asked it directly, rather than this
-    // skill needing to know every other agent's drafting config itself
-    // (which would mean agent-admin importing from every other agent
-    // package — a circular dependency, since they all depend on
-    // agent-admin for BaseAgent).
-    const handoffTask: AgentTask = {
-      id: randomUUID(),
-      agentRole: parsed.suggestedRole,
-      description: `Draft a new ${parsed.suggestedRole} skill for detected pattern: ${parsed.description}`,
-      status: 'queued',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      input: { type: 'propose_skill', request: parsed.description },
-      approvalRequired: false,
-    };
     agent.emit('agent:handoff_requested', { task: handoffTask });
 
     agent.emit('agent:detect_skill_opportunities_complete', {

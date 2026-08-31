@@ -101,7 +101,8 @@ describe('detectSkillOpportunitiesSkill', () => {
         patternDescription: expect.stringContaining('recent content performed'),
         suggestedRole: 'content',
         exampleRequests: expect.arrayContaining([expect.stringContaining('how did my posts do')]),
-      })
+      }),
+      expect.objectContaining({ agentRole: 'content' }) // resumeTask, for durability across a restart
     );
   });
 

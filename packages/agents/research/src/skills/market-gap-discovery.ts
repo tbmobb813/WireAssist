@@ -236,24 +236,28 @@ export const marketGapDiscoverySkill: Skill<MarketGapDiscoveryInput, void> = {
 
     if (input.offerOpsHandoff && topConcept) {
       const { workflow } = input.offerOpsHandoff;
+      // Built before the approval wait, passed as resumeTask, so this
+      // handoff survives a restart between approval and this continuation
+      // resuming — see ApprovalRequest.resumeTask.
+      const handoffTask = OpsTasks.createWorkflowRunTask({
+        workflow,
+        brief:
+          `Use this market-gap discovery run's top-ranked concept as the product concept for ` +
+          `this listing: "${topConcept}". Full discovery report for context (pain points this ` +
+          `concept addresses, sourcing, competing framings):\n\n${fullReport}\n\n` +
+          `This does not excuse a genuinely missing shop setting (variant naming, cost sheet, ` +
+          `fulfillment type, etc.) — if the workflow's own rules say to block or escalate on ` +
+          `one of those, still do; don't invent a value for it just because this is a one-shot handoff.`,
+        description: `NixOps run from market-gap discovery: ${topConcept}`,
+        objectiveId: task.objectiveId,
+      });
       const handoffApproved = await agent.proposeAction(
         task,
         `Turn the top market-gap concept ("${topConcept}") into a "${workflow}" NixOps run?`,
-        { topConcept, workflow }
+        { topConcept, workflow },
+        handoffTask
       );
       if (handoffApproved) {
-        const handoffTask = OpsTasks.createWorkflowRunTask({
-          workflow,
-          brief:
-            `Use this market-gap discovery run's top-ranked concept as the product concept for ` +
-            `this listing: "${topConcept}". Full discovery report for context (pain points this ` +
-            `concept addresses, sourcing, competing framings):\n\n${fullReport}\n\n` +
-            `This does not excuse a genuinely missing shop setting (variant naming, cost sheet, ` +
-            `fulfillment type, etc.) — if the workflow's own rules say to block or escalate on ` +
-            `one of those, still do; don't invent a value for it just because this is a one-shot handoff.`,
-          description: `NixOps run from market-gap discovery: ${topConcept}`,
-          objectiveId: task.objectiveId,
-        });
         agent.emit('agent:handoff_requested', { task: handoffTask });
       }
     }

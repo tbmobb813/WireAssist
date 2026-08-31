@@ -36,25 +36,29 @@ export const generateStrategySkill: Skill<GenerateStrategyInput, void> = {
     // through its own approval before anything is ever posted.
     if (offerContentDraft) {
       const { platform, tone } = offerContentDraft;
+      // Built before the approval wait, passed as resumeTask, so this
+      // handoff survives a restart between approval and this continuation
+      // resuming — see ApprovalRequest.resumeTask.
+      const topic = `${product.name}: ${gtm.positioning.headline}`;
+      const extraContext = [
+        `Positioning: ${gtm.positioning.headline}`,
+        `North star: ${gtm.north_star}`,
+        `Founder advantage: ${gtm.founder_advantage}`,
+      ].join('\n');
+      const handoffTask = ContentTasks.generatePost(
+        topic,
+        platform,
+        tone,
+        extraContext,
+        task.objectiveId
+      );
       const draftApproved = await agent.proposeAction(
         task,
         `Draft ${platform} content announcing ${product.name}'s launch based on this GTM strategy?`,
-        { product: product.name, platform, tone }
+        { product: product.name, platform, tone },
+        handoffTask
       );
       if (draftApproved) {
-        const topic = `${product.name}: ${gtm.positioning.headline}`;
-        const extraContext = [
-          `Positioning: ${gtm.positioning.headline}`,
-          `North star: ${gtm.north_star}`,
-          `Founder advantage: ${gtm.founder_advantage}`,
-        ].join('\n');
-        const handoffTask = ContentTasks.generatePost(
-          topic,
-          platform,
-          tone,
-          extraContext,
-          task.objectiveId
-        );
         agent.emit('agent:handoff_requested', { task: handoffTask });
       }
     }
@@ -65,18 +69,19 @@ export const generateStrategySkill: Skill<GenerateStrategyInput, void> = {
     // different needs and neither depends on the other's outcome.
     if (offerContentCalendar) {
       const { platforms } = offerContentCalendar;
+      const handoffTask = ContentTasks.generatePlanFromTimeline(
+        product.name,
+        gtm.launch_timeline,
+        platforms,
+        task.objectiveId
+      );
       const calendarApproved = await agent.proposeAction(
         task,
         `Generate a full content calendar for ${product.name} from this launch timeline?`,
-        { product: product.name, platforms }
+        { product: product.name, platforms },
+        handoffTask
       );
       if (calendarApproved) {
-        const handoffTask = ContentTasks.generatePlanFromTimeline(
-          product.name,
-          gtm.launch_timeline,
-          platforms,
-          task.objectiveId
-        );
         agent.emit('agent:handoff_requested', { task: handoffTask });
       }
     }

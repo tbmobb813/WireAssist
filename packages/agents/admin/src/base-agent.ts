@@ -443,17 +443,22 @@ export abstract class BaseAgent {
       return { result: guardError, isError: true };
     }
 
+    // Built before the approval wait, and passed as resumeTask, so this
+    // handoff survives a restart landing between approval and this
+    // continuation resuming — see ApprovalRequest.resumeTask.
+    const history = (task.input as { history?: ProviderMessage[] } | undefined)?.history;
+    const delegatedTask = buildDelegatedFreeformTask(task, targetRole, prompt.trim(), history);
+
     const approved = await this.proposeAction(
       task,
       `Hand off to ${roleLabel(targetRole)} agent: ${prompt.trim().slice(0, 100)}`,
-      { targetRole, prompt: prompt.trim() }
+      { targetRole, prompt: prompt.trim() },
+      delegatedTask
     );
     if (!approved) {
       return { result: 'User declined the handoff.', isError: true };
     }
 
-    const history = (task.input as { history?: ProviderMessage[] } | undefined)?.history;
-    const delegatedTask = buildDelegatedFreeformTask(task, targetRole, prompt.trim(), history);
     // taskId here is the ORIGINATING task's id, not delegatedTask.id — the
     // frontend's activity feed and live SSE routing both key off
     // payload.taskId to find the conversation turn currently being watched,

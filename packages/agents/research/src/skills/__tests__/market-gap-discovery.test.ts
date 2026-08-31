@@ -122,7 +122,8 @@ describe('marketGapDiscoverySkill', () => {
       2,
       expect.anything(),
       expect.stringContaining('Widget Pro'),
-      expect.objectContaining({ workflow: 'nixlevel-listing' })
+      expect.objectContaining({ workflow: 'nixlevel-listing' }),
+      expect.objectContaining({ agentRole: 'strategy' }) // resumeTask, for durability across a restart
     );
   });
 

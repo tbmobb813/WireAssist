@@ -112,7 +112,8 @@ describe('generateStrategySkill — GTM -> Content handoff', () => {
     expect(proposeAction).toHaveBeenCalledWith(
       expect.anything(),
       expect.stringContaining("Draft linkedin content announcing StatusWatch's launch"),
-      expect.objectContaining({ platform: 'linkedin' })
+      expect.objectContaining({ platform: 'linkedin' }),
+      expect.objectContaining({ agentRole: 'content' }) // resumeTask, for durability across a restart
     );
   });
 
@@ -179,7 +180,8 @@ describe('generateStrategySkill — GTM -> Content calendar handoff', () => {
     expect(proposeAction).toHaveBeenCalledWith(
       expect.anything(),
       expect.stringContaining('full content calendar for StatusWatch'),
-      expect.objectContaining({ platforms: ['linkedin', 'twitter'] })
+      expect.objectContaining({ platforms: ['linkedin', 'twitter'] }),
+      expect.objectContaining({ agentRole: 'content' }) // resumeTask, for durability across a restart
     );
   });
 
