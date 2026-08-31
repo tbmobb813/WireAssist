@@ -1,4 +1,4 @@
-import type { Skill } from '@wireassist/core';
+import type { AgentTask, Skill } from '@wireassist/core';
 import { ContentTasks } from '@wireassist/agent-content';
 import { OpsTasks } from '@wireassist/agent-ops';
 import type { Platform } from '@wireassist/trendpost-mcp';
@@ -90,19 +90,24 @@ export const researchTopicSkill: Skill<ResearchTopicInput, void> = {
     // its own approval before anything is ever posted.
     if (offerContentDraft) {
       const { platform, tone } = offerContentDraft;
+      // Built now, before the approval wait, and handed to proposeAction as
+      // resumeTask — so it's captured in the approval row itself and can be
+      // replayed on restart even if this continuation never gets to run
+      // agent.emit() below. See ApprovalRequest.resumeTask.
+      const handoffTask: AgentTask = ContentTasks.generatePost(
+        query,
+        platform,
+        tone,
+        summary,
+        task.objectiveId
+      );
       const draftApproved = await agent.proposeAction(
         task,
         `Draft ${platform} content from this research on "${query}"?`,
-        { query, platform, tone }
+        { query, platform, tone },
+        handoffTask
       );
       if (draftApproved) {
-        const handoffTask = ContentTasks.generatePost(
-          query,
-          platform,
-          tone,
-          summary,
-          task.objectiveId
-        );
         agent.emit('agent:handoff_requested', { task: handoffTask });
       }
     }
@@ -113,28 +118,32 @@ export const researchTopicSkill: Skill<ResearchTopicInput, void> = {
     // anything is ever "done."
     if (offerOpsHandoff) {
       const { workflow } = offerOpsHandoff;
+      // Same reasoning as the content handoff above — built before the
+      // approval wait so it survives as resumeTask even if this
+      // continuation never resumes.
+      const handoffTask: AgentTask = OpsTasks.createWorkflowRunTask({
+        workflow,
+        brief:
+          `Use this research to identify every distinct, sellable, specific product concept ` +
+          `(not vague categories) it points to, and write one numbered product entry per ` +
+          `concept so this run can batch-generate a listing for each. If only one clear ` +
+          `candidate emerges, that's fine — one numbered entry is still valid. Do not ask a ` +
+          `follow-up question about WHICH product to pick; this is a one-shot handoff with no ` +
+          `way to hear a reply, so pick the strongest candidates yourself and proceed. This ` +
+          `does not excuse a genuinely missing shop setting (variant naming, cost sheet, etc.) ` +
+          `— if the workflow's own rules say to block on one of those, still block; don't ` +
+          `invent a value for it just because this is a one-shot handoff.` +
+          `\n\nRESEARCH ON "${query}":\n${summary}`,
+        description: `NixOps run from research: ${query}`,
+        objectiveId: task.objectiveId,
+      });
       const handoffApproved = await agent.proposeAction(
         task,
         `Turn this research into a "${workflow}" NixOps run?`,
-        { query, workflow }
+        { query, workflow },
+        handoffTask
       );
       if (handoffApproved) {
-        const handoffTask = OpsTasks.createWorkflowRunTask({
-          workflow,
-          brief:
-            `Use this research to identify every distinct, sellable, specific product concept ` +
-            `(not vague categories) it points to, and write one numbered product entry per ` +
-            `concept so this run can batch-generate a listing for each. If only one clear ` +
-            `candidate emerges, that's fine — one numbered entry is still valid. Do not ask a ` +
-            `follow-up question about WHICH product to pick; this is a one-shot handoff with no ` +
-            `way to hear a reply, so pick the strongest candidates yourself and proceed. This ` +
-            `does not excuse a genuinely missing shop setting (variant naming, cost sheet, etc.) ` +
-            `— if the workflow's own rules say to block on one of those, still block; don't ` +
-            `invent a value for it just because this is a one-shot handoff.` +
-            `\n\nRESEARCH ON "${query}":\n${summary}`,
-          description: `NixOps run from research: ${query}`,
-          objectiveId: task.objectiveId,
-        });
         agent.emit('agent:handoff_requested', { task: handoffTask });
       }
     }

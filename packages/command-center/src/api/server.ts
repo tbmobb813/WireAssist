@@ -66,6 +66,7 @@ import { registerConversationRoutes } from './conversation-routes';
 import { routeChatMessage, type RouteDecision, type ChatHistoryMessage } from './chat-router';
 import { getLocation, setLocation, listNotes, addNote, deleteNote } from './dashboard-widgets';
 import { routeHandoffTask } from '../lib/route-handoff';
+import { replayOrphanedHandoffs } from '../lib/replay-handoffs';
 
 const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
 const DB_PATH = path.join(HOME_PATH, '.wireassist', 'wireassist.db');
@@ -553,6 +554,27 @@ function reportRestartRecovery() {
   broadcast('restart_recovery', summary);
 }
 
+// True durability for handoffs: called once at the end of bootstrap(),
+// after every agent is constructed (queueContentTask/queueOpsTask/etc. all
+// dereference module-level agent variables that don't exist until then —
+// this cannot run any earlier, including from inside reportRestartRecovery()
+// itself, which fires before agent construction).
+//
+// reportRestartRecovery() already found this restart's orphaned approvals
+// and logged/broadcast them; this re-fetches the same set and delegates to
+// replayOrphanedHandoffs() (lib/replay-handoffs.ts) to actually re-emit any
+// that carry a resumeTask through the same 'agent:handoff_requested' event
+// and routeHandoffTask() dispatch the live path uses, instead of leaving
+// them flagged as "orphaned" forever, requiring a human to notice and
+// manually re-trigger.
+function runOrphanedHandoffReplay(): void {
+  replayOrphanedHandoffs(
+    approval.getOrphanedApprovals(),
+    (task) => events.emit('agent:handoff_requested', { task }),
+    (id) => approval.markConsumed(id)
+  );
+}
+
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 async function bootstrap() {
   openStores();
@@ -611,6 +633,7 @@ async function bootstrap() {
   }
 
   agentReady = true;
+  runOrphanedHandoffReplay();
   if (!anthropicConfigured()) {
     logger.warn(
       '⚠️  ANTHROPIC_API_KEY is not set — dashboard loads, but triage/chat/calendar tasks will fail until you export it.'

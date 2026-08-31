@@ -10,10 +10,17 @@ export interface SkillAgentHandle {
   useTool(toolName: string, params: Record<string, unknown>): Promise<unknown>;
   loadContext(query: string): Promise<string>;
   remember(content: string, tags?: string[]): void;
+  // resumeTask: pass the fully-formed downstream AgentTask you'd hand off
+  // if this gets approved, when there is one. It's persisted with the
+  // approval request itself, so a restart that lands between approval and
+  // your continuation resuming can still replay the handoff — see
+  // ApprovalRequest.resumeTask. Omit for approvals with no follow-on task
+  // (e.g. gating a remember() call).
   proposeAction(
     task: AgentTask,
     action: string,
-    payload: Record<string, unknown>
+    payload: Record<string, unknown>,
+    resumeTask?: AgentTask
   ): Promise<boolean>;
   emit(event: string, payload: unknown): void;
   // Multi-turn tool-calling loop (see BaseAgent.runToolLoop). Falls back to

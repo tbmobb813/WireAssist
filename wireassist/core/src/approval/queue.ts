@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
 import type { ApprovalRequest } from './types';
-import type { AgentRole } from '../agents/types';
+import type { AgentRole, AgentTask } from '../agents/types';
 
 export class ApprovalQueue {
   private db: Database.Database;
@@ -45,6 +45,9 @@ export class ApprovalQueue {
     if (!columnNames.has('resolution_note')) {
       this.db.exec(`ALTER TABLE approval_queue ADD COLUMN resolution_note TEXT`);
     }
+    if (!columnNames.has('resume_task')) {
+      this.db.exec(`ALTER TABLE approval_queue ADD COLUMN resume_task TEXT`);
+    }
   }
 
   // Agent calls this and awaits — resolves when user approves/rejects (max 10 min)
@@ -53,13 +56,18 @@ export class ApprovalQueue {
     agentRole: AgentRole;
     action: string;
     payload: Record<string, unknown>;
+    // Captured now, at proposal time, specifically so it survives a restart
+    // that happens between approval and the continuation that would
+    // otherwise be the only thing that ever emits it — see the field's own
+    // doc comment on ApprovalRequest.
+    resumeTask?: AgentTask;
   }): Promise<boolean> {
     const id = randomUUID();
     this.db
       .prepare(
         `
-      INSERT INTO approval_queue (id, task_id, agent_role, action, payload, status, created_at)
-      VALUES (?, ?, ?, ?, ?, 'pending', ?)
+      INSERT INTO approval_queue (id, task_id, agent_role, action, payload, status, created_at, resume_task)
+      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
     `
       )
       .run(
@@ -68,7 +76,8 @@ export class ApprovalQueue {
         params.agentRole,
         params.action,
         JSON.stringify(params.payload),
-        new Date().toISOString()
+        new Date().toISOString(),
+        params.resumeTask ? JSON.stringify(params.resumeTask) : null
       );
 
     return new Promise((resolve) => {
@@ -225,5 +234,13 @@ function mapRow(r: any): ApprovalRequest {
     resolvedAt: r.resolved_at ? new Date(r.resolved_at) : undefined,
     consumedAt: r.consumed_at ? new Date(r.consumed_at) : undefined,
     resolutionNote: r.resolution_note ?? undefined,
+    resumeTask: r.resume_task ? deserializeTask(JSON.parse(r.resume_task)) : undefined,
   };
+}
+
+// JSON.stringify turns an AgentTask's Date fields into ISO strings; this
+// reverses that so a rehydrated resumeTask matches what AgentTask actually
+// declares, the same way every other Date-bearing row in this file does.
+function deserializeTask(raw: any): AgentTask {
+  return { ...raw, createdAt: new Date(raw.createdAt), updatedAt: new Date(raw.updatedAt) };
 }

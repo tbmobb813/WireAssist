@@ -182,3 +182,77 @@ describe('ApprovalQueue restart recovery (issue #184)', () => {
     expect(queue.getOrphanedApprovals()).toEqual([]);
   }, 10000);
 });
+
+describe('ApprovalQueue resumeTask (true handoff durability)', () => {
+  const sampleTask = {
+    id: 'task-handoff-1',
+    agentRole: 'content' as any,
+    description: 'Generate linkedin post about: AI trends',
+    status: 'queued' as const,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    input: { type: 'generate_post', topic: 'AI trends' },
+    approvalRequired: true,
+  };
+
+  it('persists resumeTask via request() and returns it, with Date fields rehydrated, once orphaned', () => {
+    const queue = freshQueue();
+    const db = (queue as any).db;
+
+    // request() itself always marks consumed the moment its own in-process
+    // poll notices the approval (that's the fast/live path) — so "orphaned"
+    // can only be produced the way a real restart does: a fresh process
+    // that never had a live request()/poll for this row at all, just an
+    // approved row sitting in the DB. Insert directly, mirroring seed().
+    db.prepare(
+      `INSERT INTO approval_queue (id, task_id, agent_role, action, payload, status, created_at, resolved_at, resume_task)
+       VALUES (?, ?, ?, ?, ?, 'approved', ?, ?, ?)`
+    ).run(
+      'id-1',
+      'task-x',
+      'research',
+      'Draft linkedin content?',
+      '{}',
+      new Date().toISOString(),
+      new Date().toISOString(),
+      JSON.stringify(sampleTask)
+    );
+
+    const [orphaned] = queue.getOrphanedApprovals();
+    expect(orphaned.resumeTask).toBeDefined();
+    expect(orphaned.resumeTask?.id).toBe('task-handoff-1');
+    expect(orphaned.resumeTask?.agentRole).toBe('content');
+    expect(orphaned.resumeTask?.createdAt).toBeInstanceOf(Date);
+    expect(orphaned.resumeTask?.createdAt.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('request() writes resumeTask to the DB row when supplied', async () => {
+    const queue = freshQueue();
+    const db = (queue as any).db;
+
+    const requestPromise = queue.request({
+      taskId: 'task-x',
+      agentRole: 'research' as any,
+      action: 'Draft linkedin content?',
+      payload: {},
+      resumeTask: sampleTask,
+    });
+
+    const [{ id, resume_task }] = db
+      .prepare('SELECT id, resume_task FROM approval_queue')
+      .all() as { id: string; resume_task: string }[];
+    expect(JSON.parse(resume_task).id).toBe('task-handoff-1');
+
+    // Drain the live path too, so the pending timer doesn't leak past the test.
+    queue.resolve(id, true);
+    await requestPromise;
+  }, 10000);
+
+  it('leaves resumeTask undefined when the caller does not pass one', () => {
+    const queue = freshQueue();
+    seed(queue, [{ agentRole: 'admin', action: 'Store research findings', status: 'approved' }]);
+
+    const [orphaned] = queue.getOrphanedApprovals();
+    expect(orphaned.resumeTask).toBeUndefined();
+  });
+});

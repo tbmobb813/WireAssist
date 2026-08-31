@@ -62,7 +62,8 @@ describe('researchTopicSkill — Research -> Content handoff', () => {
       2,
       expect.anything(),
       expect.stringContaining('Draft linkedin content'),
-      expect.objectContaining({ platform: 'linkedin' })
+      expect.objectContaining({ platform: 'linkedin' }),
+      expect.objectContaining({ agentRole: 'content' }) // resumeTask, for durability across a restart
     );
   });
 
@@ -93,6 +94,27 @@ describe('researchTopicSkill — Research -> Content handoff', () => {
         }),
       })
     );
+  });
+
+  it('passes the exact same task object as resumeTask and as the emitted handoff — durability depends on these matching', async () => {
+    const proposeAction = jest.fn().mockResolvedValue(true);
+    const agent = makeAgentHandle({ proposeAction });
+
+    await researchTopicSkill.execute({
+      agent,
+      task: makeTask(),
+      input: {
+        query: 'AI trends',
+        offerContentDraft: { platform: 'linkedin', tone: 'direct' },
+      },
+    });
+
+    const resumeTaskArg = proposeAction.mock.calls[1][3];
+    const emittedTask = (agent.emit as jest.Mock).mock.calls.find(
+      (c) => c[0] === 'agent:handoff_requested'
+    )?.[1].task;
+    expect(resumeTaskArg).toBeDefined();
+    expect(resumeTaskArg).toBe(emittedTask);
   });
 
   it('does not emit a handoff when the content-draft approval is declined', async () => {
@@ -156,7 +178,8 @@ describe('researchTopicSkill — Research -> NixOps handoff', () => {
       2,
       expect.anything(),
       expect.stringContaining('nixlevel-listing'),
-      expect.objectContaining({ workflow: 'nixlevel-listing' })
+      expect.objectContaining({ workflow: 'nixlevel-listing' }),
+      expect.objectContaining({ agentRole: 'strategy' }) // resumeTask, for durability across a restart
     );
   });
 

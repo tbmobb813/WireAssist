@@ -211,7 +211,8 @@ export abstract class BaseAgent {
       useTool: (toolName, params) => this.useTool(toolName, params),
       loadContext: (query) => this.loadContext(query),
       remember: (content, tags) => this.remember(content, tags),
-      proposeAction: (task, action, payload) => this.proposeAction(task, action, payload),
+      proposeAction: (task, action, payload, resumeTask) =>
+        this.proposeAction(task, action, payload, resumeTask),
       emit: (event, payload) => this.events.emit(event, payload),
       runToolLoop: (task, userMessage, opts) => this.runToolLoop(task, userMessage, opts),
       listDecisions: (params) => this.listDecisions(params),
@@ -509,11 +510,15 @@ export abstract class BaseAgent {
     return captured;
   }
 
-  // Propose an action — pauses and waits for human approval
+  // Propose an action — pauses and waits for human approval. Pass
+  // resumeTask when approval unlocks a downstream handoff so a restart
+  // between "approved" and this call's continuation resuming can still
+  // replay it — see ApprovalRequest.resumeTask.
   protected async proposeAction(
     task: AgentTask,
     action: string,
-    payload: Record<string, unknown>
+    payload: Record<string, unknown>,
+    resumeTask?: AgentTask
   ): Promise<boolean> {
     this.status = 'waiting_approval';
 
@@ -531,6 +536,7 @@ export abstract class BaseAgent {
       agentRole: this.role,
       action,
       payload,
+      resumeTask,
     });
 
     this.status = approved ? 'running' : 'idle';
