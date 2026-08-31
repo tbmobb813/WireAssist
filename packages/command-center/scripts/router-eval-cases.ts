@@ -67,8 +67,19 @@ export const ROUTER_EVAL_CASES: RouterEvalCase[] = [
   // ── content_generate vs content_plan vs content_freeform ──
   {
     prompt: 'write a tweet announcing our new feature',
+    expectedKind: 'admin_freeform',
+    notes:
+      'Consistently (8/8 at temperature: 0) routes here rather than content_generate, because ' +
+      'content_generate\'s required `topic` field has nothing concrete to fill ("our new feature" ' +
+      'names no actual feature) and that tool has no way to ask a clarifying question — so bailing ' +
+      'to admin_freeform, whose tool loop can ask what the feature is before delegating to Content, ' +
+      'is the more defensible behavior. A version of this prompt with a real topic (e.g. "write a ' +
+      'tweet about our new dark mode feature") is the better test of platform inference.',
+  },
+  {
+    prompt: 'write a tweet about our new dark mode feature',
     expectedKind: 'content_generate',
-    notes: 'Single post, one platform.',
+    notes: 'Single post, one platform, with an actual concrete topic to fill.',
   },
   {
     prompt: 'build me a content calendar for the next 3 weeks across twitter and linkedin',

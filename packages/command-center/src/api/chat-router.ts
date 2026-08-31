@@ -329,6 +329,12 @@ export async function routeChatMessage(
   const response = await client.messages.create({
     model: ROUTER_MODEL,
     max_tokens: 512,
+    // This is a classification call, not a creative one — it should pick
+    // the same tool for the same input every time. Without this, the
+    // default sampling temperature made routing decisions flip between
+    // calls for the exact same prompt (observed: 6/8 admin_freeform vs
+    // 2/8 content_generate for one identical "write a tweet..." prompt).
+    temperature: 0,
     system: SYSTEM_PROMPT,
     tools: TOOLS,
     tool_choice: { type: 'any' },
