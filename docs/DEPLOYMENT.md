@@ -548,15 +548,23 @@ No `jq` needed (no request body). Run it manually once first
 (`WIREASSIST_API_URL=http://localhost:3002 ./dev/budget-warning.sh`) to
 confirm it queues successfully before trusting it to cron.
 
-## 13. Stale-approval nudges
+## 13. Approval backlog watcher (stale-approval nudges)
 
 `dev/stale-approvals.sh` triggers the Admin Agent's `stale_approvals_nudge`
-task — it scans every still-pending approval request across every agent
-(not just Admin's own) and flags any that have been sitting unresolved for
-3+ days without a decision. Unlike proactive insights (which reflects on
-already-_resolved_ history), this looks at what's still stuck in the queue
-right now. It only reads and reports — it never resolves anything itself,
-so there's nothing extra to gate. If nothing is stale, it says so and skips
+task, across every agent (not just Admin's own), in three ways:
+
+- Individual requests sitting unresolved for 3+ days without a decision.
+- The pending count piling up past a threshold (default 5), even if every
+  item is individually fresh.
+- Approvals a human already granted that no live process ever acted on —
+  a restart orphaned them (see issue #184 and
+  `ApprovalQueue.getOrphanedApprovals()`); age alone can't catch these
+  since they aren't "waiting," they're lost.
+
+Unlike proactive insights (which reflects on already-_resolved_ history),
+this looks at what's still stuck or lost right now. It only reads and
+reports — it never resolves anything itself, so there's nothing extra to
+gate. If none of the three conditions are met, it says so and skips
 pinging Telegram.
 
 **Cron entry** (daily makes more sense here than the weekly cadence above —

@@ -84,6 +84,16 @@ describe('AdminTasks', () => {
       const t = AdminTasks.staleApprovals(1);
       expect((t.input as { daysStale?: number }).daysStale).toBe(1);
     });
+
+    it('passes backlogThreshold through, undefined by default', () => {
+      expect(
+        (AdminTasks.staleApprovals(3, undefined, 10).input as { backlogThreshold?: number })
+          .backlogThreshold
+      ).toBe(10);
+      expect(
+        (AdminTasks.staleApprovals().input as { backlogThreshold?: number }).backlogThreshold
+      ).toBeUndefined();
+    });
   });
 
   describe('objectiveId passthrough', () => {

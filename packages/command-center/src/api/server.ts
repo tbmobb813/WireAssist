@@ -860,7 +860,11 @@ app.post('/api/tasks/stale-approvals', async (c) => {
   if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
   const body = await c.req.json().catch(() => ({}));
   const daysStale = Number.isFinite(body.daysStale) && body.daysStale >= 0 ? body.daysStale : 3;
-  const task = AdminTasks.staleApprovals(daysStale);
+  const backlogThreshold =
+    Number.isFinite(body.backlogThreshold) && body.backlogThreshold >= 0
+      ? body.backlogThreshold
+      : undefined;
+  const task = AdminTasks.staleApprovals(daysStale, undefined, backlogThreshold);
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });

@@ -24,6 +24,10 @@ export interface IApprovalQueue {
   }): Promise<boolean>;
   resolve(id: string, approved: boolean): void;
   getPending(): ApprovalRequest[];
+  // Approved but never observed by a live process — see ApprovalQueue's
+  // implementation for why this can happen and why age alone can't detect
+  // it (issue #184).
+  getOrphanedApprovals(): ApprovalRequest[];
   // Approved/rejected history, most recently resolved first — for agents
   // reflecting on patterns in what's been approved vs. rejected over time.
   getResolved(params?: { agentRole?: AgentRole; limit?: number }): ApprovalRequest[];

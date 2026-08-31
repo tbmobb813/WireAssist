@@ -37,6 +37,9 @@ export interface SkillAgentHandle {
   // Still-unresolved approval requests, across every agent — for skills
   // that flag approvals sitting too long without a decision.
   listPending(): ApprovalRequest[];
+  // Approvals a human already granted that no live process ever consumed —
+  // lost, not waiting. See ApprovalQueue.getOrphanedApprovals() (issue #184).
+  listOrphanedApprovals(): ApprovalRequest[];
   // Recent memories carrying at least one of `tags`, most recent first —
   // for skills that reflect on a specific kind of remembered signal across
   // every agent (e.g. tagged freeform requests), not a relevance search

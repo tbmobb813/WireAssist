@@ -26,6 +26,7 @@ function makeAgentHandle(overrides: Partial<SkillAgentHandle> = {}): SkillAgentH
     runToolLoop: jest.fn().mockResolvedValue(''),
     listDecisions: jest.fn().mockReturnValue([]),
     listPending: jest.fn().mockReturnValue([]),
+    listOrphanedApprovals: jest.fn().mockReturnValue([]),
     listMemories: jest.fn().mockReturnValue([]),
     ...overrides,
   };
@@ -58,7 +59,11 @@ describe('staleApprovalsSkill', () => {
     expect(think).not.toHaveBeenCalled();
     expect(agent.emit).toHaveBeenCalledWith(
       'agent:stale_approvals_complete',
-      expect.objectContaining({ summary: 'No approvals have been sitting stale.', stale: [] })
+      expect.objectContaining({
+        summary: 'No approvals have been sitting stale.',
+        stale: [],
+        orphaned: [],
+      })
     );
   });
 
@@ -141,5 +146,125 @@ describe('staleApprovalsSkill', () => {
       'admin',
       'content',
     ]);
+  });
+
+  describe('orphaned approvals (issue #184)', () => {
+    it('flags approvals a human already granted that no live process consumed', async () => {
+      const listOrphanedApprovals = jest.fn().mockReturnValue([
+        pending({
+          agentRole: 'strategy',
+          action: 'Turn this research into a "nixlevel-listing" NixOps run?',
+          status: 'approved',
+        }),
+      ]);
+      const agent = makeAgentHandle({ listOrphanedApprovals });
+
+      await staleApprovalsSkill.execute({ agent, task: makeTask(), input: {} });
+
+      expect(agent.think).toHaveBeenCalled();
+      expect(agent.emit).toHaveBeenCalledWith(
+        'agent:stale_approvals_complete',
+        expect.objectContaining({
+          orphaned: [
+            expect.objectContaining({
+              agentRole: 'strategy',
+              action: 'Turn this research into a "nixlevel-listing" NixOps run?',
+            }),
+          ],
+        })
+      );
+    });
+
+    it('fires even when nothing is pending or stale — orphaned approvals alone are enough', async () => {
+      const listOrphanedApprovals = jest
+        .fn()
+        .mockReturnValue([pending({ agentRole: 'admin', action: 'Send draft' })]);
+      const agent = makeAgentHandle({
+        listPending: jest.fn().mockReturnValue([]),
+        listOrphanedApprovals,
+      });
+
+      await staleApprovalsSkill.execute({ agent, task: makeTask(), input: {} });
+
+      expect(agent.think).toHaveBeenCalled();
+      const emitted = (agent.emit as jest.Mock).mock.calls.find(
+        ([event]) => event === 'agent:stale_approvals_complete'
+      )?.[1];
+      expect(emitted.summary).not.toBe('No approvals have been sitting stale.');
+    });
+
+    it('does not confuse orphaned approvals with stale-pending ones', async () => {
+      const listPending = jest.fn().mockReturnValue([]);
+      const listOrphanedApprovals = jest
+        .fn()
+        .mockReturnValue([pending({ agentRole: 'research', action: 'Store findings' })]);
+      const agent = makeAgentHandle({ listPending, listOrphanedApprovals });
+
+      await staleApprovalsSkill.execute({ agent, task: makeTask(), input: {} });
+
+      expect(agent.emit).toHaveBeenCalledWith(
+        'agent:stale_approvals_complete',
+        expect.objectContaining({ stale: [] })
+      );
+    });
+  });
+
+  describe('backlog size threshold', () => {
+    it('flags a large pile of fresh (not individually stale) pending approvals', async () => {
+      const listPending = jest
+        .fn()
+        .mockReturnValue(
+          Array.from({ length: 6 }, (_, i) =>
+            pending({ agentRole: 'admin', action: `Item ${i}`, createdAt: daysAgo(0) })
+          )
+        );
+      const agent = makeAgentHandle({ listPending });
+
+      await staleApprovalsSkill.execute({ agent, task: makeTask(), input: {} });
+
+      expect(agent.think).toHaveBeenCalled();
+      const emitted = (agent.emit as jest.Mock).mock.calls.find(
+        ([event]) => event === 'agent:stale_approvals_complete'
+      )?.[1];
+      expect(emitted.stale).toEqual([]); // none are individually stale by age
+      expect(emitted.summary).not.toBe('No approvals have been sitting stale.');
+    });
+
+    it('does not fire on backlog size alone when under the threshold', async () => {
+      const listPending = jest
+        .fn()
+        .mockReturnValue(
+          Array.from({ length: 3 }, (_, i) =>
+            pending({ agentRole: 'admin', action: `Item ${i}`, createdAt: daysAgo(0) })
+          )
+        );
+      const agent = makeAgentHandle({ listPending });
+
+      await staleApprovalsSkill.execute({ agent, task: makeTask(), input: {} });
+
+      expect(agent.emit).toHaveBeenCalledWith(
+        'agent:stale_approvals_complete',
+        expect.objectContaining({ summary: 'No approvals have been sitting stale.' })
+      );
+    });
+
+    it('respects a custom backlogThreshold input', async () => {
+      const listPending = jest
+        .fn()
+        .mockReturnValue(
+          Array.from({ length: 2 }, (_, i) =>
+            pending({ agentRole: 'admin', action: `Item ${i}`, createdAt: daysAgo(0) })
+          )
+        );
+      const agent = makeAgentHandle({ listPending });
+
+      await staleApprovalsSkill.execute({
+        agent,
+        task: makeTask(),
+        input: { backlogThreshold: 2 },
+      });
+
+      expect(agent.think).toHaveBeenCalled();
+    });
   });
 });

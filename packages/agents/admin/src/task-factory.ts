@@ -37,7 +37,7 @@ type SupportedTaskInput =
   | { type: 'follow_up_nudges'; daysStale?: number }
   | { type: 'proactive_insights' }
   | { type: 'budget_warning_nudge'; thresholdPercent?: number }
-  | { type: 'stale_approvals_nudge'; daysStale?: number }
+  | { type: 'stale_approvals_nudge'; daysStale?: number; backlogThreshold?: number }
   | { type: 'detect_skill_opportunities'; limit?: number }
   | { type: 'meeting_prep'; hoursAhead?: number }
   | {
@@ -225,12 +225,19 @@ export function createBudgetWarningTask(options?: {
 export function createStaleApprovalsTask(options?: {
   description?: string;
   daysStale?: number;
+  backlogThreshold?: number;
   objectiveId?: string;
 }): AgentTask {
   return baseTask(
     'admin',
-    options?.description ?? 'Flag approval requests that have been sitting pending too long.',
-    { type: 'stale_approvals_nudge', daysStale: options?.daysStale },
+    options?.description ??
+      'Flag approval requests that are stuck pending, piled up past a count threshold, or ' +
+        'approved but never run.',
+    {
+      type: 'stale_approvals_nudge',
+      daysStale: options?.daysStale,
+      backlogThreshold: options?.backlogThreshold,
+    },
     options?.objectiveId
   );
 }

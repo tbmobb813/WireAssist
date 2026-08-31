@@ -513,7 +513,8 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
     }
     case 'stale_approvals_complete': {
       const stale = Array.isArray(p.stale) ? p.stale : [];
-      if (stale.length === 0) break;
+      const orphaned = Array.isArray(p.orphaned) ? p.orphaned : [];
+      if (stale.length === 0 && orphaned.length === 0) break;
       await send(`⏰ ${String(p.summary ?? '').slice(0, 3000)}\n\nUse /approvals to review.`);
       break;
     }

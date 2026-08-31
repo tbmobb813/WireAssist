@@ -23,6 +23,11 @@ class CliApprovalQueue implements IApprovalQueue {
   }
 
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  getOrphanedApprovals(): never[] {
+    return [];
+  }
+
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   getResolved(): never[] {
     return [];
   }

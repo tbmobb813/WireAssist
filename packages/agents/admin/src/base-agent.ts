@@ -216,6 +216,7 @@ export abstract class BaseAgent {
       runToolLoop: (task, userMessage, opts) => this.runToolLoop(task, userMessage, opts),
       listDecisions: (params) => this.listDecisions(params),
       listPending: () => this.listPending(),
+      listOrphanedApprovals: () => this.listOrphanedApprovals(),
       listMemories: (params) => this.listMemories(params),
     };
   }
@@ -593,6 +594,13 @@ export abstract class BaseAgent {
   // shared-table reasoning as listDecisions() above.
   protected listPending(): ApprovalRequest[] {
     return this.approval.getPending();
+  }
+
+  // Approvals a human already granted that no live process ever acted on —
+  // see ApprovalQueue.getOrphanedApprovals(). Unlike listPending(), age
+  // alone can't surface these: they aren't "waiting," they're lost.
+  protected listOrphanedApprovals(): ApprovalRequest[] {
+    return this.approval.getOrphanedApprovals();
   }
 
   // Recent memories carrying at least one of the given tags, across every

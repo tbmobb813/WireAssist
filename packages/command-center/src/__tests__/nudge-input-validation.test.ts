@@ -8,6 +8,14 @@ function resolveDaysStale(raw: unknown): number {
   return Number.isFinite(raw) && (raw as number) >= 0 ? (raw as number) : 3;
 }
 
+// Unlike daysStale/thresholdPercent, this has no fixed numeric fallback —
+// the skill itself defaults to 5 when backlogThreshold is undefined, so an
+// invalid value here is passed through as undefined, not coerced to a
+// number the caller never asked for.
+function resolveBacklogThreshold(raw: unknown): number | undefined {
+  return Number.isFinite(raw) && (raw as number) >= 0 ? (raw as number) : undefined;
+}
+
 describe('resolveThresholdPercent()', () => {
   it('passes through a valid non-negative number', () => {
     expect(resolveThresholdPercent(50)).toBe(50);
@@ -48,5 +56,22 @@ describe('resolveDaysStale()', () => {
   it('defaults to 3 for NaN or a non-numeric value', () => {
     expect(resolveDaysStale(NaN)).toBe(3);
     expect(resolveDaysStale('abc')).toBe(3);
+  });
+});
+
+describe('resolveBacklogThreshold()', () => {
+  it('passes through a valid non-negative number', () => {
+    expect(resolveBacklogThreshold(5)).toBe(5);
+    expect(resolveBacklogThreshold(0)).toBe(0);
+  });
+
+  it('is undefined when not provided, letting the skill apply its own default', () => {
+    expect(resolveBacklogThreshold(undefined)).toBeUndefined();
+  });
+
+  it('is undefined for a negative number, NaN, or a non-numeric value', () => {
+    expect(resolveBacklogThreshold(-1)).toBeUndefined();
+    expect(resolveBacklogThreshold(NaN)).toBeUndefined();
+    expect(resolveBacklogThreshold('abc')).toBeUndefined();
   });
 });

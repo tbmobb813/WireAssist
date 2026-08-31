@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Fires the Admin Agent's stale_approvals_nudge task — scans every
-# still-pending approval request across every agent and flags any that
-# have been sitting unresolved for 3+ days without a decision.
+# Fires the Admin Agent's stale_approvals_nudge task — the "Approval
+# Backlog Watcher." Flags approval-queue problems three ways: individual
+# requests stuck pending 3+ days, the pending count piling up past a
+# threshold (default 5) regardless of any single item's age, and approvals
+# a human already granted that no live process ever acted on (a restart
+# orphaned them — see issue #184; ApprovalQueue.getOrphanedApprovals()).
 #
 # Unlike dev/proactive-insights.sh (which reflects on already-resolved
 # history), this looks at what's still stuck in the approval queue right

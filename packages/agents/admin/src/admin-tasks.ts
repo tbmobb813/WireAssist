@@ -54,8 +54,8 @@ export const AdminTasks = {
     return createBudgetWarningTask({ thresholdPercent, objectiveId });
   },
 
-  staleApprovals(daysStale = 3, objectiveId?: string) {
-    return createStaleApprovalsTask({ daysStale, objectiveId });
+  staleApprovals(daysStale = 3, objectiveId?: string, backlogThreshold?: number) {
+    return createStaleApprovalsTask({ daysStale, backlogThreshold, objectiveId });
   },
 
   detectSkillOpportunities(limit = 200, objectiveId?: string) {
