@@ -87,6 +87,29 @@ export const ResearchTasks = {
     };
   },
 
+  // Queued by server.ts's agent:content_generated listener when the
+  // producing task carries a reviewContext — see review-handoff-output.ts.
+  reviewHandoffOutput(input: {
+    originalQuery: string;
+    researchSummary: string;
+    requestedPlatform: string;
+    requestedTone?: string;
+    producedContent: string;
+    contentTaskId: string;
+    attempt: number;
+  }): AgentTask {
+    return {
+      id: randomUUID(),
+      agentRole: 'research',
+      description: `Review Content's ${input.requestedPlatform} draft against handoff: ${input.originalQuery}`,
+      status: 'queued',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      input: { type: 'review_handoff_output', ...input },
+      approvalRequired: false,
+    };
+  },
+
   freeform(
     prompt: string,
     history?: ProviderMessage[],

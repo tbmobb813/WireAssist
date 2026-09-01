@@ -101,6 +101,20 @@ export const researchTopicSkill: Skill<ResearchTopicInput, void> = {
         summary,
         task.objectiveId
       );
+      // Pilot: Research reviews Content's output cold once it's produced —
+      // see review-handoff-output.ts and server.ts's content_generated
+      // listener. attempt starts at 0; server.ts bumps it on a retry.
+      handoffTask.input = {
+        ...handoffTask.input,
+        reviewContext: {
+          requestedBy: 'research',
+          originalTaskId: task.id,
+          query,
+          researchSummary: summary,
+          tone,
+          attempt: 0,
+        },
+      };
       const draftApproved = await agent.proposeAction(
         task,
         `Draft ${platform} content from this research on "${query}"?`,

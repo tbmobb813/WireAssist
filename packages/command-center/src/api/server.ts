@@ -59,7 +59,7 @@ import {
   GitHubMcpClient,
   resolveAuthorizedGithubTools,
 } from '@wireassist/agent-github';
-import { registerTrendPostTools, TrendPostStorage } from '@wireassist/trendpost-mcp';
+import { registerTrendPostTools, TrendPostStorage, type Platform } from '@wireassist/trendpost-mcp';
 import { registerPortfolioRoutes } from './portfolio-routes';
 import { registerObjectiveRoutes } from './objective-routes';
 import { registerConversationRoutes } from './conversation-routes';
@@ -67,6 +67,7 @@ import { routeChatMessage, type RouteDecision, type ChatHistoryMessage } from '.
 import { getLocation, setLocation, listNotes, addNote, deleteNote } from './dashboard-widgets';
 import { routeHandoffTask } from '../lib/route-handoff';
 import { replayOrphanedHandoffs } from '../lib/replay-handoffs';
+import { decideHandoffReviewAction } from '../lib/handoff-review';
 
 const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
 const DB_PATH = path.join(HOME_PATH, '.wireassist', 'wireassist.db');
@@ -490,6 +491,87 @@ events.on('agent:handoff_requested', (p) => {
   });
   if (routed) broadcast('handoff_queued', p);
 });
+
+// Delegate -> check -> redirect pilot (Research -> Content only, for now —
+// see review-handoff-output.ts). Content's own draft-approval flow above is
+// completely unchanged; this runs in parallel, purely as a quality check.
+events.on('agent:content_generated', (p: any) => {
+  const reviewContext = p.reviewContext as
+    | {
+        requestedBy: 'research';
+        originalTaskId: string;
+        query: string;
+        researchSummary: string;
+        tone?: string;
+        attempt: number;
+      }
+    | undefined;
+  if (!reviewContext) return;
+
+  const reviewTask = ResearchTasks.reviewHandoffOutput({
+    originalQuery: reviewContext.query,
+    researchSummary: reviewContext.researchSummary,
+    requestedPlatform: p.platform,
+    requestedTone: reviewContext.tone,
+    producedContent: p.content,
+    contentTaskId: p.taskId,
+    attempt: reviewContext.attempt,
+  });
+  queueResearchTask(reviewTask as Parameters<ResearchAgent['run']>[0]);
+});
+
+events.on('agent:handoff_review_complete', (p: any) => {
+  broadcast('handoff_review_complete', p);
+  const action = decideHandoffReviewAction(p);
+  if (action.kind === 'pass') return;
+
+  if (action.kind === 'retry') {
+    // The failing draft's pending approval is stale — supersede it so the
+    // human isn't left reviewing something already known to have failed
+    // review, rather than the revised one that's coming.
+    for (const a of approval.getPending().filter((x) => x.taskId === p.contentTaskId)) {
+      approval.resolve(
+        a.id,
+        false,
+        `Superseded: failed review — "${p.reason}". Retrying with feedback.`
+      );
+    }
+
+    const retryTask = ContentTasks.generatePost(
+      p.originalQuery,
+      p.requestedPlatform as Platform,
+      p.requestedTone,
+      `${p.researchSummary}\n\nA PRIOR DRAFT FAILED REVIEW: ${p.reason}\nAddress this specifically in the revised draft.`
+    );
+    retryTask.input = {
+      ...retryTask.input,
+      reviewContext: {
+        requestedBy: 'research',
+        originalTaskId: p.contentTaskId,
+        query: p.originalQuery,
+        researchSummary: p.researchSummary,
+        tone: p.requestedTone,
+        attempt: p.attempt + 1,
+      },
+    };
+    queueContentTask(retryTask as Parameters<ContentAgent['run']>[0]);
+    return;
+  }
+
+  // Escalate: already retried once and still failed. Leave the current
+  // pending approval alone (untouched, still awaiting a human decision) —
+  // just flag the concern so whoever reviews it sees why before deciding,
+  // rather than silently retrying again or discarding it.
+  events.emit('agent:handoff_review_escalated', {
+    contentTaskId: p.contentTaskId,
+    originalQuery: p.originalQuery,
+    requestedPlatform: p.requestedPlatform,
+    reason: p.reason,
+    producedContent: p.producedContent,
+  });
+});
+
+events.on('agent:handoff_review_escalated', (p) => broadcast('handoff_review_escalated', p));
 
 type RestartRecoverySummary = {
   bootedAt: string;

@@ -1,11 +1,25 @@
 import type { Skill } from '@wireassist/core';
 import type { Platform } from '@wireassist/trendpost-mcp';
 
+// Present only when this task came from the Research -> Content handoff
+// pilot (research-topic.ts's offerContentDraft). Carries what's needed for
+// Research's own review_handoff_output skill to grade this draft cold
+// against what it actually asked for — see review-handoff-output.ts.
+export interface HandoffReviewContext {
+  requestedBy: 'research';
+  originalTaskId: string;
+  query: string;
+  researchSummary: string;
+  tone?: string;
+  attempt: number;
+}
+
 export interface GeneratePostInput {
   topic: string;
   platform: Platform;
   tone?: string;
   extraContext?: string;
+  reviewContext?: HandoffReviewContext;
 }
 
 export const generatePostSkill: Skill<GeneratePostInput, void> = {
@@ -15,7 +29,7 @@ export const generatePostSkill: Skill<GeneratePostInput, void> = {
   requiresApproval: true,
 
   async execute({ agent, task, input }) {
-    const { topic, platform, tone, extraContext } = input;
+    const { topic, platform, tone, extraContext, reviewContext } = input;
 
     const memoryContext = await agent.loadContext(
       'business description products services audience'
@@ -35,6 +49,9 @@ export const generatePostSkill: Skill<GeneratePostInput, void> = {
     agent.emit('agent:content_generated', {
       taskId: task.id,
       ...result,
+      // Only present for the review pilot — server.ts's listener uses this
+      // to decide whether to queue Research's cold review of this draft.
+      reviewContext,
     });
 
     const analysis = (await agent.useTool('content_analyze', {

@@ -35,7 +35,7 @@ export interface IApprovalQueue {
     payload: Record<string, unknown>;
     resumeTask?: AgentTask;
   }): Promise<boolean>;
-  resolve(id: string, approved: boolean): void;
+  resolve(id: string, approved: boolean, note?: string): void;
   getPending(): ApprovalRequest[];
   // Approved but never observed by a live process — see ApprovalQueue's
   // implementation for why this can happen and why age alone can't detect

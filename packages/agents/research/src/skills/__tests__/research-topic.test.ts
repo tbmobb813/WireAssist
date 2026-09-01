@@ -96,6 +96,37 @@ describe('researchTopicSkill — Research -> Content handoff', () => {
     );
   });
 
+  it('attaches a reviewContext to the Content handoff task, starting at attempt 0', async () => {
+    const agent = makeAgentHandle();
+
+    await researchTopicSkill.execute({
+      agent,
+      task: makeTask({ id: 'task-r1' }),
+      input: {
+        query: 'AI trends',
+        offerContentDraft: { platform: 'linkedin', tone: 'direct' },
+      },
+    });
+
+    expect(agent.emit).toHaveBeenCalledWith(
+      'agent:handoff_requested',
+      expect.objectContaining({
+        task: expect.objectContaining({
+          input: expect.objectContaining({
+            reviewContext: {
+              requestedBy: 'research',
+              originalTaskId: 'task-r1',
+              query: 'AI trends',
+              researchSummary: 'Findings summary.',
+              tone: 'direct',
+              attempt: 0,
+            },
+          }),
+        }),
+      })
+    );
+  });
+
   it('passes the exact same task object as resumeTask and as the emitted handoff — durability depends on these matching', async () => {
     const proposeAction = jest.fn().mockResolvedValue(true);
     const agent = makeAgentHandle({ proposeAction });

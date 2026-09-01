@@ -576,6 +576,19 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
       await send(`📊 ${String(p.summary ?? '').slice(0, 3000)}\n\nUse /content to review.`);
       break;
     }
+    case 'handoff_review_escalated': {
+      // Delegate -> check -> redirect pilot (Research -> Content): fired
+      // only after a draft has already failed review once, been retried
+      // with feedback, and still failed. The pending approval for the
+      // retried draft is untouched — this just flags why, so the decision
+      // to approve/reject it is made with the review's concern in view.
+      await send(
+        `⚠️ Content draft failed review twice for "${String(p.originalQuery ?? '')}" ` +
+          `(${String(p.requestedPlatform ?? '')}): ${String(p.reason ?? '').slice(0, 1500)}` +
+          `\n\nUse /approvals to review the draft anyway.`
+      );
+      break;
+    }
   }
 }
 

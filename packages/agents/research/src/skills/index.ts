@@ -4,6 +4,7 @@ import { synthesizeFindingsSkill } from './synthesize-findings';
 import { freeformSkill } from './freeform';
 import { proposeSkillSkill } from './propose-skill';
 import { marketGapDiscoverySkill } from './market-gap-discovery';
+import { reviewHandoffOutputSkill } from './review-handoff-output';
 
 export const RESEARCH_SKILLS: Skill[] = [
   researchTopicSkill,
@@ -11,6 +12,7 @@ export const RESEARCH_SKILLS: Skill[] = [
   freeformSkill,
   proposeSkillSkill,
   marketGapDiscoverySkill,
+  reviewHandoffOutputSkill,
 ];
 
 // Same-agent SkillChain example: research a topic, then synthesize it

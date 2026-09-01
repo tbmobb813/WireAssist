@@ -112,17 +112,21 @@ export class ApprovalQueue {
     });
   }
 
-  // Command Center UI calls this when user taps Approve or Reject
-  resolve(id: string, approved: boolean): void {
+  // Command Center UI calls this when user taps Approve or Reject. note is
+  // also used programmatically — e.g. superseding a pending approval whose
+  // draft failed review and is being redone (see server.ts's
+  // agent:handoff_review_complete listener) — to distinguish that from an
+  // actual human rejection.
+  resolve(id: string, approved: boolean, note?: string): void {
     this.db
       .prepare(
         `
       UPDATE approval_queue
-      SET status = ?, resolved_at = ?
+      SET status = ?, resolved_at = ?, resolution_note = COALESCE(?, resolution_note)
       WHERE id = ?
     `
       )
-      .run(approved ? 'approved' : 'rejected', new Date().toISOString(), id);
+      .run(approved ? 'approved' : 'rejected', new Date().toISOString(), note ?? null, id);
   }
 
   markConsumed(id: string): void {

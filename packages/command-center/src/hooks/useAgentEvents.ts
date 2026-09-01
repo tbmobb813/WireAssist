@@ -89,7 +89,47 @@ export type AgentEvent =
   | { event: 'freeform_response'; payload: { taskId: string; response: string } }
   | {
       event: 'content_generated';
-      payload: { taskId: string; content: string; platform: string; topic: string };
+      payload: {
+        taskId: string;
+        content: string;
+        platform: string;
+        topic: string;
+        // Only present for the Research -> Content review pilot — see
+        // review-handoff-output.ts.
+        reviewContext?: {
+          requestedBy: 'research';
+          originalTaskId: string;
+          query: string;
+          researchSummary: string;
+          tone?: string;
+          attempt: number;
+        };
+      };
+    }
+  | {
+      event: 'handoff_review_complete';
+      payload: {
+        taskId: string;
+        contentTaskId: string;
+        passed: boolean;
+        reason: string;
+        attempt: number;
+        originalQuery: string;
+        researchSummary: string;
+        requestedPlatform: string;
+        requestedTone?: string;
+        producedContent: string;
+      };
+    }
+  | {
+      event: 'handoff_review_escalated';
+      payload: {
+        contentTaskId: string;
+        originalQuery: string;
+        requestedPlatform: string;
+        reason: string;
+        producedContent: string;
+      };
     }
   | { event: 'content_approved'; payload: { taskId: string; content: string; platform: string } }
   | {
