@@ -4,6 +4,30 @@ import { tmpdir } from 'os';
 import type { AgentTask, IApprovalQueue, MemoryStore, MCPClient, EventBus } from '@wireassist/core';
 import { AdminAgent } from '../admin-agent';
 import * as autoApprovePolicy from '../auto-approve-policy';
+import type { ChatDispatch } from '../chat-dispatch';
+
+function makeChatDispatchMock(overrides: Partial<ChatDispatch> = {}): ChatDispatch {
+  const stubResult = {
+    taskId: 'dispatched-task-1',
+    agentRole: 'content' as const,
+    summary: 'Queued.',
+  };
+  return {
+    contentPost: jest.fn().mockResolvedValue(stubResult),
+    contentPlan: jest.fn().mockResolvedValue(stubResult),
+    contentFreeform: jest.fn().mockResolvedValue(stubResult),
+    researchTopic: jest.fn().mockResolvedValue(stubResult),
+    researchFreeform: jest.fn().mockResolvedValue(stubResult),
+    opsWorkflow: jest.fn().mockResolvedValue(stubResult),
+    opsFreeform: jest.fn().mockResolvedValue(stubResult),
+    gtmFreeform: jest.fn().mockResolvedValue(stubResult),
+    githubFreeform: jest.fn().mockResolvedValue(stubResult),
+    redirectToGtmWizard: jest
+      .fn()
+      .mockReturnValue({ redirect: '/gtm', message: 'Head to the wizard.' }),
+    ...overrides,
+  };
+}
 
 function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
   return {
@@ -25,6 +49,7 @@ function makeDeps(
     memory?: Partial<MemoryStore>;
     mcp?: Partial<MCPClient>;
     events?: Partial<EventBus>;
+    chatDispatch?: Partial<ChatDispatch>;
   } = {}
 ) {
   return {
@@ -53,6 +78,7 @@ function makeDeps(
       on: jest.fn(),
       ...overrides.events,
     } as unknown as EventBus,
+    chatDispatch: makeChatDispatchMock(overrides.chatDispatch),
   };
 }
 
@@ -424,6 +450,99 @@ describe('AdminAgent — delegate_to_agent', () => {
 
     expect(result.isError).toBe(true);
     expect(deps.approval.request).not.toHaveBeenCalled();
+  });
+});
+
+describe('AdminAgent — chat dispatch tools', () => {
+  it('dispatch_content_post calls chatDispatch.contentPost with the tool input and originating task context, never proposing approval', async () => {
+    const contentPost = jest
+      .fn()
+      .mockResolvedValue({ taskId: 'content-task-1', agentRole: 'content', summary: 'Queued.' });
+    const deps = makeDeps({ chatDispatch: { contentPost } });
+    const agent = new AdminAgent(deps);
+    const history = [{ role: 'user' as const, content: 'earlier turn' }];
+
+    const result = await (agent as any).executeToolCall(
+      makeTask({ input: { type: 'freeform', history }, objectiveId: 'obj-1' }),
+      { id: 'c1', name: 'dispatch_content_post', input: { topic: 'launch', platform: 'twitter' } }
+    );
+
+    expect(contentPost).toHaveBeenCalledWith(
+      { topic: 'launch', platform: 'twitter' },
+      { history, objectiveId: 'obj-1', images: undefined, documents: undefined }
+    );
+    expect(deps.approval.request).not.toHaveBeenCalled();
+    expect(result).toEqual({ result: 'Queued.', isError: false });
+  });
+
+  it.each([
+    ['dispatch_content_post', { topic: 't', platform: 'twitter' }, 'contentPost'],
+    ['dispatch_content_plan', {}, 'contentPlan'],
+    ['dispatch_content_freeform', { prompt: 'p' }, 'contentFreeform'],
+    ['dispatch_research_topic', { query: 'q' }, 'researchTopic'],
+    ['dispatch_research_freeform', { prompt: 'p' }, 'researchFreeform'],
+    ['dispatch_ops_workflow', { workflow: 'w', brief: 'b' }, 'opsWorkflow'],
+    ['dispatch_ops_freeform', { prompt: 'p' }, 'opsFreeform'],
+    ['dispatch_gtm_freeform', { prompt: 'p' }, 'gtmFreeform'],
+    ['dispatch_github_freeform', { prompt: 'p' }, 'githubFreeform'],
+  ] as const)(
+    '%s dispatches to chatDispatch.%s, emits agent:chat_dispatch_queued, and never proposes approval',
+    async (toolName, input, methodName) => {
+      const deps = makeDeps();
+      const agent = new AdminAgent(deps);
+
+      const result = await (agent as any).executeToolCall(makeTask(), {
+        id: 'c1',
+        name: toolName,
+        input,
+      });
+
+      expect((deps.chatDispatch as any)[methodName]).toHaveBeenCalled();
+      expect(deps.approval.request).not.toHaveBeenCalled();
+      expect(result.isError).toBe(false);
+      expect(deps.events.emit).toHaveBeenCalledWith('agent:chat_dispatch_queued', {
+        taskId: expect.any(String),
+        dispatchedTaskId: 'dispatched-task-1',
+        agentRole: 'content',
+      });
+    }
+  );
+
+  it('redirect_to_gtm_wizard emits agent:gtm_redirect_requested, queues no task, and never proposes approval', async () => {
+    const deps = makeDeps();
+    const agent = new AdminAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'redirect_to_gtm_wizard',
+      input: {},
+    });
+
+    expect(deps.chatDispatch.redirectToGtmWizard).toHaveBeenCalled();
+    expect(deps.approval.request).not.toHaveBeenCalled();
+    expect(deps.events.emit).toHaveBeenCalledWith('agent:gtm_redirect_requested', {
+      taskId: expect.any(String),
+      redirect: '/gtm',
+      message: 'Head to the wizard.',
+    });
+    expect(result).toEqual({ result: 'Head to the wizard.', isError: false });
+  });
+
+  it('surfaces a rejected dispatch (e.g. GitHub not configured) as an error result, not a thrown exception', async () => {
+    const deps = makeDeps({
+      chatDispatch: {
+        githubFreeform: jest.fn().mockRejectedValue(new Error('GitHub agent not configured')),
+      },
+    });
+    const agent = new AdminAgent(deps);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c1',
+      name: 'dispatch_github_freeform',
+      input: { prompt: 'what changed in the last commit' },
+    });
+
+    expect(result).toEqual({ result: 'GitHub agent not configured', isError: true });
   });
 });
 

@@ -25,6 +25,7 @@ import {
   listAutoApproveRecords,
   setAutoApproveOverride,
   GmailClient,
+  type ChatDispatch,
 } from '@wireassist/agent-admin';
 import { ContentAgent, ContentTasks } from '@wireassist/agent-content';
 import { ResearchAgent, ResearchTasks, setupResearchMCP } from '@wireassist/agent-research';
@@ -229,6 +230,144 @@ function queueGithubTask(task: Parameters<GitHubAgent['run']>[0]) {
   emitTaskQueued(task);
   githubTaskChain = githubTaskChain.then(() => agent.run(task)).catch(logAgentTaskError);
   return task;
+}
+
+// Concrete implementation of AdminAgent's ChatDispatch interface — the
+// dependency-injection seam that lets Admin's own tool-calling loop queue a
+// real, structured task on another agent without agent-admin's package
+// importing task factories from content/research/ops/gtm/github directly
+// (those packages already depend on agent-admin for BaseAgent, so the
+// reverse import would be circular). This file already safely depends on
+// every agent package, so it's the only place that can hold the real
+// wiring; AdminAgent only ever sees the ChatDispatch interface.
+function buildChatDispatch(): ChatDispatch {
+  return {
+    async contentPost(input, ctx) {
+      // extraContext (4th param) intentionally left undefined — objectiveId
+      // goes in its real (5th) slot. The old chat-router.ts dispatch passed
+      // objectiveId as the 4th positional arg, silently landing in
+      // extraContext instead — not carried forward here.
+      const task = ContentTasks.generatePost(
+        input.topic,
+        input.platform,
+        input.tone,
+        undefined,
+        ctx.objectiveId
+      );
+      queueContentTask(task);
+      return {
+        taskId: task.id,
+        agentRole: 'content',
+        summary: `Queued a ${input.platform} post about "${input.topic}".`,
+      };
+    },
+    async contentPlan(input, ctx) {
+      const task = ContentTasks.generatePlan(
+        input.platforms ?? ['linkedin', 'twitter'],
+        input.weeksAhead ?? 1,
+        input.postsPerWeek ?? 3,
+        undefined,
+        ctx.objectiveId
+      );
+      queueContentTask(task);
+      return { taskId: task.id, agentRole: 'content', summary: 'Queued a content plan.' };
+    },
+    async contentFreeform(input, ctx) {
+      const task = ContentTasks.freeform(
+        input.prompt,
+        ctx.history,
+        ctx.objectiveId,
+        ctx.images,
+        ctx.documents
+      );
+      queueContentTask(task);
+      return { taskId: task.id, agentRole: 'content', summary: 'Handed off to Content.' };
+    },
+    async researchTopic(input, ctx) {
+      const task = ResearchTasks.researchTopic(
+        input.query,
+        input.depth ?? 'quick',
+        undefined,
+        ctx.objectiveId,
+        input.offerOpsWorkflow ? { workflow: input.offerOpsWorkflow } : undefined
+      );
+      queueResearchTask(task);
+      return {
+        taskId: task.id,
+        agentRole: 'research',
+        summary: `Queued research on "${input.query}".`,
+      };
+    },
+    async researchFreeform(input, ctx) {
+      const task = ResearchTasks.freeform(
+        input.prompt,
+        ctx.history,
+        ctx.objectiveId,
+        ctx.images,
+        ctx.documents
+      );
+      queueResearchTask(task);
+      return { taskId: task.id, agentRole: 'research', summary: 'Handed off to Research.' };
+    },
+    async opsWorkflow(input, ctx) {
+      const task = OpsTasks.createWorkflowRunTask({
+        workflow: input.workflow,
+        brief: input.brief,
+        objectiveId: ctx.objectiveId,
+      });
+      queueOpsTask(task);
+      return {
+        taskId: task.id,
+        agentRole: 'strategy',
+        summary: `Queued ops workflow "${input.workflow}".`,
+      };
+    },
+    async opsFreeform(input, ctx) {
+      const task = OpsTasks.createOpsFreeformTask({
+        prompt: input.prompt,
+        history: ctx.history,
+        objectiveId: ctx.objectiveId,
+        images: ctx.images,
+        documents: ctx.documents,
+      });
+      queueOpsTask(task);
+      return { taskId: task.id, agentRole: 'strategy', summary: 'Handed off to NixOps.' };
+    },
+    async gtmFreeform(input, ctx) {
+      const task = GtmTasks.freeform(
+        input.prompt,
+        ctx.history,
+        ctx.objectiveId,
+        ctx.images,
+        ctx.documents
+      );
+      queueGtmTask(task);
+      return { taskId: task.id, agentRole: 'gtm', summary: 'Handed off to GTM.' };
+    },
+    async githubFreeform(input, ctx) {
+      if (!githubReady) {
+        throw new Error(
+          'GitHub agent not configured — see docs/SETUP.md\'s "GitHub Dev Agent" section to set up a Personal Access Token.'
+        );
+      }
+      const task = GitHubTasks.freeform(
+        input.prompt,
+        ctx.history,
+        ctx.objectiveId,
+        ctx.images,
+        ctx.documents
+      );
+      queueGithubTask(task);
+      return { taskId: task.id, agentRole: 'github', summary: 'Handed off to GitHub Dev.' };
+    },
+    redirectToGtmWizard() {
+      return {
+        redirect: '/gtm',
+        message:
+          'GTM strategy needs more detail than chat can capture — 16 fields covering your product, market, and business. Head to the GTM wizard to build a full plan.',
+      };
+    },
+  };
 }
 
 // GitHubMcpClient.callTool() returns MCP's array-of-content-blocks shape
@@ -703,7 +842,7 @@ async function bootstrap() {
   // Admin Agent — always constructed so freeform chat works without Gmail/Calendar
   // credentials. Gmail/Calendar tools register separately below; email/calendar-
   // specific tasks are gated on gmailReady, not on the agent's existence.
-  agent = new AdminAgent({ approval, memory, mcp, events });
+  agent = new AdminAgent({ approval, memory, mcp, events, chatDispatch: buildChatDispatch() });
   try {
     await setupAdminMCP(mcp);
     gmailReady = true;

@@ -7,6 +7,24 @@ import { AdminAgent } from './admin-agent';
 import { setupAdminMCP } from './mcp-setup';
 import { AdminTasks } from './admin-tasks';
 import { createEmailTriageTask } from './task-factory';
+import type { ChatDispatch } from './chat-dispatch';
+
+// This CLI demo only exercises email triage — chat dispatch (writing a
+// post, running research, etc.) isn't part of this flow, so a stub that
+// errors loudly beats silently wiring up real network/task-queue behavior
+// nothing here would ever actually use.
+const notImplementedInDemo: ChatDispatch = {
+  contentPost: () => Promise.reject(new Error('chat dispatch not supported in demo.ts')),
+  contentPlan: () => Promise.reject(new Error('chat dispatch not supported in demo.ts')),
+  contentFreeform: () => Promise.reject(new Error('chat dispatch not supported in demo.ts')),
+  researchTopic: () => Promise.reject(new Error('chat dispatch not supported in demo.ts')),
+  researchFreeform: () => Promise.reject(new Error('chat dispatch not supported in demo.ts')),
+  opsWorkflow: () => Promise.reject(new Error('chat dispatch not supported in demo.ts')),
+  opsFreeform: () => Promise.reject(new Error('chat dispatch not supported in demo.ts')),
+  gtmFreeform: () => Promise.reject(new Error('chat dispatch not supported in demo.ts')),
+  githubFreeform: () => Promise.reject(new Error('chat dispatch not supported in demo.ts')),
+  redirectToGtmWizard: () => ({ redirect: '/gtm', message: 'Not supported in demo.ts.' }),
+};
 
 /**
  * Simple CLI-based ApprovalQueue implementation that asks the user [y/n]
@@ -105,6 +123,7 @@ async function runDemo(): Promise<void> {
     memory,
     mcp,
     events,
+    chatDispatch: notImplementedInDemo,
   });
 
   // Build a mock email triage task and run it end-to-end.

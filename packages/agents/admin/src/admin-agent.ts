@@ -1,15 +1,26 @@
 import {
   type AgentConfig,
   type AgentTask,
+  type DocumentAttachment,
   type IApprovalQueue,
+  type ImageAttachment,
   type MemoryStore,
   type MCPClient,
   type EventBus,
+  type ProviderMessage,
   type ProviderToolCall,
 } from '@wireassist/core';
 import { BaseAgent } from './base-agent';
 import { ADMIN_TOOL_SCHEMAS, READ_ONLY_ADMIN_TOOLS, ADMIN_SKILL_TOOLS } from './tool-schemas';
 import { buildDelegateToolSchema, DELEGATE_TOOL_NAME } from './delegate';
+import {
+  type ChatDispatch,
+  type ChatDispatchResult,
+  type DispatchCtx,
+  DISPATCH_TOOL_NAMES,
+  buildChatDispatchToolSchemas,
+} from './chat-dispatch';
+import type { Platform } from '@wireassist/trendpost-mcp';
 import {
   ADMIN_SKILLS,
   proposeOrAutoApprove,
@@ -85,12 +96,24 @@ Always respond in structured JSON when processing emails or calendar data.
 Use plain English for explanations and recommendations.
 
 DELEGATION:
-If fulfilling this well needs another agent's actual work — a written post (Content), web
-research (Research), running a business workflow (NixOps), a go-to-market strategy (GTM), or
-GitHub repo work (GitHub Dev) — propose delegating via delegate_to_agent instead of just
-describing what could be done or drafting a lesser version yourself. Give the target agent a
-self-contained prompt; they won't see this conversation. Never delegate something you can
-already do yourself with your own tools (email, calendar, sheets).
+Every chat message reaches you first — you're the front door, not a fallback. If fulfilling this
+well needs another agent's actual work, you have two different mechanisms and they are NOT
+interchangeable:
+- For a specific, well-defined action with an obvious target — write this one post, research this
+  one thing, run this named ops workflow, ask something about a real GitHub repo/PR — call the
+  matching dispatch_* tool (dispatch_content_post, dispatch_content_plan,
+  dispatch_content_freeform, dispatch_research_topic, dispatch_research_freeform,
+  dispatch_ops_workflow, dispatch_ops_freeform, dispatch_gtm_freeform, dispatch_github_freeform,
+  redirect_to_gtm_wizard). These start immediately with no approval step — use them for the
+  routine, low-ambiguity case, the same way you'd just say "on it" to a request that's already
+  clear.
+- For something genuinely open-ended, high-stakes, or where you're not confident a dispatch tool
+  cleanly covers it, use delegate_to_agent instead — it requires human approval before the target
+  agent starts, which is the right amount of friction when the request itself is ambiguous enough
+  to need a second look before committing another agent's work to it.
+Give the target agent a self-contained prompt either way; they won't see this conversation. Never
+delegate or dispatch something you can already do yourself with your own tools (email, calendar,
+sheets).
 
 SELF-IMPROVEMENT:
 If Jason is asking you to build yourself a new capability — "draft a skill that...", "can you
@@ -142,11 +165,14 @@ const ADMIN_TOOLS = [
 ];
 
 export class AdminAgent extends BaseAgent {
+  private chatDispatch: ChatDispatch;
+
   constructor(deps: {
     approval: IApprovalQueue;
     memory: MemoryStore;
     mcp: MCPClient;
     events: EventBus;
+    chatDispatch: ChatDispatch;
   }) {
     const config: AgentConfig = {
       role: 'admin',
@@ -157,7 +183,8 @@ export class AdminAgent extends BaseAgent {
       // to the model-facing schema list here but deliberately NOT to
       // `tools` above — they're dispatched via invokeSkill(), never
       // useTool()/MCP, so they have no business in the MCP authorization
-      // list.
+      // list. Chat-dispatch tools (dispatch_content_post, etc.) are the
+      // same story — dispatched via executeChatDispatch(), never useTool().
       toolSchemas: {
         ...Object.fromEntries(
           [...ADMIN_TOOLS, ...ADMIN_SKILL_TOOLS]
@@ -165,10 +192,12 @@ export class AdminAgent extends BaseAgent {
             .map((name) => [name, ADMIN_TOOL_SCHEMAS[name]])
         ),
         [DELEGATE_TOOL_NAME]: buildDelegateToolSchema('admin'),
+        ...buildChatDispatchToolSchemas(),
       },
       maxTokens: 4096,
     };
     super(config, deps);
+    this.chatDispatch = deps.chatDispatch;
     for (const skill of ADMIN_SKILLS) {
       this.skills.registerSkill(skill);
     }
@@ -253,6 +282,16 @@ export class AdminAgent extends BaseAgent {
         return this.executeDelegateToAgent(task, call);
       }
 
+      if (DISPATCH_TOOL_NAMES.has(call.name)) {
+        // Must await (not just return the promise) — the surrounding
+        // try/catch only catches a rejection that happens while it's still
+        // on the stack; returning an unawaited promise here would let a
+        // rejected chatDispatch call (e.g. GitHub not configured) escape
+        // as an unhandled rejection instead of the { isError: true } shape
+        // every other branch in this method returns.
+        return await this.executeChatDispatch(task, call);
+      }
+
       if (ADMIN_SKILL_TOOLS.has(call.name)) {
         // Skill-tools self-gate their own mutations via internal
         // proposeAction() calls (email_triage/calendar_review both do) —
@@ -279,6 +318,87 @@ export class AdminAgent extends BaseAgent {
     } catch (error) {
       return { result: error instanceof Error ? error.message : String(error), isError: true };
     }
+  }
+
+  // Builds the shared context every dispatch method needs from the
+  // ORIGINATING chat task — history/images/documents already live in
+  // task.input for a freeform task (see createFreeformTask, task-factory.ts),
+  // objectiveId is a top-level AgentTask field.
+  private dispatchCtx(task: AgentTask): DispatchCtx {
+    const input = task.input as {
+      history?: ProviderMessage[];
+      images?: ImageAttachment[];
+      documents?: DocumentAttachment[];
+    };
+    return {
+      history: input.history,
+      objectiveId: task.objectiveId,
+      images: input.images,
+      documents: input.documents,
+    };
+  }
+
+  // Dispatch tools (see chat-dispatch.ts) — the zero-approval counterpart
+  // to executeDelegateToAgent(). Each one queues a real, structured task on
+  // the target agent immediately (matching the zero-friction behavior the
+  // old chat-router.ts classifier gave these same requests) and emits an
+  // event telling the chat UI to redirect its polling to the new task's id
+  // — without that, the chat window would show "Handing off..." and then
+  // never display the real result, same gap the handoff_queued case already
+  // has for delegate_to_agent.
+  private async executeChatDispatch(
+    task: AgentTask,
+    call: ProviderToolCall
+  ): Promise<{ result: unknown; isError: boolean }> {
+    const ctx = this.dispatchCtx(task);
+    const input = call.input as Record<string, unknown>;
+
+    if (call.name === 'redirect_to_gtm_wizard') {
+      const { redirect, message } = this.chatDispatch.redirectToGtmWizard();
+      this.events.emit('agent:gtm_redirect_requested', { taskId: task.id, redirect, message });
+      return { result: message, isError: false };
+    }
+
+    const dispatchers: Record<string, () => Promise<ChatDispatchResult>> = {
+      dispatch_content_post: () =>
+        this.chatDispatch.contentPost(
+          input as { topic: string; platform: Platform; tone?: string },
+          ctx
+        ),
+      dispatch_content_plan: () =>
+        this.chatDispatch.contentPlan(
+          input as { platforms?: Platform[]; weeksAhead?: number; postsPerWeek?: number },
+          ctx
+        ),
+      dispatch_content_freeform: () =>
+        this.chatDispatch.contentFreeform(input as { prompt: string }, ctx),
+      dispatch_research_topic: () =>
+        this.chatDispatch.researchTopic(
+          input as { query: string; depth?: 'quick' | 'deep'; offerOpsWorkflow?: string },
+          ctx
+        ),
+      dispatch_research_freeform: () =>
+        this.chatDispatch.researchFreeform(input as { prompt: string }, ctx),
+      dispatch_ops_workflow: () =>
+        this.chatDispatch.opsWorkflow(input as { workflow: string; brief: string }, ctx),
+      dispatch_ops_freeform: () => this.chatDispatch.opsFreeform(input as { prompt: string }, ctx),
+      dispatch_gtm_freeform: () => this.chatDispatch.gtmFreeform(input as { prompt: string }, ctx),
+      dispatch_github_freeform: () =>
+        this.chatDispatch.githubFreeform(input as { prompt: string }, ctx),
+    };
+
+    const dispatcher = dispatchers[call.name];
+    if (!dispatcher) {
+      return { result: `Unknown dispatch tool "${call.name}".`, isError: true };
+    }
+
+    const result = await dispatcher();
+    this.events.emit('agent:chat_dispatch_queued', {
+      taskId: task.id,
+      dispatchedTaskId: result.taskId,
+      agentRole: result.agentRole,
+    });
+    return { result: result.summary, isError: false };
   }
 }
 

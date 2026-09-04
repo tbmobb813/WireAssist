@@ -11,6 +11,7 @@ export {
   DELEGATE_TOOL_NAME,
 } from './delegate';
 export { BudgetTracker, BudgetExceededError, budgetTracker, type BudgetStatus } from './budget';
+export type { ChatDispatch, ChatDispatchResult, DispatchCtx } from './chat-dispatch';
 export {
   AUTO_APPROVE_THRESHOLD,
   isAutoApproveEligibleType,

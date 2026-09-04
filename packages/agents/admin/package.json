@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@wireassist/core": "workspace:*",
+    "@wireassist/trendpost-mcp": "workspace:*",
     "google-auth-library": "10.5.0",
     "googleapis": "^176.0.0"
   },
