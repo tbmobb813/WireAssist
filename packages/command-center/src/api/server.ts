@@ -1213,9 +1213,25 @@ app.post('/api/tasks/freeform', async (c) => {
   let decision: RouteDecision;
   try {
     decision = await routeChatMessage(instruction, history);
-  } catch {
+  } catch (err) {
+    // Router failures (classifier errored, or returned no tool call) are
+    // otherwise invisible — this is the only place they'd surface,
+    // silently masked by the exact same fallback a legitimately-ambiguous
+    // message gets. Worth distinguishing in logs since a spike here means
+    // the classifier itself is broken, not that users are asking vague
+    // questions.
+    logger.warn(
+      '[chat-router] classification failed, falling back to admin_freeform:',
+      err instanceof Error ? err.message : err
+    );
     decision = { kind: 'admin_freeform', prompt: instruction };
   }
+  // Router decisions are otherwise unauditable — this is the only signal
+  // for noticing a new class of misrouting (a time-sensitive or repo-
+  // specific question landing in admin_freeform, say) before a user has to
+  // report a hang or a wrong answer and someone chases it through a live
+  // transcript, same as the pricing-question bug earlier.
+  logger.info(`[chat-router] "${instruction.slice(0, 80)}" -> ${decision.kind}`);
 
   switch (decision.kind) {
     case 'admin_triage': {
