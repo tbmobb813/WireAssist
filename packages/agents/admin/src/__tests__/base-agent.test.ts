@@ -168,12 +168,12 @@ function makeDefaultRunAgent(depOverrides = {}) {
 // ── Tests ─────────────────────────────────────────────────────────────────
 
 describe('BaseAgent.loadContext()', () => {
-  it('calls searchAsync with the query, agentRole filter, and trace exclusion', async () => {
+  it('calls searchAsync with the query, agentRole filter, and trace/freeform_request exclusion', async () => {
     const { agent, deps } = makeAgent();
     await agent.testLoadContext('email preferences');
     expect(deps.memory.searchAsync).toHaveBeenCalledWith('email preferences', {
       agentRole: 'admin',
-      excludeTags: ['trace'],
+      excludeTags: ['trace', 'freeform_request'],
     });
   });
 

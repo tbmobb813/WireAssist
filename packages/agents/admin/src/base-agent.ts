@@ -575,7 +575,16 @@ export abstract class BaseAgent {
     try {
       const memories = await this.memory.searchAsync(query, {
         agentRole: this.role,
-        excludeTags: ['trace'],
+        // 'trace' = proposeAction()'s own approval-flow audit trail.
+        // 'freeform_request' = every raw chat prompt, remembered unfiltered
+        // by createFreeformSkill() (freeform-factory.ts) so patterns can be
+        // mined later (detect_skill_opportunities) — but that means most of
+        // it is one-off small talk, not a durable fact. Left in the search
+        // pool, it dilutes vector-similarity ranking with noise on every
+        // future turn. Excluding it here doesn't touch the write path or
+        // that later pattern-mining use — only stops it from being injected
+        // back into context as if it were curated memory.
+        excludeTags: ['trace', 'freeform_request'],
       });
       if (memories.length === 0) return '';
       return memories.map((m) => m.content).join('\n\n');

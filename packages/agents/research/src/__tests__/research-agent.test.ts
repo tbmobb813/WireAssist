@@ -203,7 +203,7 @@ describe('ResearchAgent.run() — synthesize_findings', () => {
     await agent.run(task);
     expect(deps.memory.searchAsync).toHaveBeenCalledWith('AI tools', {
       agentRole: 'research',
-      excludeTags: ['trace'],
+      excludeTags: ['trace', 'freeform_request'],
     });
     expect(deps.events.emit).toHaveBeenCalledWith(
       'agent:research_complete',
