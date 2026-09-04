@@ -296,6 +296,17 @@ export abstract class BaseAgent {
   ): Promise<string> {
     const tools = this.config.toolSchemas ? Object.values(this.config.toolSchemas) : [];
     if (!this.getProvider().supportsTools || tools.length === 0) {
+      // Silent by default otherwise: an agent configured (deliberately or
+      // via a stray WIREASSIST_PROVIDER override) onto a provider without
+      // tool support loses web search / delegation / every other tool with
+      // no error and no visible signal — the response still comes back,
+      // just quietly worse. One log line turns that into something
+      // grep-able instead of a mystery bug report.
+      if (!this.getProvider().supportsTools) {
+        console.warn(
+          `[${this.role}] runToolLoop: provider "${this.getProvider().type}" doesn't support tool-calling — falling back to a single tool-less think() call.`
+        );
+      }
       // think() has no messages-array support — fold prior turns into the
       // context string instead, so conversational memory still survives on
       // non-Anthropic providers rather than silently vanishing. Attachments
