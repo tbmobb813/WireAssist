@@ -7,6 +7,23 @@ function generateId(): string {
   return randomBytes(16).toString('hex');
 }
 
+// FTS5 MATCH treats its argument as a query-syntax string, not a literal —
+// an unescaped apostrophe, hyphen, or bare "AND"/"OR"/"NOT" from real user
+// input throws a syntax error instead of just finding nothing. Same
+// tokenize-and-quote approach as MemoryStore.toFtsQuery() in
+// ../memory/store.ts: split on non-word characters, double-quote each
+// token, so every raw query becomes a valid (if occasionally union-heavy)
+// phrase-per-token MATCH.
+function toFtsQuery(raw: string): string | null {
+  const tokens = raw
+    .trim()
+    .split(/[^\w]+/)
+    .map((t) => t.replace(/"/g, '""'))
+    .filter((t) => t.length > 0);
+  if (tokens.length === 0) return null;
+  return tokens.map((t) => `"${t}"`).join(' ');
+}
+
 export class MessageStore {
   private db: Database.Database;
 
@@ -164,12 +181,15 @@ export class MessageStore {
 
   async search(query: string, conversationId?: string): Promise<Message[]> {
     try {
+      const ftsQuery = toFtsQuery(query);
+      if (!ftsQuery) return [];
+
       let sql = `
         SELECT m.* FROM messages m
         JOIN messages_fts fts ON m.id = fts.id
         WHERE messages_fts MATCH ?
       `;
-      const params: any[] = [query];
+      const params: any[] = [ftsQuery];
 
       if (conversationId) {
         sql += ' AND m.conversation_id = ?';

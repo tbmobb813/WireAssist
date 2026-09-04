@@ -107,4 +107,21 @@ describe('MessageStore', () => {
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].content).toContain('problem');
   });
+
+  test('search does not throw on FTS5-special characters in the query', async () => {
+    await messageStore.create({
+      conversationId,
+      role: 'user',
+      content: "What's the plan?",
+      timestamp: Date.now(),
+    });
+
+    // Apostrophes, hyphens, and bare boolean-looking words are all real
+    // FTS5 query syntax — passed through unescaped, "what's" alone is
+    // enough to throw a syntax error instead of matching or returning [].
+    await expect(messageStore.search("what's")).resolves.toBeDefined();
+    await expect(messageStore.search('AND OR NOT')).resolves.toBeDefined();
+    await expect(messageStore.search('-')).resolves.toEqual([]);
+    await expect(messageStore.search('   ')).resolves.toEqual([]);
+  });
 });

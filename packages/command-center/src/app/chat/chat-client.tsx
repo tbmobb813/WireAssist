@@ -46,6 +46,15 @@ interface ConversationSummary {
   updatedAt: number;
 }
 
+interface MessageSearchResult {
+  messageId: string;
+  conversationId: string;
+  conversationTitle: string;
+  role: string;
+  content: string;
+  timestamp: number;
+}
+
 const ACTIVE_CONVERSATION_KEY = 'wireassist:activeConversationId';
 
 const WELCOME_MESSAGE: Message = {
@@ -187,6 +196,9 @@ export default function ChatClient() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversationList, setConversationList] = useState<ConversationSummary[]>([]);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [conversationSearch, setConversationSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<MessageSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
   const [objectiveId, setObjectiveId] = useState('');
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [imageError, setImageError] = useState<string | null>(null);
@@ -212,6 +224,32 @@ export default function ChatClient() {
       console.warn('Failed to load conversation list', err);
     }
   }, []);
+
+  // Debounced so switching in the search box doesn't fire one request per
+  // keystroke — 300ms is short enough to feel live, long enough to skip
+  // every intermediate character while typing at normal speed.
+  useEffect(() => {
+    const query = conversationSearch.trim();
+    if (!query) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/conversations/search?q=${encodeURIComponent(query)}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { results: MessageSearchResult[] };
+        setSearchResults(data.results);
+      } catch (err) {
+        console.warn('Conversation search failed', err);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [conversationSearch]);
 
   const hydrateMessages = useCallback(async (id: string): Promise<boolean> => {
     const res = await fetch(`/api/conversations/${id}/messages`);
@@ -272,6 +310,7 @@ export default function ChatClient() {
   const switchConversation = useCallback(
     async (id: string) => {
       setSwitcherOpen(false);
+      setConversationSearch('');
       if (id === conversationId) return;
       const hydrated = await hydrateMessages(id);
       if (!hydrated) return;
@@ -775,14 +814,20 @@ export default function ChatClient() {
 
           {switcherOpen && (
             <>
-              <div className="fixed inset-0 z-10" onClick={() => setSwitcherOpen(false)} />
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => {
+                  setSwitcherOpen(false);
+                  setConversationSearch('');
+                }}
+              />
               <div
                 className="absolute right-0 mt-2 rounded-lg z-20"
                 style={{
                   background: '#0f1225',
                   border: '1px solid #1e2040',
                   width: 280,
-                  maxHeight: 320,
+                  maxHeight: 400,
                   overflowY: 'auto',
                 }}
               >
@@ -793,7 +838,47 @@ export default function ChatClient() {
                 >
                   + NEW CONVERSATION
                 </button>
-                {conversationList.length === 0 ? (
+                <div className="px-3 py-2" style={{ borderBottom: '1px solid #1e2040' }}>
+                  <input
+                    autoFocus
+                    value={conversationSearch}
+                    onChange={(e) => setConversationSearch(e.target.value)}
+                    placeholder="Search past conversations..."
+                    className="w-full rounded px-2 py-1.5 text-xs outline-none"
+                    style={{ background: '#0d0d1a', border: '1px solid #1e2040', color: '#e2e8f0' }}
+                  />
+                </div>
+                {conversationSearch.trim() ? (
+                  searching ? (
+                    <div className="px-4 py-3 text-xs text-gray-600">Searching...</div>
+                  ) : searchResults.length === 0 ? (
+                    <div className="px-4 py-3 text-xs text-gray-600">No messages found.</div>
+                  ) : (
+                    searchResults.map((r) => (
+                      <div
+                        key={r.messageId}
+                        onClick={() => switchConversation(r.conversationId)}
+                        className="px-4 py-3 text-xs cursor-pointer hover:bg-white/5"
+                        style={{
+                          background:
+                            r.conversationId === conversationId ? '#1e2040' : 'transparent',
+                          borderBottom: '1px solid #1e2040',
+                        }}
+                      >
+                        <div className="truncate text-gray-300 font-medium">
+                          {r.conversationTitle}
+                        </div>
+                        <div className="truncate text-gray-500 mt-0.5">
+                          {r.role === 'user' ? 'You: ' : 'Agent: '}
+                          {r.content}
+                        </div>
+                        <div className="text-gray-600 mt-0.5">
+                          {formatRelativeTime(r.timestamp)}
+                        </div>
+                      </div>
+                    ))
+                  )
+                ) : conversationList.length === 0 ? (
                   <div className="px-4 py-3 text-xs text-gray-600">No conversations yet.</div>
                 ) : (
                   conversationList.map((c) => (

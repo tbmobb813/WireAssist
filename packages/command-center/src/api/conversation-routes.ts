@@ -47,6 +47,43 @@ export function registerConversationRoutes(
     return c.json({ ok: true });
   });
 
+  // Full-text search over every conversation's message content — the
+  // messages_fts index (messages.ts) has existed since this feature
+  // shipped but had no route exposing it; this is the first consumer.
+  // Registered before the /:id routes below so a literal path segment
+  // "search" is never captured as a conversation id.
+  app.get('/api/conversations/search', async (c) => {
+    const query = c.req.query('q')?.trim();
+    if (!query) return c.json({ results: [] });
+
+    const matches = await messages.search(query);
+    const titleCache = new Map<string, string>();
+    const results = [];
+    for (const m of matches.slice(0, 50)) {
+      let title = titleCache.get(m.conversationId);
+      if (title === undefined) {
+        try {
+          title = (await conversations.get(m.conversationId)).title;
+        } catch {
+          // Conversation was deleted after this message was indexed but
+          // before this search ran — skip rather than surface a dangling
+          // reference the UI can't navigate to.
+          continue;
+        }
+        titleCache.set(m.conversationId, title);
+      }
+      results.push({
+        messageId: m.id,
+        conversationId: m.conversationId,
+        conversationTitle: title,
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp,
+      });
+    }
+    return c.json({ results });
+  });
+
   app.get('/api/conversations/:id/messages', async (c) => {
     const id = c.req.param('id');
     try {
