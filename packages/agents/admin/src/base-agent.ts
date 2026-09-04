@@ -398,6 +398,14 @@ export abstract class BaseAgent {
       }
     }
 
+    // This cap has already had to be raised once fleet-wide (6 -> 12) after
+    // reactive user reports of hangs — the only way to know if 12 is still
+    // too low is another report unless this is logged. Grep-able signal for
+    // "does this cap need raising again" instead of finding out the hard way
+    // a third time.
+    console.warn(
+      `[${this.role}] runToolLoop: hit maxIterations (${maxIterations}) without a final answer — task ${task.id}.`
+    );
     return "I wasn't able to finish this within the allotted steps — here's what I found so far.";
   }
 
