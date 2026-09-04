@@ -209,6 +209,13 @@ export default function ChatClient() {
   const pendingTaskId = useRef<string | null>(null);
   const handledEvents = useRef(new Set<string>());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // pollForTask is declared further down (it depends on scanActivity, which
+  // depends on applyTaskEvent) — applyTaskEvent needing to call it back
+  // (to redirect polling on a 'chat_dispatch_queued' event) is a genuine
+  // mutual dependency, not just a declaration-order accident. A ref
+  // indirection breaks the cycle: applyTaskEvent calls
+  // pollForTaskRef.current, kept in sync below once pollForTask exists.
+  const pollForTaskRef = useRef<((taskId: string) => Promise<void>) | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -505,6 +512,35 @@ export default function ChatClient() {
           // the handoff) still arrives on this same taskId.
           return false;
         }
+        case 'chat_dispatch_queued': {
+          // Admin dispatched a specific action (write a post, run research,
+          // etc.) via one of chat-dispatch.ts's zero-approval tools — the
+          // real result will arrive tagged with the NEW task's id, not the
+          // one this request started with, so redirect tracking to it or
+          // it'll never match and the chat window will just go quiet.
+          const p = payload as { dispatchedTaskId?: string; agentRole?: string };
+          if (p.dispatchedTaskId) {
+            addProgressMessage(
+              `Handing off to the ${agentRoleLabel(p.agentRole ?? '')} agent...`,
+              taskId
+            );
+            markHandled(taskId, event);
+            pendingTaskId.current = p.dispatchedTaskId;
+            void pollForTaskRef.current?.(p.dispatchedTaskId);
+          }
+          return false; // non-terminal — the real completion event now matches the redirected id
+        }
+        case 'gtm_redirect_requested': {
+          // Admin's redirect_to_gtm_wizard tool — no task was ever queued
+          // for this one, so just show the message+link directly.
+          const p = payload as { redirect?: string; message?: string };
+          addAgentMessage(
+            `${p.message ?? ''}\n\nOpen the GTM wizard: ${p.redirect ?? '/gtm'}`,
+            taskId
+          );
+          markHandled(taskId, event);
+          return true;
+        }
         case 'ops_stage_complete': {
           const p = payload as { stage?: string };
           const stageKey = p.stage ?? 'unknown';
@@ -592,6 +628,10 @@ export default function ChatClient() {
     },
     [addAgentMessage, scanActivity]
   );
+
+  useEffect(() => {
+    pollForTaskRef.current = pollForTask;
+  }, [pollForTask]);
 
   useAgentEvents(
     useCallback(
@@ -775,10 +815,6 @@ export default function ChatClient() {
         const message =
           typeof data.error === 'string' ? data.error : `Request failed (${res.status})`;
         addAgentMessage(`Error: ${message}`);
-        return;
-      }
-      if (typeof data.redirect === 'string') {
-        addAgentMessage(`${data.message ?? ''}\n\nOpen the GTM wizard: ${data.redirect}`);
         return;
       }
       if (typeof data.taskId === 'string') {

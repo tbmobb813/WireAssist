@@ -64,7 +64,7 @@ import { registerTrendPostTools, TrendPostStorage, type Platform } from '@wireas
 import { registerPortfolioRoutes } from './portfolio-routes';
 import { registerObjectiveRoutes } from './objective-routes';
 import { registerConversationRoutes } from './conversation-routes';
-import { routeChatMessage, type RouteDecision, type ChatHistoryMessage } from './chat-router';
+import { type ChatHistoryMessage } from './chat-router';
 import { getLocation, setLocation, listNotes, addNote, deleteNote } from './dashboard-widgets';
 import { routeHandoffTask } from '../lib/route-handoff';
 import { replayOrphanedHandoffs } from '../lib/replay-handoffs';
@@ -576,6 +576,16 @@ events.on('agent:content_analyzed', (p) => broadcast('content_analyzed', p));
 events.on('agent:scheduled_posts', (p) => broadcast('scheduled_posts', p));
 events.on('agent:research_complete', (p) => broadcast('research_complete', p));
 events.on('agent:tool_call_started', (p) => broadcast('tool_call_started', p));
+// Fired by AdminAgent.executeChatDispatch() (chat-dispatch.ts's dispatch_*
+// tools) — tells the chat UI to redirect its polling from Admin's own task
+// id to the newly-dispatched task's id, or the real result (content_
+// generated/research_complete/etc.) would never match what the client is
+// still listening for. See chat-client.tsx's 'chat_dispatch_queued' case.
+events.on('agent:chat_dispatch_queued', (p) => broadcast('chat_dispatch_queued', p));
+// Fired by AdminAgent's redirect_to_gtm_wizard tool — no task is queued for
+// this one (a full GTM strategy needs the 16-field wizard form), so the
+// client shows the message+link directly instead of polling anything.
+events.on('agent:gtm_redirect_requested', (p) => broadcast('gtm_redirect_requested', p));
 events.on('agent:ops_stage_complete', (p) => broadcast('ops_stage_complete', p));
 events.on('agent:ops_blocked', (p) => broadcast('ops_blocked', p));
 events.on('agent:ops_run_complete', (p) => broadcast('ops_run_complete', p));
@@ -1349,141 +1359,14 @@ app.post('/api/tasks/freeform', async (c) => {
   const objectiveId =
     typeof rawObjectiveId === 'string' && rawObjectiveId ? rawObjectiveId : undefined;
 
-  let decision: RouteDecision;
-  try {
-    decision = await routeChatMessage(instruction, history);
-  } catch (err) {
-    // Router failures (classifier errored, or returned no tool call) are
-    // otherwise invisible — this is the only place they'd surface,
-    // silently masked by the exact same fallback a legitimately-ambiguous
-    // message gets. Worth distinguishing in logs since a spike here means
-    // the classifier itself is broken, not that users are asking vague
-    // questions.
-    logger.warn(
-      '[chat-router] classification failed, falling back to admin_freeform:',
-      err instanceof Error ? err.message : err
-    );
-    decision = { kind: 'admin_freeform', prompt: instruction };
-  }
-  // Router decisions are otherwise unauditable — this is the only signal
-  // for noticing a new class of misrouting (a time-sensitive or repo-
-  // specific question landing in admin_freeform, say) before a user has to
-  // report a hang or a wrong answer and someone chases it through a live
-  // transcript, same as the pricing-question bug earlier.
-  logger.info(`[chat-router] "${instruction.slice(0, 80)}" -> ${decision.kind}`);
-
-  switch (decision.kind) {
-    case 'admin_triage': {
-      if (!gmailReady) return c.json(gmailRequired(), 503);
-      const task = AdminTasks.triageEmail(20, objectiveId);
-      queueAgentTask(task);
-      return c.json({ taskId: task.id, status: 'queued' });
-    }
-    case 'admin_calendar': {
-      if (!gmailReady) return c.json(gmailRequired(), 503);
-      const task = AdminTasks.reviewCalendar(decision.daysAhead ?? 7, objectiveId);
-      queueAgentTask(task);
-      return c.json({ taskId: task.id, status: 'queued' });
-    }
-    case 'content_generate': {
-      const task = ContentTasks.generatePost(
-        decision.topic,
-        decision.platform,
-        decision.tone,
-        objectiveId
-      );
-      queueContentTask(task);
-      return c.json({ taskId: task.id, status: 'queued' });
-    }
-    case 'content_plan': {
-      const task = ContentTasks.generatePlan(
-        decision.platforms ?? ['linkedin', 'twitter'],
-        decision.weeksAhead ?? 1,
-        decision.postsPerWeek ?? 3,
-        objectiveId
-      );
-      queueContentTask(task);
-      return c.json({ taskId: task.id, status: 'queued' });
-    }
-    case 'content_freeform': {
-      const task = ContentTasks.freeform(decision.prompt, history, objectiveId, images, documents);
-      queueContentTask(task);
-      return c.json({ taskId: task.id, status: 'queued' });
-    }
-    case 'research_topic': {
-      const task = ResearchTasks.researchTopic(
-        decision.query,
-        decision.depth ?? 'quick',
-        undefined,
-        objectiveId,
-        decision.offerOpsWorkflow ? { workflow: decision.offerOpsWorkflow } : undefined
-      );
-      queueResearchTask(task);
-      return c.json({ taskId: task.id, status: 'queued' });
-    }
-    case 'research_freeform': {
-      const task = ResearchTasks.freeform(decision.prompt, history, objectiveId, images, documents);
-      queueResearchTask(task);
-      return c.json({ taskId: task.id, status: 'queued' });
-    }
-    case 'ops_freeform': {
-      const task = OpsTasks.createOpsFreeformTask({
-        prompt: decision.prompt,
-        history,
-        objectiveId,
-        images,
-        documents,
-      });
-      queueOpsTask(task);
-      return c.json({ taskId: task.id, status: 'queued' });
-    }
-    case 'ops_workflow': {
-      const task = OpsTasks.createWorkflowRunTask({
-        workflow: decision.workflow,
-        brief: decision.brief,
-        objectiveId,
-      });
-      queueOpsTask(task);
-      return c.json({ taskId: task.id, status: 'queued' });
-    }
-    case 'gtm_freeform': {
-      const task = GtmTasks.freeform(decision.prompt, history, objectiveId, images, documents);
-      queueGtmTask(task);
-      return c.json({ taskId: task.id, status: 'queued' });
-    }
-    case 'gtm_redirect':
-      return c.json({
-        redirect: '/gtm',
-        message:
-          'GTM strategy needs more detail than chat can capture — 16 fields covering your product, market, and business. Head to the GTM wizard to build a full plan.',
-      });
-    case 'github_freeform': {
-      if (!githubReady) {
-        return c.json(
-          {
-            error:
-              'GitHub agent not configured — see docs/SETUP.md\'s "GitHub Dev Agent" section to set up a Personal Access Token.',
-          },
-          503
-        );
-      }
-      const task = GitHubTasks.freeform(decision.prompt, history, objectiveId, images, documents);
-      queueGithubTask(task);
-      return c.json({ taskId: task.id, status: 'queued' });
-    }
-    case 'admin_freeform':
-    default: {
-      const task = AdminTasks.freeform(
-        decision.kind === 'admin_freeform' ? decision.prompt : instruction,
-        history,
-        objectiveId,
-        images,
-        documents
-      );
-      queueAgentTask(task);
-      return c.json({ taskId: task.id, status: 'queued' });
-    }
-  }
+  // Admin is the sole front door — every chat message reaches it first,
+  // and its own tool-calling loop decides whether to answer directly,
+  // dispatch a specific action to another agent (see chat-dispatch.ts's
+  // zero-approval dispatch_* tools), or delegate something open-ended via
+  // delegate_to_agent. No classifier pre-empts that judgment anymore.
+  const task = AdminTasks.freeform(instruction, history, objectiveId, images, documents);
+  queueAgentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
 });
 
 // ── CONTENT TASKS ─────────────────────────────────────────────────────────
