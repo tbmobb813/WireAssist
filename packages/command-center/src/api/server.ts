@@ -1987,6 +1987,24 @@ app.post('/api/memory/upgrade-embeddings', async (c) => {
   return c.json(result);
 });
 
+// Business-context onboarding answers (business_description, products_
+// services, target_customers, content_voice, etc.) used to be stored ONLY
+// under agentRole: 'admin' — but MemoryStore.searchAsync filters strictly
+// by agentRole, and the only real consumer of this data is Content
+// (generate-post.ts/generate-plan.ts both call loadContext('business
+// description products services...')), which is scoped to agentRole:
+// 'content'. Every post/plan Content ever generated ran with zero business
+// context as a result — confirmed live, searching the exact same terms
+// scoped to 'content' returned nothing, despite onboarding having real
+// answers on file since 2026-08-11.
+//
+// Written to both roles that actually need it today (admin, content) —
+// not speculatively to every agent role, since research/ops/gtm/github
+// never call loadContext() with business-context queries at all; adding it
+// there would just dilute their own memory search with irrelevant noise
+// for no consumer.
+const ONBOARDING_CONTEXT_ROLES: AgentRole[] = ['admin', 'content'];
+
 app.post('/api/memory/onboard', async (c) => {
   if (!agentReady) return c.json({ error: 'not ready' }, 503);
   const body = (await c.req.json().catch(() => ({}))) as { answers?: Record<string, string> };
@@ -1997,12 +2015,14 @@ app.post('/api/memory/onboard', async (c) => {
   let stored = 0;
   for (const [question, answer] of Object.entries(answers)) {
     if (typeof answer === 'string' && answer.trim()) {
-      await memory.storeAsync({
-        content: `${question}: ${answer.trim()}`,
-        agentRole: 'admin',
-        tags: ['onboarding'],
-        createdAt: new Date(),
-      });
+      for (const agentRole of ONBOARDING_CONTEXT_ROLES) {
+        await memory.storeAsync({
+          content: `${question}: ${answer.trim()}`,
+          agentRole,
+          tags: ['onboarding'],
+          createdAt: new Date(),
+        });
+      }
       stored++;
     }
   }
