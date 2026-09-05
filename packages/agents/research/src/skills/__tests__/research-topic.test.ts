@@ -181,6 +181,117 @@ describe('researchTopicSkill — Research -> Content handoff', () => {
   });
 });
 
+describe('researchTopicSkill — live price fetch (deterministic, not model-dependent)', () => {
+  // This path runs whenever dispatch_research_topic reaches the skill
+  // directly (task.input.type routing, see BaseAgent.run()) — no outer
+  // tool loop, no system prompt, so this fetch can't depend on the model
+  // choosing to act on an instruction; the skill has to do it itself.
+  function useToolMock(searchResults: Array<{ title: string; url: string; description: string }>) {
+    return jest.fn((toolName: string, params: Record<string, unknown>) => {
+      if (toolName === 'brave_search') return Promise.resolve({ results: searchResults });
+      if (toolName === 'fetch_product_price') {
+        return Promise.resolve({
+          found: true,
+          url: params.url,
+          title: 'AMD Ryzen 7 9800X3D',
+          price: '399.99',
+          currency: 'USD',
+          availability: 'InStock',
+        });
+      }
+      throw new Error(`Unexpected tool call: ${toolName}`);
+    });
+  }
+
+  it('fetches a live price when the query is price-shaped and a retailer URL is present', async () => {
+    const useTool = useToolMock([
+      { title: 'Best CPUs 2026', url: 'https://pcbench.net/best-cpus', description: 'old data' },
+      {
+        title: 'AMD Ryzen 7 9800X3D',
+        url: 'https://www.amazon.com/dp/B0DKFMSMYK',
+        description: 'stale price',
+      },
+    ]);
+    const agent = makeAgentHandle({ useTool });
+
+    await researchTopicSkill.execute({
+      agent,
+      task: makeTask(),
+      input: { query: 'What is the current price of an AMD Ryzen 7 9800X3D?' },
+    });
+
+    expect(useTool).toHaveBeenCalledWith('fetch_product_price', {
+      url: 'https://www.amazon.com/dp/B0DKFMSMYK',
+    });
+    expect(agent.think).toHaveBeenCalledWith(
+      expect.stringContaining('Live price check on https://www.amazon.com/dp/B0DKFMSMYK'),
+      undefined
+    );
+    expect(agent.think).toHaveBeenCalledWith(expect.stringContaining('USD 399.99'), undefined);
+  });
+
+  it('does not fetch when the query is not price-shaped, even with a retailer URL present', async () => {
+    const useTool = useToolMock([
+      { title: 'AMD Ryzen 7 9800X3D review', url: 'https://www.amazon.com/dp/X', description: '' },
+    ]);
+    const agent = makeAgentHandle({ useTool });
+
+    await researchTopicSkill.execute({
+      agent,
+      task: makeTask(),
+      input: { query: 'Is the AMD Ryzen 7 9800X3D good for gaming?' },
+    });
+
+    expect(useTool).not.toHaveBeenCalledWith('fetch_product_price', expect.anything());
+  });
+
+  it('does not fetch when the query is price-shaped but no retailer URL is in the results', async () => {
+    const useTool = useToolMock([
+      {
+        title: 'Reddit thread on CPU prices',
+        url: 'https://reddit.com/r/pcbuild/x',
+        description: '',
+      },
+    ]);
+    const agent = makeAgentHandle({ useTool });
+
+    await researchTopicSkill.execute({
+      agent,
+      task: makeTask(),
+      input: { query: 'current price of AMD Ryzen 7 9800X3D' },
+    });
+
+    expect(useTool).not.toHaveBeenCalledWith('fetch_product_price', expect.anything());
+  });
+
+  it('tells the synthesis step to fall back to labeled estimates when the fetch fails', async () => {
+    const useTool = jest.fn((toolName: string) => {
+      if (toolName === 'brave_search') {
+        return Promise.resolve({
+          results: [{ title: 'X', url: 'https://www.amazon.com/dp/X', description: '' }],
+        });
+      }
+      return Promise.resolve({
+        found: false,
+        url: 'https://www.amazon.com/dp/X',
+        note: 'No structured product price data found.',
+      });
+    });
+    const agent = makeAgentHandle({ useTool });
+
+    await researchTopicSkill.execute({
+      agent,
+      task: makeTask(),
+      input: { query: 'current price of AMD Ryzen 7 9800X3D' },
+    });
+
+    expect(agent.think).toHaveBeenCalledWith(
+      expect.stringContaining('Fall back to snippet-based'),
+      undefined
+    );
+  });
+});
+
 describe('researchTopicSkill — Research -> NixOps handoff', () => {
   it('does not propose an ops handoff when offerOpsHandoff is not set', async () => {
     const agent = makeAgentHandle();
