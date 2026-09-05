@@ -16,6 +16,7 @@ import type { ChatDispatch } from './chat-dispatch';
 const notImplementedInDemo: ChatDispatch = {
   contentPost: () => Promise.reject(new Error('chat dispatch not supported in demo.ts')),
   contentPlan: () => Promise.reject(new Error('chat dispatch not supported in demo.ts')),
+  contentCampaign: () => Promise.reject(new Error('chat dispatch not supported in demo.ts')),
   contentFreeform: () => Promise.reject(new Error('chat dispatch not supported in demo.ts')),
   researchTopic: () => Promise.reject(new Error('chat dispatch not supported in demo.ts')),
   researchFreeform: () => Promise.reject(new Error('chat dispatch not supported in demo.ts')),

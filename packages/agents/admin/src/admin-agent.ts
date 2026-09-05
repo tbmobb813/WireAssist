@@ -370,6 +370,11 @@ export class AdminAgent extends BaseAgent {
           input as { platforms?: Platform[]; weeksAhead?: number; postsPerWeek?: number },
           ctx
         ),
+      dispatch_content_campaign: () =>
+        this.chatDispatch.contentCampaign(
+          input as { platforms?: Platform[]; weeksAhead?: number; postsPerWeek?: number },
+          ctx
+        ),
       dispatch_content_freeform: () =>
         this.chatDispatch.contentFreeform(input as { prompt: string }, ctx),
       dispatch_research_topic: () =>

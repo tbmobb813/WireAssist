@@ -15,6 +15,7 @@ function makeChatDispatchMock(overrides: Partial<ChatDispatch> = {}): ChatDispat
   return {
     contentPost: jest.fn().mockResolvedValue(stubResult),
     contentPlan: jest.fn().mockResolvedValue(stubResult),
+    contentCampaign: jest.fn().mockResolvedValue(stubResult),
     contentFreeform: jest.fn().mockResolvedValue(stubResult),
     researchTopic: jest.fn().mockResolvedValue(stubResult),
     researchFreeform: jest.fn().mockResolvedValue(stubResult),

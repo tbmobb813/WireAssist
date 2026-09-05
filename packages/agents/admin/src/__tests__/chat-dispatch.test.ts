@@ -1,11 +1,12 @@
 import { DISPATCH_TOOL_NAMES, buildChatDispatchToolSchemas } from '../chat-dispatch';
 
 describe('DISPATCH_TOOL_NAMES', () => {
-  it('lists exactly the 10 dispatch tool names, one per non-admin chat-router kind', () => {
+  it('lists exactly the 11 dispatch tool names', () => {
     expect([...DISPATCH_TOOL_NAMES].sort()).toEqual(
       [
         'dispatch_content_post',
         'dispatch_content_plan',
+        'dispatch_content_campaign',
         'dispatch_content_freeform',
         'dispatch_research_topic',
         'dispatch_research_freeform',

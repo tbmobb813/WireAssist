@@ -296,6 +296,21 @@ function buildChatDispatch(): ChatDispatch {
       queueContentTask(task);
       return { taskId: task.id, agentRole: 'content', summary: 'Queued a content plan.' };
     },
+    async contentCampaign(input, ctx) {
+      const task = ContentTasks.generateAndScheduleCampaign(
+        input.platforms ?? ['linkedin', 'twitter'],
+        input.weeksAhead ?? 1,
+        input.postsPerWeek ?? 3,
+        undefined,
+        ctx.objectiveId
+      );
+      queueContentTask(task);
+      return {
+        taskId: task.id,
+        agentRole: 'content',
+        summary: 'Queued a full content campaign — drafting, scoring, and proposing a schedule.',
+      };
+    },
     async contentFreeform(input, ctx) {
       const task = ContentTasks.freeform(
         input.prompt,

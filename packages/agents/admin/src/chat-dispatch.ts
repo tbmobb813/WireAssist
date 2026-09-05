@@ -49,6 +49,10 @@ export interface ChatDispatch {
     input: { platforms?: Platform[]; weeksAhead?: number; postsPerWeek?: number },
     ctx: DispatchCtx
   ): Promise<ChatDispatchResult>;
+  contentCampaign(
+    input: { platforms?: Platform[]; weeksAhead?: number; postsPerWeek?: number },
+    ctx: DispatchCtx
+  ): Promise<ChatDispatchResult>;
   contentFreeform(input: { prompt: string }, ctx: DispatchCtx): Promise<ChatDispatchResult>;
   researchTopic(
     input: { query: string; depth?: 'quick' | 'deep'; offerOpsWorkflow?: string },
@@ -71,6 +75,7 @@ export interface ChatDispatch {
 export const DISPATCH_TOOL_NAMES = new Set<string>([
   'dispatch_content_post',
   'dispatch_content_plan',
+  'dispatch_content_campaign',
   'dispatch_content_freeform',
   'dispatch_research_topic',
   'dispatch_research_freeform',
@@ -113,8 +118,28 @@ export function buildChatDispatchToolSchemas(): Record<string, ProviderToolDefin
     dispatch_content_plan: {
       name: 'dispatch_content_plan',
       description:
-        'Hand off a multi-post content plan/calendar across platforms to the Content agent to ' +
-        'actually generate. Starts immediately, no approval needed.',
+        'Hand off a multi-post content IDEA list/calendar across platforms to the Content agent — ' +
+        'topics, angles, and suggested dates, not drafted or scheduled posts. Use when the user ' +
+        'wants ideas/a calendar to review, not finished content ready to go out (use ' +
+        'dispatch_content_campaign for that instead). Starts immediately, no approval needed.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          platforms: { type: 'array', items: { type: 'string', enum: PLATFORM_ENUM } },
+          weeksAhead: { type: 'number' },
+          postsPerWeek: { type: 'number' },
+        },
+      },
+    },
+    dispatch_content_campaign: {
+      name: 'dispatch_content_campaign',
+      description:
+        'Hand off a full content campaign to the Content agent — generates ideas, drafts every ' +
+        'post, self-scores each one, retries a weak draft once with specific feedback, then asks ' +
+        'for ONE batch approval to schedule everything that passed. Use for "plan AND schedule"/' +
+        '"a week of posts ready to go" asks, not just a list of ideas (use dispatch_content_plan ' +
+        'for that). Starts immediately, no approval needed until the single scheduling approval at ' +
+        'the end.',
       inputSchema: {
         type: 'object',
         properties: {

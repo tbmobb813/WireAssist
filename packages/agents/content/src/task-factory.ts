@@ -49,6 +49,32 @@ export const ContentTasks = {
     };
   },
 
+  generateAndScheduleCampaign(
+    platforms: Platform[],
+    weeksAhead = 1,
+    postsPerWeek = 3,
+    businessContext?: string,
+    objectiveId?: string
+  ): AgentTask {
+    return {
+      id: randomUUID(),
+      agentRole: 'content',
+      description: `Generate and schedule ${weeksAhead}-week campaign for ${platforms.join(', ')}`,
+      status: 'queued',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      input: {
+        type: 'generate_and_schedule_campaign',
+        platforms,
+        weeksAhead,
+        postsPerWeek,
+        businessContext,
+      },
+      approvalRequired: true,
+      objectiveId,
+    };
+  },
+
   schedulePost(
     content: string,
     platform: Platform,
