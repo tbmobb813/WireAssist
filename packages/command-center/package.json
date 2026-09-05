@@ -30,7 +30,7 @@
     "@wireassist/core": "workspace:*",
     "@wireassist/trendpost-mcp": "workspace:*",
     "better-sqlite3": "^12.11.1",
-    "hono": "^4.12.27",
+    "hono": "^4.13.5",
     "next": "16.3.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.0"
