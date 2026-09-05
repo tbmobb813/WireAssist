@@ -51,6 +51,10 @@ export class MemoryStore {
         INSERT INTO memories_fts(rowid, content, agent_role, tags)
         VALUES (new.rowid, new.content, new.agent_role, new.tags);
       END;
+      CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+        INSERT INTO memories_fts(memories_fts, rowid, content, agent_role, tags)
+        VALUES ('delete', old.rowid, old.content, old.agent_role, old.tags);
+      END;
     `);
 
     // Migrate existing DBs that pre-date the embedding column
@@ -187,6 +191,12 @@ export class MemoryStore {
 
     const results = this.vectorSearch(vec, filters);
     return results.length > 0 ? results : this.ftsSearch(query, filters);
+  }
+
+  /** Deletes one memory by id. Returns false if no row matched — the caller's cue to 404. */
+  delete(id: string): boolean {
+    const result = this.db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);
+    return result.changes > 0;
   }
 
   /** Backfill embeddings for all rows that were stored before the model was available. */

@@ -2030,6 +2030,19 @@ app.get('/api/memory', async (c) => {
   return c.json(await memory.searchAsync(query, filters));
 });
 
+// Every prior memory correction this session (fixing a vague/stale
+// onboarding answer, deduplicating a role-write bug) needed a manual
+// better-sqlite3 script run directly against the container to remove the
+// stale row, since no delete capability existed anywhere in the API. This
+// is that capability — a real, human-triggered delete (from the /memory
+// browser UI), not something any agent calls on itself.
+app.delete('/api/memory/:id', async (c) => {
+  const id = c.req.param('id');
+  const deleted = memory.delete(id);
+  if (!deleted) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
+});
+
 app.post('/api/memory/upgrade-embeddings', async (c) => {
   if (!agentReady) return c.json({ error: 'not ready' }, 503);
   const result = await memory.upgradeEmbeddings();

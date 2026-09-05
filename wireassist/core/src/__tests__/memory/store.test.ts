@@ -254,6 +254,42 @@ describe('MemoryStore.upgradeEmbeddings()', () => {
   });
 });
 
+describe('MemoryStore.delete()', () => {
+  test('removes the entry and returns true', () => {
+    const store = freshStore();
+    const id = store.store({
+      content: 'delete me',
+      agentRole: 'admin',
+      tags: [],
+      createdAt: new Date(),
+    });
+
+    expect(store.delete(id)).toBe(true);
+    expect(store.listRecent()).toEqual([]);
+  });
+
+  test('returns false for an id that does not exist', () => {
+    const store = freshStore();
+    expect(store.delete('nonexistent-id')).toBe(false);
+  });
+
+  test('deleted entry no longer surfaces via FTS5 fallback search', async () => {
+    const store = freshStore();
+    const id = store.store({
+      content: 'unique deletable phrase',
+      agentRole: 'admin',
+      tags: [],
+      createdAt: new Date(),
+    });
+    store.delete(id);
+
+    // Zero-similarity vec forces the ftsSearch fallback path.
+    (embed as jest.Mock).mockResolvedValueOnce(new Float32Array(384).fill(0));
+    const results = await store.searchAsync('unique deletable phrase');
+    expect(results.some((r) => r.id === id)).toBe(false);
+  });
+});
+
 describe('MemoryStore — column migration', () => {
   test('adds embedding column to a pre-existing DB without it', () => {
     // Create a DB using the old schema (no embedding column)

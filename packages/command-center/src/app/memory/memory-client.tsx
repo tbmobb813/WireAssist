@@ -13,6 +13,15 @@ export default function MemoryClient() {
   const [entries, setEntries] = useState<MemoryEntry[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this memory? This cannot be undone.')) return;
+    setDeletingId(id);
+    const res = await fetch(`/api/memory/${id}`, { method: 'DELETE' });
+    if (res.ok) setEntries((prev) => prev.filter((e) => e.id !== id));
+    setDeletingId(null);
+  };
 
   useEffect(() => {
     const fetch_ = async () => {
@@ -81,6 +90,13 @@ export default function MemoryClient() {
                 <span className="text-xs text-gray-600">
                   {new Date(entry.createdAt).toLocaleString()}
                 </span>
+                <button
+                  onClick={() => handleDelete(entry.id)}
+                  disabled={deletingId === entry.id}
+                  className="ml-auto text-xs text-gray-600 hover:text-red-400 disabled:opacity-50"
+                >
+                  {deletingId === entry.id ? 'Deleting...' : 'Delete'}
+                </button>
               </div>
               <p className="text-sm text-gray-300">{entry.content}</p>
               {entry.tags.length > 0 && (
