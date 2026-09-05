@@ -86,7 +86,14 @@ pile by skimming reasons, not by re-reading every email himself.
 
 Only return valid JSON. No markdown fences.`;
 
-    const rawResponse = await agent.think(triagePrompt, context);
+    // Default maxTokens (Admin's config: 4096) genuinely wasn't enough here
+    // — a real live failure showed the response truncated mid-string with
+    // no closing quote, well before the object closed. Up to 10 detailed
+    // threads across 4 categories, each with its own reasoning field, adds
+    // up fast. Explicit override rather than raising Admin's global default,
+    // since this is the one call in its skill set that scales with inbox
+    // volume the way nothing else here does.
+    const rawResponse = await agent.think(triagePrompt, context, 8192);
 
     let triage: TriageCategories;
     try {
