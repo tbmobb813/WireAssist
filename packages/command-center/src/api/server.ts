@@ -1371,8 +1371,28 @@ app.post('/api/tasks/freeform', async (c) => {
   // zero-approval dispatch_* tools), or delegate something open-ended via
   // delegate_to_agent. No classifier pre-empts that judgment anymore.
   const task = AdminTasks.freeform(instruction, history, objectiveId, images, documents);
+
+  // adminTaskChain (queueAgentTask, below) is one global serialized queue —
+  // EVERY admin task (every chat message, plus 15+ scheduled skills) runs
+  // one at a time. If Admin is mid-approval right now, this new task
+  // doesn't get dropped — it's still queued and will run once that's
+  // resolved — but without this check the user has no way to know their
+  // message is silently waiting behind an unrelated approval instead of
+  // being answered. Surfacing it here turns a silent hang into something
+  // actionable instead of a mystery bug report.
+  const blockedByApproval =
+    agent.status === 'waiting_approval'
+      ? approval.getPending().find((a) => a.agentRole === 'admin')
+      : undefined;
+
   queueAgentTask(task);
-  return c.json({ taskId: task.id, status: 'queued' });
+  return c.json({
+    taskId: task.id,
+    status: 'queued',
+    ...(blockedByApproval && {
+      blockedByApproval: { id: blockedByApproval.id, action: blockedByApproval.action },
+    }),
+  });
 });
 
 // ── CONTENT TASKS ─────────────────────────────────────────────────────────

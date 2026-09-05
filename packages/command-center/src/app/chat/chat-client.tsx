@@ -818,6 +818,16 @@ export default function ChatClient() {
         return;
       }
       if (typeof data.taskId === 'string') {
+        // Admin's task queue is fully serialized — this message is queued
+        // and WILL run once the blocking approval is resolved, but without
+        // this it just looks like the request silently vanished for
+        // however long that approval sits unresolved.
+        if (data.blockedByApproval?.action) {
+          addProgressMessage(
+            `Heads up: still waiting on your approval for "${data.blockedByApproval.action}" — resolve that in Approvals and this message will continue automatically.`,
+            data.taskId
+          );
+        }
         pendingTaskId.current = data.taskId;
         void pollForTask(data.taskId);
       } else {
