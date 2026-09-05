@@ -141,7 +141,7 @@ export const detectSkillOpportunitiesSkill: Skill<DetectSkillOpportunitiesInput,
       return;
     }
 
-    agent.emit('agent:handoff_requested', { task: handoffTask });
+    agent.emit('agent:handoff_requested', { task: handoffTask, taskId: task.id });
 
     agent.emit('agent:detect_skill_opportunities_complete', {
       taskId: task.id,

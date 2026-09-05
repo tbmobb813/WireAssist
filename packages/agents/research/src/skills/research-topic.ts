@@ -122,7 +122,7 @@ export const researchTopicSkill: Skill<ResearchTopicInput, void> = {
         handoffTask
       );
       if (draftApproved) {
-        agent.emit('agent:handoff_requested', { task: handoffTask });
+        agent.emit('agent:handoff_requested', { task: handoffTask, taskId: task.id });
       }
     }
 
@@ -158,7 +158,7 @@ export const researchTopicSkill: Skill<ResearchTopicInput, void> = {
         handoffTask
       );
       if (handoffApproved) {
-        agent.emit('agent:handoff_requested', { task: handoffTask });
+        agent.emit('agent:handoff_requested', { task: handoffTask, taskId: task.id });
       }
     }
   },

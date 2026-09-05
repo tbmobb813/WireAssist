@@ -258,7 +258,7 @@ export const marketGapDiscoverySkill: Skill<MarketGapDiscoveryInput, void> = {
         handoffTask
       );
       if (handoffApproved) {
-        agent.emit('agent:handoff_requested', { task: handoffTask });
+        agent.emit('agent:handoff_requested', { task: handoffTask, taskId: task.id });
       }
     }
   },

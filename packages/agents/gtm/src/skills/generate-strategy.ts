@@ -59,7 +59,7 @@ export const generateStrategySkill: Skill<GenerateStrategyInput, void> = {
         handoffTask
       );
       if (draftApproved) {
-        agent.emit('agent:handoff_requested', { task: handoffTask });
+        agent.emit('agent:handoff_requested', { task: handoffTask, taskId: task.id });
       }
     }
 
@@ -82,7 +82,7 @@ export const generateStrategySkill: Skill<GenerateStrategyInput, void> = {
         handoffTask
       );
       if (calendarApproved) {
-        agent.emit('agent:handoff_requested', { task: handoffTask });
+        agent.emit('agent:handoff_requested', { task: handoffTask, taskId: task.id });
       }
     }
   },
