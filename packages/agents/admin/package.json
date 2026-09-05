@@ -20,7 +20,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^20.19.24",
     "jest": "^30.4.2",
-    "@swc/core": "^1.15.47",
+    "@swc/core": "^1.16.1",
     "@swc/jest": "^0.2.39",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
