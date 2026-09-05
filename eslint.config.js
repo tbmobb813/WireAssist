@@ -29,6 +29,15 @@ export default [
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       'no-console': ['warn', { allow: ['warn', 'error'] }],
+      // Core no-undef isn't type-aware, so it false-positives on anything
+      // that only exists in TS type-space — a namespace referenced as a
+      // type (NodeJS.Timeout), a global ambient type (RequestInit), a
+      // locally-declared type/interface used before its declaration in
+      // source order, JSX's implicit React reference, etc. TypeScript's own
+      // compiler already reports a genuinely undefined identifier (TS2304)
+      // far more accurately than this rule can — this is typescript-eslint's
+      // own documented recommendation, not a one-off workaround.
+      'no-undef': 'off',
     },
   },
 ];
