@@ -47,7 +47,7 @@
     "eslint": "^10.8.1",
     "@eslint/js": "^10.0.1",
     "globals": "^17.11.0",
-    "prettier": "^3.3.3"
+    "prettier": "^3.9.6"
   },
   "repository": {
     "type": "git",
