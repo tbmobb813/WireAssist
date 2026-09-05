@@ -16,8 +16,7 @@
     "start:api": "tsx src/api/server.ts",
     "start:web": "node scripts/run-next.mjs start",
     "test": "jest",
-    "typecheck": "tsc --noEmit",
-    "eval:router": "tsx scripts/eval-router.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.119.0",

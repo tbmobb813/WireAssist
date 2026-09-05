@@ -64,11 +64,18 @@ import { registerTrendPostTools, TrendPostStorage, type Platform } from '@wireas
 import { registerPortfolioRoutes } from './portfolio-routes';
 import { registerObjectiveRoutes } from './objective-routes';
 import { registerConversationRoutes } from './conversation-routes';
-import { type ChatHistoryMessage } from './chat-router';
 import { getLocation, setLocation, listNotes, addNote, deleteNote } from './dashboard-widgets';
 import { routeHandoffTask } from '../lib/route-handoff';
 import { replayOrphanedHandoffs } from '../lib/replay-handoffs';
 import { decideHandoffReviewAction } from '../lib/handoff-review';
+
+// Formerly imported from the now-deleted chat-router.ts (its classifier is
+// gone — Admin decides everything now — but this shape is still what the
+// chat client sends as prior turns).
+interface ChatHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
 const DB_PATH = path.join(HOME_PATH, '.wireassist', 'wireassist.db');
@@ -1284,8 +1291,7 @@ app.delete('/api/notes/:id', (c) => {
 });
 
 // Caps and validates the client-supplied conversation transcript before it
-// ever reaches an LLM call — defends against a tampered/oversized payload
-// even though chat-router applies its own cap too.
+// ever reaches an LLM call — defends against a tampered/oversized payload.
 const MAX_HISTORY_MESSAGES = 20;
 function sanitizeHistory(raw: unknown): ChatHistoryMessage[] | undefined {
   if (!Array.isArray(raw)) return undefined;
