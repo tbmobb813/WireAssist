@@ -87,7 +87,6 @@ const events = new EventBus();
 let approval: ApprovalQueue;
 let memory: MemoryStore;
 let taskStore: TaskStore;
-let agent: AdminAgent;
 let contentAgent: ContentAgent;
 let researchAgent: ResearchAgent;
 let opsAgent: NixOpsAgent;
@@ -124,9 +123,6 @@ function logAgentTaskError(err: unknown) {
   }
   logger.error('❌ Agent task failed:', err);
 }
-
-/** Run one admin task at a time so events and status stay coherent. */
-let adminTaskChain: Promise<void> = Promise.resolve();
 
 function saveTaskToDb(task: AgentTask, error?: string) {
   try {
@@ -178,9 +174,30 @@ function emitTaskQueued(task: AgentTask) {
   });
 }
 
+// Deliberately NOT serialized behind a shared promise chain the way every
+// other agent's queue still is. BaseAgent.run() has a built-in reentrancy
+// guard (`if (this.status === 'running') return;`) that silently DROPS a
+// task if it hits an agent instance already mid-run — that guard is why
+// the old adminTaskChain existed at all, and it's still exactly why the
+// other five agents' queues stay serialized. Admin is different: it's the
+// sole front door for every chat message (see /api/tasks/freeform) plus
+// 15+ scheduled skills, so one task sitting on a human approval used to
+// silently block everything queued behind it — confirmed live, an
+// unrelated content-generation request once sat stuck for minutes behind
+// one pending triage approval, no error, no signal.
+//
+// Fix: give every admin task its own fresh AdminAgent instance instead of
+// sharing one long-lived singleton. Constructing one is cheap (no I/O —
+// just wiring shared references and registering skills into that
+// instance's own local SkillRegistry), and every other piece of state
+// this needs (approval queue, memory, mcp, events) is already safely
+// shared across instances via its own concurrency-safe persistence. That
+// makes each task's reentrancy guard private to itself, so a stuck
+// approval on one task can no longer block any other — genuine
+// concurrency, not just a longer queue.
 function queueAgentTask(task: Parameters<AdminAgent['run']>[0]) {
   emitTaskQueued(task);
-  adminTaskChain = adminTaskChain.then(() => agent.run(task)).catch(logAgentTaskError);
+  buildAdminAgent().run(task).catch(logAgentTaskError);
   return task;
 }
 
@@ -375,6 +392,16 @@ function buildChatDispatch(): ChatDispatch {
       };
     },
   };
+}
+
+// Builds a fresh AdminAgent per call rather than reusing one long-lived
+// singleton — see queueAgentTask's own comment for why. Cheap: the
+// constructor does no I/O, just wires these already-shared, already-
+// concurrency-safe references (approval/memory/mcp/events all persist to
+// their own SQLite-backed stores; the LLM provider clients are stateless
+// per-call) and registers this instance's own local skill set.
+function buildAdminAgent(): AdminAgent {
+  return new AdminAgent({ approval, memory, mcp, events, chatDispatch: buildChatDispatch() });
 }
 
 // GitHubMcpClient.callTool() returns MCP's array-of-content-blocks shape
@@ -856,10 +883,11 @@ async function bootstrap() {
     );
   }
 
-  // Admin Agent — always constructed so freeform chat works without Gmail/Calendar
-  // credentials. Gmail/Calendar tools register separately below; email/calendar-
-  // specific tasks are gated on gmailReady, not on the agent's existence.
-  agent = new AdminAgent({ approval, memory, mcp, events, chatDispatch: buildChatDispatch() });
+  // No persistent Admin instance to construct here anymore — every admin
+  // task gets its own fresh one via buildAdminAgent() (see queueAgentTask).
+  // Gmail/Calendar tools still register on the shared mcp client below,
+  // available to every instance built afterward; email/calendar-specific
+  // tasks are gated on gmailReady, not on any agent's existence.
   try {
     await setupAdminMCP(mcp);
     gmailReady = true;
@@ -935,11 +963,18 @@ app.get('/health', (c) =>
 
 // ── AGENT STATUS ──────────────────────────────────────────────────────────
 app.get('/api/agent/status', (c) => {
+  // Admin no longer has one persistent instance to read .status off (see
+  // buildAdminAgent()) — multiple admin tasks can genuinely be in flight
+  // at once now, each with its own private status. The one state that
+  // still matters for a dashboard glance is "is anything waiting on me
+  // right now", which is a real fact independent of any single instance —
+  // derived directly from the approval queue instead.
+  const adminWaitingOnApproval = approval.getPending().some((a) => a.agentRole === 'admin');
   return c.json({
     admin: {
       role: 'admin',
       name: 'Admin Agent',
-      status: agent?.status ?? 'idle',
+      status: adminWaitingOnApproval ? 'waiting_approval' : 'idle',
     },
     content: {
       role: 'content',
@@ -1370,29 +1405,17 @@ app.post('/api/tasks/freeform', async (c) => {
   // dispatch a specific action to another agent (see chat-dispatch.ts's
   // zero-approval dispatch_* tools), or delegate something open-ended via
   // delegate_to_agent. No classifier pre-empts that judgment anymore.
+  //
+  // Each task also gets its own fresh AdminAgent instance (queueAgentTask,
+  // via buildAdminAgent()) rather than sharing one long-lived singleton —
+  // this message genuinely does not wait behind an unrelated pending
+  // approval anymore, since that's a different task on a different
+  // instance. (A prior version of this route surfaced a "blocked by
+  // approval" warning here — that was a workaround for the shared-instance
+  // serialization this fix removes, not needed anymore.)
   const task = AdminTasks.freeform(instruction, history, objectiveId, images, documents);
-
-  // adminTaskChain (queueAgentTask, below) is one global serialized queue —
-  // EVERY admin task (every chat message, plus 15+ scheduled skills) runs
-  // one at a time. If Admin is mid-approval right now, this new task
-  // doesn't get dropped — it's still queued and will run once that's
-  // resolved — but without this check the user has no way to know their
-  // message is silently waiting behind an unrelated approval instead of
-  // being answered. Surfacing it here turns a silent hang into something
-  // actionable instead of a mystery bug report.
-  const blockedByApproval =
-    agent.status === 'waiting_approval'
-      ? approval.getPending().find((a) => a.agentRole === 'admin')
-      : undefined;
-
   queueAgentTask(task);
-  return c.json({
-    taskId: task.id,
-    status: 'queued',
-    ...(blockedByApproval && {
-      blockedByApproval: { id: blockedByApproval.id, action: blockedByApproval.action },
-    }),
-  });
+  return c.json({ taskId: task.id, status: 'queued' });
 });
 
 // ── CONTENT TASKS ─────────────────────────────────────────────────────────
