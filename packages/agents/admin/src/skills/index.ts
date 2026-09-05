@@ -59,4 +59,4 @@ export {
   meetingFollowupSkill,
   draftDocumentSkill,
 };
-export { proposeOrAutoApprove } from './propose-or-auto-approve';
+export { proposeOrAutoApprove, proposeBatchOrAutoApprove } from './propose-or-auto-approve';

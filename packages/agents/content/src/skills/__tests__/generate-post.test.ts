@@ -83,3 +83,44 @@ describe('generatePostSkill — review pilot passthrough', () => {
     );
   });
 });
+
+describe('generatePostSkill — no approval gate', () => {
+  it('never proposes approval — generating a draft is not a final outcome', async () => {
+    const agent = makeAgentHandle();
+
+    await generatePostSkill.execute({
+      agent,
+      task: makeTask(),
+      input: { topic: 'AI trends', platform: 'linkedin' },
+    });
+
+    expect(agent.proposeAction).not.toHaveBeenCalled();
+  });
+
+  it('unconditionally emits agent:content_approved once generation completes', async () => {
+    const agent = makeAgentHandle();
+
+    await generatePostSkill.execute({
+      agent,
+      task: makeTask(),
+      input: { topic: 'AI trends', platform: 'linkedin' },
+    });
+
+    expect(agent.emit).toHaveBeenCalledWith(
+      'agent:content_approved',
+      expect.objectContaining({ content: 'A great post.', platform: 'linkedin' })
+    );
+  });
+
+  it('never calls content_analyze — no consumer left for it in this skill', async () => {
+    const agent = makeAgentHandle();
+
+    await generatePostSkill.execute({
+      agent,
+      task: makeTask(),
+      input: { topic: 'AI trends', platform: 'linkedin' },
+    });
+
+    expect(agent.useTool).not.toHaveBeenCalledWith('content_analyze', expect.anything());
+  });
+});

@@ -25,8 +25,13 @@ export interface GeneratePostInput {
 export const generatePostSkill: Skill<GeneratePostInput, void> = {
   name: 'generate_post',
   role: 'content',
-  description: 'Generate a single post for one platform, gated by approval.',
-  requiresApproval: true,
+  // Not approval-gated — generating/analyzing/remembering a draft has no
+  // real-world effect yet. The actual "will this go live" checkpoint is
+  // schedule_post_skill, since nothing publishes without first being
+  // scheduled, and publish_due_posts_skill's cron sweep runs unattended by
+  // design once something is scheduled. Gating this step too was asking
+  // for approval on a process step, not a final outcome.
+  description: 'Generate a single post for one platform.',
 
   async execute({ agent, task, input }) {
     const { topic, platform, tone, extraContext, reviewContext } = input;
@@ -54,40 +59,24 @@ export const generatePostSkill: Skill<GeneratePostInput, void> = {
       reviewContext,
     });
 
-    const analysis = (await agent.useTool('content_analyze', {
+    // No content_analyze call here anymore — its only consumer was the
+    // approval card just removed below, and content-retro.ts already runs
+    // its own separate analysis pass on published posts for retrospective
+    // learning. Computing a score nothing displays was wasted latency/cost.
+    //
+    // No approval gate here (see the skill's own comment on why) — generating
+    // and remembering a draft has no real-world effect. It still isn't
+    // scheduled or posted anywhere; that's schedule_post_skill's job, with
+    // its own approval, which is the actual "will this go live" checkpoint.
+    agent.remember(`Generated ${platform} post about: ${topic}`, [
+      'content',
+      'generated',
+      platform,
+    ]);
+    agent.emit('agent:content_approved', {
+      taskId: task.id,
       content: result.content,
       platform,
-    })) as { score: number; estimatedEngagement: string; suggestion: string };
-
-    // Wording matters here: approving this only saves the draft to memory —
-    // it does NOT schedule or post anything (that's schedule_post_skill, a
-    // separate approval with its own scheduledAt). Earlier phrasing ("Post
-    // to {platform}: ...") implied this approval alone would publish, which
-    // it never did — approved drafts just sat in memory with no scheduled
-    // slot and no visible next step.
-    const approved = await agent.proposeAction(
-      task,
-      `Save this ${platform} draft? (still needs to be scheduled separately): "${result.content.slice(0, 80)}..."`,
-      { content: result.content, platform, analysis }
-    );
-
-    if (approved) {
-      agent.remember(`Generated approved ${platform} post about: ${topic}`, [
-        'content',
-        'approved',
-        platform,
-      ]);
-      agent.emit('agent:content_approved', {
-        taskId: task.id,
-        content: result.content,
-        platform,
-      });
-    } else {
-      agent.remember(`User rejected ${platform} post about: ${topic}. May need different angle.`, [
-        'content',
-        'rejected',
-        platform,
-      ]);
-    }
+    });
   },
 };

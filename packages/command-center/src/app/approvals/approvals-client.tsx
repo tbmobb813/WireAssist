@@ -36,8 +36,15 @@ function PayloadPreview({ payload }: { payload: Record<string, unknown> }) {
     typeof payload.targetRole === 'string' && typeof payload.prompt === 'string'
       ? { targetRole: payload.targetRole, prompt: payload.prompt }
       : undefined;
+  // proposeBatchOrAutoApprove's bundled batch shape (email-triage.ts) — one
+  // approval covering several individually-labeled actions at once.
+  const batchActions = Array.isArray(payload.actions)
+    ? (payload.actions as { id?: string; label?: string }[]).filter(
+        (a): a is { id?: string; label: string } => typeof a?.label === 'string'
+      )
+    : undefined;
 
-  const recognized = text || summary || sources || analysis || delegation;
+  const recognized = text || summary || sources || analysis || delegation || batchActions;
   if (!recognized) return null;
 
   return (
@@ -72,6 +79,19 @@ function PayloadPreview({ payload }: { payload: Record<string, unknown> }) {
             </a>
           ))}
         </div>
+      )}
+      {batchActions && batchActions.length > 0 && (
+        <ul className="space-y-1.5">
+          {batchActions.map((a, i) => (
+            <li
+              key={a.id ?? i}
+              className="text-sm text-gray-300 pl-3"
+              style={{ borderLeft: '2px solid #1e2040' }}
+            >
+              {a.label}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

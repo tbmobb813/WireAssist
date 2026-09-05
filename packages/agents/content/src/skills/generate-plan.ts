@@ -11,8 +11,11 @@ export interface GeneratePlanInput {
 export const generatePlanSkill: Skill<GeneratePlanInput, void> = {
   name: 'generate_plan',
   role: 'content',
-  description: 'Generate a multi-week content plan across platforms, gated by approval.',
-  requiresApproval: true,
+  // Not approval-gated, same reasoning as generate_post_skill — generating
+  // and remembering ideas has no real-world effect. Scheduling each idea
+  // individually (schedule_post_skill) is the real "will this go live"
+  // checkpoint.
+  description: 'Generate a multi-week content plan across platforms.',
 
   async execute({ agent, task, input }) {
     const { platforms, weeksAhead = 1, postsPerWeek = 3, businessContext: providedContext } = input;
@@ -39,20 +42,12 @@ export const generatePlanSkill: Skill<GeneratePlanInput, void> = {
       totalGenerated: result.totalGenerated,
     });
 
-    // Same wording caution as generate-post.ts: this only saves the plan's
-    // ideas to memory, it doesn't schedule any of them — scheduling is a
-    // separate, later step per idea.
-    const approved = await agent.proposeAction(
-      task,
-      `Save these ${result.totalGenerated} content ideas across ${platforms.join(', ')}? (still need to be scheduled individually)`,
-      { ideas: result.ideas }
+    // No approval gate here (see the skill's own comment on why) — this
+    // only saves the plan's ideas to memory, it doesn't schedule any of
+    // them; scheduling is a separate, later, approval-gated step per idea.
+    agent.remember(
+      `Generated content plan: ${result.totalGenerated} posts for ${platforms.join(', ')}`,
+      ['content', 'plan', 'generated']
     );
-
-    if (approved) {
-      agent.remember(
-        `Approved content plan: ${result.totalGenerated} posts for ${platforms.join(', ')}`,
-        ['content', 'plan', 'approved']
-      );
-    }
   },
 };

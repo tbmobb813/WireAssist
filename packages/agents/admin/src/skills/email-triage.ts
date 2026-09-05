@@ -9,7 +9,7 @@ import {
   type ProposedAction,
   type TriageCategories,
 } from '../types';
-import { proposeOrAutoApprove } from './propose-or-auto-approve';
+import { proposeBatchOrAutoApprove } from './propose-or-auto-approve';
 
 export const emailTriageSkill: Skill<{ maxEmails?: number }, EmailTriageResult> = {
   name: 'email_triage',
@@ -150,7 +150,7 @@ Only return valid JSON. No markdown fences.`;
 
     // Propose ignore-labeling for the ignore category — this is what makes
     // the ignore pile actionable (and auto-approvable, see
-    // proposeOrAutoApprove) rather than just reported.
+    // proposeBatchOrAutoApprove) rather than just reported.
     for (const email of triage.categories.ignore ?? []) {
       if (!validThreadIds.has(email.threadId)) continue;
       proposedActions.push({
@@ -176,14 +176,11 @@ Only return valid JSON. No markdown fences.`;
     // 6. Emit the result — Command Center UI picks this up and renders it
     agent.emit('agent:triage_complete', result);
 
-    // 7. For each proposed action, request approval (or auto-approve, for
-    // the narrow ignore-labeling carve-out) individually.
-    for (const action of proposedActions) {
-      const approved = await proposeOrAutoApprove(agent, task, action);
-      if (approved) {
-        await agent.useTool(action.type, action.payload);
-      }
-    }
+    // 7. Auto-approve-eligible actions (the narrow ignore-labeling carve-out)
+    // execute immediately; everything else needing a real human decision is
+    // bundled into ONE batch approval instead of one sequential prompt per
+    // action — see proposeBatchOrAutoApprove's own comment for why.
+    await proposeBatchOrAutoApprove(agent, task, proposedActions);
 
     return result;
   },

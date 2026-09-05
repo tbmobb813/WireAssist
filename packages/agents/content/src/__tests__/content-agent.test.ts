@@ -255,17 +255,10 @@ describe('ContentAgent — chat tool-calling loop', () => {
 });
 
 describe('ContentAgent — composable skill-tools in the chat loop', () => {
-  it('executeToolCall() dispatches generate_post_skill via invokeSkill(), letting the skill self-gate its own approval rather than gating the outer call a second time', async () => {
+  it('executeToolCall() dispatches generate_post_skill via invokeSkill(), with no approval gate — generating a draft has no real-world effect', async () => {
     const mcpCall = jest.fn().mockImplementation((tool: string) => {
       if (tool === 'content_generate') {
         return Promise.resolve({ content: 'Post text', platform: 'linkedin', topic: 'Q3 launch' });
-      }
-      if (tool === 'content_analyze') {
-        return Promise.resolve({
-          score: 8,
-          estimatedEngagement: 'high',
-          suggestion: 'tighten CTA',
-        });
       }
       throw new Error(`unexpected tool: ${tool}`);
     });
@@ -282,7 +275,7 @@ describe('ContentAgent — composable skill-tools in the chat loop', () => {
     });
 
     expect(result.isError).toBe(false);
-    expect(deps.approval.request).toHaveBeenCalledTimes(1);
+    expect(deps.approval.request).not.toHaveBeenCalled();
     expect(deps.events.emit).toHaveBeenCalledWith(
       'agent:content_generated',
       expect.objectContaining({ content: 'Post text' })
