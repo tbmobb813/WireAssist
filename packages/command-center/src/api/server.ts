@@ -2089,28 +2089,46 @@ app.post('/api/memory/upgrade-embeddings', async (c) => {
 // for no consumer.
 const ONBOARDING_CONTEXT_ROLES: AgentRole[] = ['admin', 'content'];
 
+// account (optional): when given, answers are tagged `account:<name>` in
+// addition to 'onboarding', so content generation for that specific
+// account (see generate-plan.ts/generate-post.ts/generate-and-schedule-
+// campaign.ts) can pull an exact, unblended set of answers via
+// listMemories() instead of the general blended business-context search.
+// Confirmed live 2026-09-05: without this, content labeled for one
+// account (e.g. mindtype_studio) still read like the whole umbrella
+// business, since only one shared business_description/content_topics
+// existed across every venture. Omitting account keeps the original
+// shared-context behavior unchanged, for anyone who hasn't set up
+// per-account answers yet.
 app.post('/api/memory/onboard', async (c) => {
   if (!agentReady) return c.json({ error: 'not ready' }, 503);
-  const body = (await c.req.json().catch(() => ({}))) as { answers?: Record<string, string> };
-  const { answers } = body;
+  const body = (await c.req.json().catch(() => ({}))) as {
+    answers?: Record<string, string>;
+    account?: string;
+  };
+  const { answers, account } = body;
   if (!answers || typeof answers !== 'object') {
     return c.json({ error: 'answers object required' }, 400);
   }
   let stored = 0;
   for (const [question, answer] of Object.entries(answers)) {
     if (typeof answer === 'string' && answer.trim()) {
+      const tags = account ? ['onboarding', `account:${account}`] : ['onboarding'];
+      const content = account
+        ? `[${account}] ${question}: ${answer.trim()}`
+        : `${question}: ${answer.trim()}`;
       for (const agentRole of ONBOARDING_CONTEXT_ROLES) {
         await memory.storeAsync({
-          content: `${question}: ${answer.trim()}`,
+          content,
           agentRole,
-          tags: ['onboarding'],
+          tags,
           createdAt: new Date(),
         });
       }
       stored++;
     }
   }
-  return c.json({ ok: true, stored });
+  return c.json({ ok: true, stored, account: account ?? null });
 });
 
 // One-shot catch-up for anything a live-SSE-only client (the Telegram bot,

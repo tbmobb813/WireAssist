@@ -39,9 +39,17 @@ export const generatePostSkill: Skill<GeneratePostInput, void> = {
   async execute({ agent, task, input }) {
     const { topic, platform, account, tone, extraContext, reviewContext } = input;
 
-    const memoryContext = await agent.loadContext(
-      'business description products services audience'
-    );
+    // See generate-plan.ts's identical pattern for why exact per-account
+    // memory takes priority over the blended search when it exists.
+    const accountContext = account
+      ? agent
+          .listMemories({ tags: [`account:${account}`] })
+          .map((m) => m.content)
+          .join('\n\n')
+      : '';
+    const memoryContext =
+      accountContext ||
+      (await agent.loadContext('business description products services audience'));
     // extraContext carries a handoff from another agent (e.g. a research finding) —
     // it takes precedence in the prompt since it's more specific to this post than
     // the agent's general business-context memory.

@@ -34,9 +34,22 @@ export const generatePlanSkill: Skill<GeneratePlanInput, void> = {
       businessContext: providedContext,
     } = input;
 
-    const memoryContext = await agent.loadContext(
-      'business description products services recent news'
-    );
+    // Exact per-account onboarding answers (if any exist) take priority
+    // over the general blended business-context search — mixing the two
+    // is exactly what put NixLevel/controller-repair/blog content into a
+    // batch labeled for a single specific account (confirmed live
+    // 2026-09-05). Falls back to the blended search when no account-
+    // specific answers have been onboarded yet, so behavior is unchanged
+    // for any account without dedicated context.
+    const accountContext = account
+      ? agent
+          .listMemories({ tags: [`account:${account}`] })
+          .map((m) => m.content)
+          .join('\n\n')
+      : '';
+    const memoryContext =
+      accountContext ||
+      (await agent.loadContext('business description products services recent news'));
     // providedContext carries a handoff from another agent (e.g. a GTM strategy) —
     // it takes precedence since it's a more specific, current business description
     // than whatever's accumulated in memory.

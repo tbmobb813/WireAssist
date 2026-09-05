@@ -57,9 +57,17 @@ export const generateAndScheduleCampaignSkill: Skill<GenerateAndScheduleCampaign
       businessContext: providedContext,
     } = input;
 
-    const memoryContext = await agent.loadContext(
-      'business description products services recent news audience'
-    );
+    // See generate-plan.ts's identical pattern for why exact per-account
+    // memory takes priority over the blended search when it exists.
+    const accountContext = account
+      ? agent
+          .listMemories({ tags: [`account:${account}`] })
+          .map((m) => m.content)
+          .join('\n\n')
+      : '';
+    const memoryContext =
+      accountContext ||
+      (await agent.loadContext('business description products services recent news audience'));
     const businessContext =
       [providedContext, memoryContext].filter(Boolean).join('\n\n') || 'Solo business operator';
 
