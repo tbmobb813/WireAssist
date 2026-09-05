@@ -3,6 +3,11 @@ import type { Platform } from '@wireassist/trendpost-mcp';
 
 export interface GenerateAndScheduleCampaignInput {
   platforms: Platform[];
+  // See generate-plan.ts's GeneratePlanInput.account for why this matters —
+  // without it, a batch gets generated against every venture's blended
+  // context at once with no record of which post was meant for which
+  // account (confirmed live 2026-09-05).
+  account?: string;
   weeksAhead?: number;
   postsPerWeek?: number;
   businessContext?: string;
@@ -44,7 +49,13 @@ export const generateAndScheduleCampaignSkill: Skill<GenerateAndScheduleCampaign
   requiresApproval: true,
 
   async execute({ agent, task, input }) {
-    const { platforms, weeksAhead = 1, postsPerWeek = 3, businessContext: providedContext } = input;
+    const {
+      platforms,
+      account,
+      weeksAhead = 1,
+      postsPerWeek = 3,
+      businessContext: providedContext,
+    } = input;
 
     const memoryContext = await agent.loadContext(
       'business description products services recent news audience'
@@ -55,17 +66,24 @@ export const generateAndScheduleCampaignSkill: Skill<GenerateAndScheduleCampaign
     const planResult = (await agent.useTool('content_generate_plan', {
       businessContext,
       platforms,
+      account,
       weeksAhead,
       postsPerWeek,
     })) as { ideas: GeneratedIdea[]; totalGenerated: number };
 
-    const ready: Array<{ content: string; platform: Platform; scheduledAt: string }> = [];
+    const ready: Array<{
+      content: string;
+      platform: Platform;
+      account?: string;
+      scheduledAt: string;
+    }> = [];
     const flagged: Array<{ topic: string; platform: Platform; reason: string }> = [];
 
     for (const idea of planResult.ideas) {
       let draft = (await agent.useTool('content_generate', {
         topic: idea.topic,
         platform: idea.platform,
+        account,
         context: `${businessContext}\n\nAngle: ${idea.angle}`,
       })) as { content: string };
 
@@ -78,6 +96,7 @@ export const generateAndScheduleCampaignSkill: Skill<GenerateAndScheduleCampaign
         draft = (await agent.useTool('content_generate', {
           topic: idea.topic,
           platform: idea.platform,
+          account,
           context:
             `${businessContext}\n\nAngle: ${idea.angle}\n\n` +
             `A PRIOR DRAFT SCORED ${analysis.score}/10 — specific feedback to address:\n` +
@@ -94,6 +113,7 @@ export const generateAndScheduleCampaignSkill: Skill<GenerateAndScheduleCampaign
         ready.push({
           content: draft.content,
           platform: idea.platform,
+          account,
           scheduledAt: idea.scheduledFor,
         });
       } else {
@@ -121,11 +141,12 @@ export const generateAndScheduleCampaignSkill: Skill<GenerateAndScheduleCampaign
       return;
     }
 
+    const accountLabel = account ? ` for ${account}` : '';
     const approved = await agent.proposeAction(
       task,
       ready.length === 1
-        ? `Schedule this ${ready[0].platform} post for ${new Date(ready[0].scheduledAt).toLocaleDateString()}?`
-        : `Schedule ${ready.length} posts across ${platforms.join('/')} for the week?`,
+        ? `Schedule this ${ready[0].platform} post${accountLabel} for ${new Date(ready[0].scheduledAt).toLocaleDateString()}?`
+        : `Schedule ${ready.length} posts across ${platforms.join('/')}${accountLabel} for the week?`,
       { posts: ready }
     );
 
@@ -142,6 +163,7 @@ export const generateAndScheduleCampaignSkill: Skill<GenerateAndScheduleCampaign
       const result = await agent.useTool('content_schedule_post', {
         content: post.content,
         platform: post.platform,
+        account: post.account,
         scheduledAt: post.scheduledAt,
         objectiveId: task.objectiveId,
       });

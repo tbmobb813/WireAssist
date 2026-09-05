@@ -42,15 +42,25 @@ export interface ChatDispatchResult {
 // existing approval/memory/mcp/events deps.
 export interface ChatDispatch {
   contentPost(
-    input: { topic: string; platform: Platform; tone?: string },
+    input: { topic: string; platform: Platform; account?: string; tone?: string },
     ctx: DispatchCtx
   ): Promise<ChatDispatchResult>;
   contentPlan(
-    input: { platforms?: Platform[]; weeksAhead?: number; postsPerWeek?: number },
+    input: {
+      platforms?: Platform[];
+      account?: string;
+      weeksAhead?: number;
+      postsPerWeek?: number;
+    },
     ctx: DispatchCtx
   ): Promise<ChatDispatchResult>;
   contentCampaign(
-    input: { platforms?: Platform[]; weeksAhead?: number; postsPerWeek?: number },
+    input: {
+      platforms?: Platform[];
+      account?: string;
+      weeksAhead?: number;
+      postsPerWeek?: number;
+    },
     ctx: DispatchCtx
   ): Promise<ChatDispatchResult>;
   contentFreeform(input: { prompt: string }, ctx: DispatchCtx): Promise<ChatDispatchResult>;
@@ -88,6 +98,23 @@ export const DISPATCH_TOOL_NAMES = new Set<string>([
 
 const PLATFORM_ENUM = ['twitter', 'linkedin', 'instagram', 'threads'];
 
+// Which specific brand/account this content is for — required on every
+// content dispatch tool that can produce more than one piece of content
+// per call. "platform" alone (e.g. "instagram") is ambiguous once more
+// than one brand has an account on the same platform: a single content-
+// plan batch mixed content for multiple ventures under one undifferentiated
+// "instagram" tag before this field existed (confirmed live 2026-09-05).
+// A free string, not a strict enum, since accounts get added over time —
+// but the model must ask the user rather than guess if it isn't already
+// clear which account is meant.
+const ACCOUNT_SCHEMA_PROPERTY = {
+  type: 'string',
+  description:
+    'Which specific brand/account this is for (e.g. "techtrendwire", "mindtype_studio", ' +
+    '"nixlevel"). If the user hasn\'t said which account and it isn\'t obvious from context, ' +
+    'ask before dispatching rather than guessing — do not default to one account silently.',
+};
+
 // Descriptions copied near-verbatim from chat-router.ts's TOOLS array —
 // tuned through several real bug-fix sessions (the live-price/stock/
 // version wording on research_topic, the GitHub-vs-research
@@ -110,9 +137,10 @@ export function buildChatDispatchToolSchemas(): Record<string, ProviderToolDefin
         properties: {
           topic: { type: 'string', description: 'What the content should be about.' },
           platform: { type: 'string', enum: PLATFORM_ENUM },
+          account: ACCOUNT_SCHEMA_PROPERTY,
           tone: { type: 'string', description: 'Optional tone, e.g. "direct", "playful".' },
         },
-        required: ['topic', 'platform'],
+        required: ['topic', 'platform', 'account'],
       },
     },
     dispatch_content_plan: {
@@ -126,9 +154,11 @@ export function buildChatDispatchToolSchemas(): Record<string, ProviderToolDefin
         type: 'object',
         properties: {
           platforms: { type: 'array', items: { type: 'string', enum: PLATFORM_ENUM } },
+          account: ACCOUNT_SCHEMA_PROPERTY,
           weeksAhead: { type: 'number' },
           postsPerWeek: { type: 'number' },
         },
+        required: ['account'],
       },
     },
     dispatch_content_campaign: {
@@ -144,9 +174,11 @@ export function buildChatDispatchToolSchemas(): Record<string, ProviderToolDefin
         type: 'object',
         properties: {
           platforms: { type: 'array', items: { type: 'string', enum: PLATFORM_ENUM } },
+          account: ACCOUNT_SCHEMA_PROPERTY,
           weeksAhead: { type: 'number' },
           postsPerWeek: { type: 'number' },
         },
+        required: ['account'],
       },
     },
     dispatch_content_freeform: {

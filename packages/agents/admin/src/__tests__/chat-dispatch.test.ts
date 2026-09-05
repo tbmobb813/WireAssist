@@ -40,9 +40,16 @@ describe('buildChatDispatchToolSchemas', () => {
     }
   });
 
-  it('dispatch_content_post requires topic and platform', () => {
+  it('dispatch_content_post requires topic, platform, and account', () => {
     const s = schemas.dispatch_content_post.inputSchema as { required: string[] };
-    expect(s.required).toEqual(['topic', 'platform']);
+    expect(s.required).toEqual(['topic', 'platform', 'account']);
+  });
+
+  it('dispatch_content_plan and dispatch_content_campaign require account', () => {
+    const plan = schemas.dispatch_content_plan.inputSchema as { required: string[] };
+    const campaign = schemas.dispatch_content_campaign.inputSchema as { required: string[] };
+    expect(plan.required).toEqual(['account']);
+    expect(campaign.required).toEqual(['account']);
   });
 
   it('dispatch_ops_workflow requires workflow and brief', () => {

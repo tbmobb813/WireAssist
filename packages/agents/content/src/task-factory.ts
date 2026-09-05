@@ -9,12 +9,18 @@ import type { Platform } from '@wireassist/trendpost-mcp';
 import type { TimelineWeekInput } from './skills/generate-plan-from-timeline';
 
 export const ContentTasks = {
+  // account: which specific brand/account (e.g. "techtrendwire",
+  // "mindtype_studio", "nixlevel") this content is for — appended as the
+  // last param on every one of these builders specifically so no existing
+  // positional call site has to change. See generate-plan.ts's
+  // GeneratePlanInput.account for why this field exists at all.
   generatePost(
     topic: string,
     platform: Platform,
     tone?: string,
     extraContext?: string,
-    objectiveId?: string
+    objectiveId?: string,
+    account?: string
   ): AgentTask {
     return {
       id: randomUUID(),
@@ -23,7 +29,7 @@ export const ContentTasks = {
       status: 'queued',
       createdAt: new Date(),
       updatedAt: new Date(),
-      input: { type: 'generate_post', topic, platform, tone, extraContext },
+      input: { type: 'generate_post', topic, platform, tone, extraContext, account },
       approvalRequired: true,
       objectiveId,
     };
@@ -34,7 +40,8 @@ export const ContentTasks = {
     weeksAhead = 1,
     postsPerWeek = 3,
     businessContext?: string,
-    objectiveId?: string
+    objectiveId?: string,
+    account?: string
   ): AgentTask {
     return {
       id: randomUUID(),
@@ -43,7 +50,14 @@ export const ContentTasks = {
       status: 'queued',
       createdAt: new Date(),
       updatedAt: new Date(),
-      input: { type: 'generate_plan', platforms, weeksAhead, postsPerWeek, businessContext },
+      input: {
+        type: 'generate_plan',
+        platforms,
+        weeksAhead,
+        postsPerWeek,
+        businessContext,
+        account,
+      },
       approvalRequired: true,
       objectiveId,
     };
@@ -54,7 +68,8 @@ export const ContentTasks = {
     weeksAhead = 1,
     postsPerWeek = 3,
     businessContext?: string,
-    objectiveId?: string
+    objectiveId?: string,
+    account?: string
   ): AgentTask {
     return {
       id: randomUUID(),
@@ -69,6 +84,7 @@ export const ContentTasks = {
         weeksAhead,
         postsPerWeek,
         businessContext,
+        account,
       },
       approvalRequired: true,
       objectiveId,
@@ -80,7 +96,8 @@ export const ContentTasks = {
     platform: Platform,
     scheduledAt: string,
     tags?: string[],
-    objectiveId?: string
+    objectiveId?: string,
+    account?: string
   ): AgentTask {
     return {
       id: randomUUID(),
@@ -89,7 +106,7 @@ export const ContentTasks = {
       status: 'queued',
       createdAt: new Date(),
       updatedAt: new Date(),
-      input: { type: 'schedule_post', content, platform, scheduledAt, tags },
+      input: { type: 'schedule_post', content, platform, scheduledAt, tags, account },
       approvalRequired: true,
       objectiveId,
     };

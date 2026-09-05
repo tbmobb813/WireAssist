@@ -3,6 +3,14 @@ import type { Platform } from '@wireassist/trendpost-mcp';
 
 export interface GeneratePlanInput {
   platforms: Platform[];
+  // Which specific brand/account this plan is for (e.g. "techtrendwire",
+  // "mindtype_studio", "nixlevel") — required in practice, not just
+  // optional metadata: without it, ideas get generated against the
+  // blended business-context memory spanning every venture at once, which
+  // is exactly what produced an unlabeled, cross-venture-mixed batch live
+  // on 2026-09-05. Left optional in the type only for backward
+  // compatibility with any caller that hasn't been updated yet.
+  account?: string;
   weeksAhead?: number;
   postsPerWeek?: number;
   businessContext?: string;
@@ -18,7 +26,13 @@ export const generatePlanSkill: Skill<GeneratePlanInput, void> = {
   description: 'Generate a multi-week content plan across platforms.',
 
   async execute({ agent, task, input }) {
-    const { platforms, weeksAhead = 1, postsPerWeek = 3, businessContext: providedContext } = input;
+    const {
+      platforms,
+      account,
+      weeksAhead = 1,
+      postsPerWeek = 3,
+      businessContext: providedContext,
+    } = input;
 
     const memoryContext = await agent.loadContext(
       'business description products services recent news'
@@ -32,6 +46,7 @@ export const generatePlanSkill: Skill<GeneratePlanInput, void> = {
     const result = (await agent.useTool('content_generate_plan', {
       businessContext,
       platforms,
+      account,
       weeksAhead,
       postsPerWeek,
     })) as { ideas: unknown[]; totalGenerated: number };

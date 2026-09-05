@@ -115,6 +115,13 @@ Give the target agent a self-contained prompt either way; they won't see this co
 delegate or dispatch something you can already do yourself with your own tools (email, calendar,
 sheets).
 
+ACCOUNT AMBIGUITY: dispatch_content_post/dispatch_content_plan/dispatch_content_campaign require
+an account (which specific brand this content is for — e.g. "techtrendwire", "mindtype_studio",
+"nixlevel"). More than one brand can have an account on the same platform, so "instagram" alone
+never tells you which one. If the user's request doesn't make the account obvious, ASK rather
+than guessing or defaulting to whichever venture comes to mind first — a wrong guess here means
+content generated for the wrong brand's voice/audience.
+
 SELF-IMPROVEMENT:
 If Jason is asking you to build yourself a new capability — "draft a skill that...", "can you
 make yourself able to...", anything where the point is growing what you can do, not just doing
@@ -362,17 +369,27 @@ export class AdminAgent extends BaseAgent {
     const dispatchers: Record<string, () => Promise<ChatDispatchResult>> = {
       dispatch_content_post: () =>
         this.chatDispatch.contentPost(
-          input as { topic: string; platform: Platform; tone?: string },
+          input as { topic: string; platform: Platform; account?: string; tone?: string },
           ctx
         ),
       dispatch_content_plan: () =>
         this.chatDispatch.contentPlan(
-          input as { platforms?: Platform[]; weeksAhead?: number; postsPerWeek?: number },
+          input as {
+            platforms?: Platform[];
+            account?: string;
+            weeksAhead?: number;
+            postsPerWeek?: number;
+          },
           ctx
         ),
       dispatch_content_campaign: () =>
         this.chatDispatch.contentCampaign(
-          input as { platforms?: Platform[]; weeksAhead?: number; postsPerWeek?: number },
+          input as {
+            platforms?: Platform[];
+            account?: string;
+            weeksAhead?: number;
+            postsPerWeek?: number;
+          },
           ctx
         ),
       dispatch_content_freeform: () =>

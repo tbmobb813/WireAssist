@@ -107,14 +107,16 @@ what you actually know.`;
 export function registerTrendPostTools(mcp: MCPClient, storage: TrendPostStorage): void {
   // ── GENERATE CONTENT ──────────────────────────────────────────
   mcp.register('content_generate', async (params) => {
-    const { topic, platform, tone, context } = params as {
+    const { topic, platform, account, tone, context } = params as {
       topic: string;
       platform: Platform;
+      account?: string;
       tone?: string;
       context?: string;
     };
 
     const prompt = `Write a ${platform} post about: ${topic}
+${account ? `This post is for the "${account}" account specifically — stay within that one brand's topics/voice, don't blend in content that belongs to a different account.` : ''}
 ${tone ? `Tone: ${tone}` : ''}
 ${context ? `Business context: ${context}` : ''}
 
@@ -132,7 +134,7 @@ Return ONLY the post content. No labels, no explanations, no quotes around it.`;
       .map((b) => b.text)
       .join('');
 
-    return { content, platform, topic };
+    return { content, platform, topic, account };
   });
 
   // ── GENERATE CONTENT PLAN ─────────────────────────────────────
@@ -140,12 +142,14 @@ Return ONLY the post content. No labels, no explanations, no quotes around it.`;
     const {
       businessContext,
       platforms,
+      account,
       weeksAhead = 1,
       postsPerWeek = 3,
       campaignId,
     } = params as {
       businessContext: string;
       platforms: Platform[];
+      account?: string;
       weeksAhead?: number;
       postsPerWeek?: number;
       campaignId?: string;
@@ -155,6 +159,7 @@ Return ONLY the post content. No labels, no explanations, no quotes around it.`;
     const prompt = `Create a content plan for a solo business operator.
 
 Business context: ${businessContext}
+${account ? `This plan is for the "${account}" account specifically — every idea must fit that one brand's topics/voice. Do not include ideas for a different account even if the business context above mentions other ventures.` : ''}
 Platforms: ${platforms.join(', ')}
 Posts needed: ${totalPosts} posts over ${weeksAhead} week(s)
 
@@ -205,6 +210,7 @@ Return only valid JSON array. No markdown fences.`;
         topic: idea.topic,
         angle: idea.angle,
         platform: idea.platform,
+        account,
         scheduledFor: dates[i],
         campaignId,
       })
@@ -293,9 +299,10 @@ Return only valid JSON array. No markdown fences.`;
 
   // ── SCHEDULE POST ─────────────────────────────────────────────
   mcp.register('content_schedule_post', async (params) => {
-    const { content, platform, scheduledAt, tags, campaignId, objectiveId } = params as {
+    const { content, platform, account, scheduledAt, tags, campaignId, objectiveId } = params as {
       content: string;
       platform: Platform;
+      account?: string;
       scheduledAt: string;
       tags?: string[];
       campaignId?: string;
@@ -305,6 +312,7 @@ Return only valid JSON array. No markdown fences.`;
     return storage.createPost({
       content,
       platform,
+      account,
       scheduledAt: new Date(scheduledAt),
       tags,
       campaignId,
@@ -314,9 +322,10 @@ Return only valid JSON array. No markdown fences.`;
 
   // ── LIST SCHEDULED POSTS ──────────────────────────────────────
   mcp.register('content_list_posts', async (params) => {
-    const { status, platform, daysAhead, daysAgo, dueOnly } = params as {
+    const { status, platform, account, daysAhead, daysAgo, dueOnly } = params as {
       status?: string;
       platform?: Platform;
+      account?: string;
       daysAhead?: number;
       daysAgo?: number;
       dueOnly?: boolean;
@@ -327,7 +336,12 @@ Return only valid JSON array. No markdown fences.`;
     // the `from` bound entirely, not passing `from: now, to: now` (which
     // storage.listPosts() would treat as an empty from-now-to-now window).
     if (dueOnly) {
-      return storage.listPosts({ status: status as PostStatus | undefined, platform, to: now });
+      return storage.listPosts({
+        status: status as PostStatus | undefined,
+        platform,
+        account,
+        to: now,
+      });
     }
 
     // daysAgo looks backward (for a retro over recently-published posts) —
@@ -338,6 +352,7 @@ Return only valid JSON array. No markdown fences.`;
       return storage.listPosts({
         status: status as PostStatus | undefined,
         platform,
+        account,
         from,
         to: now,
       });
@@ -345,7 +360,13 @@ Return only valid JSON array. No markdown fences.`;
 
     const to = daysAhead ? new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000) : undefined;
 
-    return storage.listPosts({ status: status as PostStatus | undefined, platform, from: now, to });
+    return storage.listPosts({
+      status: status as PostStatus | undefined,
+      platform,
+      account,
+      from: now,
+      to,
+    });
   });
 
   // ── DELETE POST ───────────────────────────────────────────────

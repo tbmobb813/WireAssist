@@ -6,10 +6,21 @@ import * as os from 'os';
 export type PostStatus = 'draft' | 'scheduled' | 'published' | 'failed';
 export type Platform = 'twitter' | 'linkedin' | 'instagram' | 'threads' | 'facebook';
 
+// Which specific brand/account this content is for — a real, previously
+// missing distinction. "platform" alone (e.g. "instagram") is ambiguous
+// once more than one brand has an account on the same platform (confirmed
+// live 2026-09-05: a single content-plan batch mixed NixLevel/Etsy,
+// micro-SaaS, controller-repair, and MindType.Studio content all tagged
+// only "instagram", with no way to tell which was meant for which
+// account). A free string, not a strict enum — new ventures/accounts get
+// added over time and this shouldn't need a code change to support one.
+export type ContentAccount = string;
+
 export interface ScheduledPost {
   id: string;
   content: string;
   platform: Platform;
+  account?: ContentAccount;
   scheduledAt: Date;
   status: PostStatus;
   createdAt: Date;
@@ -26,6 +37,7 @@ export interface ContentIdea {
   topic: string;
   angle: string;
   platform: Platform;
+  account?: ContentAccount;
   status: 'idea' | 'approved' | 'written' | 'scheduled';
   createdAt: Date;
   scheduledFor?: Date;
@@ -97,6 +109,8 @@ export class TrendPostStorage {
     this.addColumnIfMissing('content_ideas', 'campaign_id', 'TEXT');
     this.addColumnIfMissing('scheduled_posts', 'platform_post_id', 'TEXT');
     this.addColumnIfMissing('scheduled_posts', 'objective_id', 'TEXT');
+    this.addColumnIfMissing('scheduled_posts', 'account', 'TEXT');
+    this.addColumnIfMissing('content_ideas', 'account', 'TEXT');
   }
 
   private addColumnIfMissing(table: string, column: string, type: string): void {
@@ -110,6 +124,7 @@ export class TrendPostStorage {
   createPost(params: {
     content: string;
     platform: Platform;
+    account?: ContentAccount;
     scheduledAt: Date;
     tags?: string[];
     campaignId?: string;
@@ -124,14 +139,15 @@ export class TrendPostStorage {
     this.db
       .prepare(
         `
-      INSERT INTO scheduled_posts (id, content, platform, scheduled_at, status, created_at, tags, campaign_id, objective_id)
-      VALUES (?, ?, ?, ?, 'scheduled', ?, ?, ?, ?)
+      INSERT INTO scheduled_posts (id, content, platform, account, scheduled_at, status, created_at, tags, campaign_id, objective_id)
+      VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?)
     `
       )
       .run(
         id,
         params.content,
         params.platform,
+        params.account ?? null,
         params.scheduledAt.toISOString(),
         now.toISOString(),
         JSON.stringify(params.tags ?? []),
@@ -144,14 +160,14 @@ export class TrendPostStorage {
 
   getPost(id: string): ScheduledPost | null {
     const row = this.db.prepare('SELECT * FROM scheduled_posts WHERE id = ?').get(id) as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
     return row ? this.mapPost(row) : null;
   }
 
   listPosts(filters?: {
     status?: PostStatus;
     platform?: Platform;
+    account?: ContentAccount;
     from?: Date;
     to?: Date;
   }): ScheduledPost[] {
@@ -165,6 +181,10 @@ export class TrendPostStorage {
     if (filters?.platform) {
       sql += ' AND platform = ?';
       params.push(filters.platform);
+    }
+    if (filters?.account) {
+      sql += ' AND account = ?';
+      params.push(filters.account);
     }
     if (filters?.from) {
       sql += ' AND scheduled_at >= ?';
@@ -216,6 +236,7 @@ export class TrendPostStorage {
     topic: string;
     angle: string;
     platform: Platform;
+    account?: ContentAccount;
     scheduledFor?: Date;
     campaignId?: string;
   }): ContentIdea {
@@ -223,8 +244,8 @@ export class TrendPostStorage {
     this.db
       .prepare(
         `
-      INSERT INTO content_ideas (id, topic, angle, platform, status, created_at, scheduled_for, campaign_id)
-      VALUES (?, ?, ?, ?, 'idea', ?, ?, ?)
+      INSERT INTO content_ideas (id, topic, angle, platform, account, status, created_at, scheduled_for, campaign_id)
+      VALUES (?, ?, ?, ?, ?, 'idea', ?, ?, ?)
     `
       )
       .run(
@@ -232,6 +253,7 @@ export class TrendPostStorage {
         params.topic,
         params.angle,
         params.platform,
+        params.account ?? null,
         new Date().toISOString(),
         params.scheduledFor?.toISOString() ?? null,
         params.campaignId ?? null
@@ -286,6 +308,7 @@ export class TrendPostStorage {
       id: r.id as string,
       content: r.content as string,
       platform: r.platform as Platform,
+      account: (r.account as string | null) ?? undefined,
       scheduledAt: new Date(r.scheduled_at as string),
       status: r.status as PostStatus,
       createdAt: new Date(r.created_at as string),
@@ -304,6 +327,7 @@ export class TrendPostStorage {
       topic: r.topic as string,
       angle: r.angle as string,
       platform: r.platform as Platform,
+      account: (r.account as string | null) ?? undefined,
       status: r.status as ContentIdea['status'],
       createdAt: new Date(r.created_at as string),
       scheduledFor: r.scheduled_for ? new Date(r.scheduled_for as string) : undefined,

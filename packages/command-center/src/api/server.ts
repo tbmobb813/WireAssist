@@ -276,13 +276,14 @@ function buildChatDispatch(): ChatDispatch {
         input.platform,
         input.tone,
         undefined,
-        ctx.objectiveId
+        ctx.objectiveId,
+        input.account
       );
       queueContentTask(task);
       return {
         taskId: task.id,
         agentRole: 'content',
-        summary: `Queued a ${input.platform} post about "${input.topic}".`,
+        summary: `Queued a ${input.platform} post about "${input.topic}"${input.account ? ` for ${input.account}` : ''}.`,
       };
     },
     async contentPlan(input, ctx) {
@@ -291,10 +292,15 @@ function buildChatDispatch(): ChatDispatch {
         input.weeksAhead ?? 1,
         input.postsPerWeek ?? 3,
         undefined,
-        ctx.objectiveId
+        ctx.objectiveId,
+        input.account
       );
       queueContentTask(task);
-      return { taskId: task.id, agentRole: 'content', summary: 'Queued a content plan.' };
+      return {
+        taskId: task.id,
+        agentRole: 'content',
+        summary: `Queued a content plan${input.account ? ` for ${input.account}` : ''}.`,
+      };
     },
     async contentCampaign(input, ctx) {
       const task = ContentTasks.generateAndScheduleCampaign(
@@ -302,13 +308,14 @@ function buildChatDispatch(): ChatDispatch {
         input.weeksAhead ?? 1,
         input.postsPerWeek ?? 3,
         undefined,
-        ctx.objectiveId
+        ctx.objectiveId,
+        input.account
       );
       queueContentTask(task);
       return {
         taskId: task.id,
         agentRole: 'content',
-        summary: 'Queued a full content campaign — drafting, scoring, and proposing a schedule.',
+        summary: `Queued a full content campaign${input.account ? ` for ${input.account}` : ''} — drafting, scoring, and proposing a schedule.`,
       };
     },
     async contentFreeform(input, ctx) {

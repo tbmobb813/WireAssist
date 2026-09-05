@@ -17,6 +17,9 @@ export interface HandoffReviewContext {
 export interface GeneratePostInput {
   topic: string;
   platform: Platform;
+  // Which specific brand/account this post is for — see generate-plan.ts's
+  // GeneratePlanInput.account for why this matters.
+  account?: string;
   tone?: string;
   extraContext?: string;
   reviewContext?: HandoffReviewContext;
@@ -34,7 +37,7 @@ export const generatePostSkill: Skill<GeneratePostInput, void> = {
   description: 'Generate a single post for one platform.',
 
   async execute({ agent, task, input }) {
-    const { topic, platform, tone, extraContext, reviewContext } = input;
+    const { topic, platform, account, tone, extraContext, reviewContext } = input;
 
     const memoryContext = await agent.loadContext(
       'business description products services audience'
@@ -47,9 +50,10 @@ export const generatePostSkill: Skill<GeneratePostInput, void> = {
     const result = (await agent.useTool('content_generate', {
       topic,
       platform,
+      account,
       tone,
       context,
-    })) as { content: string; platform: string; topic: string };
+    })) as { content: string; platform: string; topic: string; account?: string };
 
     agent.emit('agent:content_generated', {
       taskId: task.id,
@@ -77,6 +81,7 @@ export const generatePostSkill: Skill<GeneratePostInput, void> = {
       taskId: task.id,
       content: result.content,
       platform,
+      account,
     });
   },
 };
