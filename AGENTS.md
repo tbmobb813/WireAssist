@@ -5,6 +5,12 @@ repo. For what each package does, see `README.md`'s package table — this file
 covers the things that aren't obvious from reading the code, and that cost real
 time to rediscover the hard way.
 
+For cross-venture context about Jason himself (who he is, brand voice per
+venture, target customers, product/service info, personal writing voice,
+working preferences) — not specific to this repo, but relevant background
+for anything written on his behalf — see `~/context/*.md` on his machine.
+Not duplicated here since it applies to every project, not just this one.
+
 ## Architecture in one paragraph
 
 Every chat message hits **Admin** first — Admin is the sole front door
