@@ -43,8 +43,21 @@ const MODEL = process.env.WIREASSIST_MODEL ?? 'claude-sonnet-5';
 // (still needed for a fence that survives inside that range) runs on
 // what's left.
 export function parseJson<T>(raw: string, context: string): T {
-  const start = raw.indexOf('{');
-  const end = raw.lastIndexOf('}');
+  // Whichever bracket type actually opens the JSON value comes first in the
+  // raw text — a response could be prose-wrapped `{...}` OR `[...]` (e.g.
+  // content_generate_plan's array of ideas). Hardcoding `{`/`}` here used to
+  // silently mangle any array response into several comma-separated objects
+  // with no enclosing brackets — valid-looking per this function, but
+  // rejected by JSON.parse ("unexpected character after JSON"). Confirmed
+  // live 2026-09-05: a real 5-idea array response, complete and
+  // well-formed, failed this way.
+  const firstBrace = raw.indexOf('{');
+  const firstBracket = raw.indexOf('[');
+  const isArray = firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace);
+  const openChar = isArray ? '[' : '{';
+  const closeChar = isArray ? ']' : '}';
+  const start = raw.indexOf(openChar);
+  const end = raw.lastIndexOf(closeChar);
   const sliced = start !== -1 && end !== -1 && end > start ? raw.slice(start, end + 1) : raw;
   const stripped = sliced
     .replace(/^```(?:json)?\s*/i, '')

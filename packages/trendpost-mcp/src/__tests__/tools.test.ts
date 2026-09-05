@@ -87,6 +87,34 @@ describe('parseJson()', () => {
       /content_analyze returned unparseable JSON/
     );
   });
+
+  // Real live failure, 2026-09-05: content_generate_plan returns a JSON
+  // array, not an object. The old {..}-only bracket matching skipped the
+  // enclosing [ ] entirely, turning a complete, well-formed 5-item array
+  // into several comma-separated objects with no wrapper — invalid JSON,
+  // even though the model's actual response was never truncated or wrong.
+  it('parses a plain JSON array with no surrounding text', () => {
+    expect(parseJson<Array<{ a: number }>>('[{"a": 1}, {"a": 2}]', 'test')).toEqual([
+      { a: 1 },
+      { a: 2 },
+    ]);
+  });
+
+  it('parses a JSON array wrapped in prose', () => {
+    expect(
+      parseJson<Array<{ a: number }>>('Here is the plan:\n[{"a": 1}, {"a": 2}]\nEnjoy!', 'test')
+    ).toEqual([{ a: 1 }, { a: 2 }]);
+  });
+
+  it('parses a JSON array whose items are objects containing braces in string values', () => {
+    // Guards against a naive fix that just switches to always matching [ ]
+    // — the array-vs-object detection has to pick whichever bracket type
+    // genuinely opens the value first, not just prefer one unconditionally.
+    const input = '[{"topic": "uses a { character in prose"}]';
+    expect(parseJson<Array<{ topic: string }>>(input, 'test')).toEqual([
+      { topic: 'uses a { character in prose' },
+    ]);
+  });
 });
 
 describe('content_list_posts — dueOnly', () => {
