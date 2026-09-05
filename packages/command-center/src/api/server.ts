@@ -832,12 +832,38 @@ function reportRestartRecovery() {
 // and routeHandoffTask() dispatch the live path uses, instead of leaving
 // them flagged as "orphaned" forever, requiring a human to notice and
 // manually re-trigger.
+//
+// Everything replayOrphanedHandoffs() doesn't touch (any approval type
+// without a resumeTask — a Gmail action, an ignore-label, a skill draft, a
+// raw tool call) used to just sit as "approved, unconsumed" permanently:
+// getOrphanedApprovals() is read-only, and nothing else ever called
+// markConsumed() on them. Confirmed live — 48 rows going back to
+// 2026-08-11 were still being re-reported as "newly discovered" on every
+// single restart, weeks later, with real business consequences among them
+// (an approved "mark as URGENT" on a security alert that never actually
+// got labeled; three approved research->NixOps handoffs that never ran).
+// reportRestartRecovery() already made these loud exactly once, which is
+// the right behavior — the bug was that nothing ever stopped re-reporting
+// the *same* historical ones as if freshly discovered on every subsequent
+// boot. Sweeping them here (after replay has already consumed whatever it
+// could actually recover) closes that gap: seen once, loudly, then done.
 function runOrphanedHandoffReplay(): void {
-  replayOrphanedHandoffs(
-    approval.getOrphanedApprovals(),
+  const orphaned = approval.getOrphanedApprovals();
+  const replayed = replayOrphanedHandoffs(
+    orphaned,
     (task) => events.emit('agent:handoff_requested', { task }),
     (id) => approval.markConsumed(id)
   );
+  const replayedIds = new Set(replayed.map((a) => a.id));
+  for (const a of orphaned) {
+    if (replayedIds.has(a.id)) continue;
+    approval.markConsumed(
+      a.id,
+      'Approved before a restart; the original continuation never resumed and this action was not ' +
+        "automatically retried (see reportRestartRecovery()'s boot-time report/notification for what " +
+        'it was). Re-trigger manually if it is still needed.'
+    );
+  }
 }
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────

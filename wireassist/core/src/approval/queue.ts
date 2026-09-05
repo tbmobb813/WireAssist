@@ -129,10 +129,12 @@ export class ApprovalQueue {
       .run(approved ? 'approved' : 'rejected', new Date().toISOString(), note ?? null, id);
   }
 
-  markConsumed(id: string): void {
+  markConsumed(id: string, note?: string): void {
     this.db
-      .prepare(`UPDATE approval_queue SET consumed_at = ? WHERE id = ?`)
-      .run(new Date().toISOString(), id);
+      .prepare(
+        `UPDATE approval_queue SET consumed_at = ?, resolution_note = COALESCE(?, resolution_note) WHERE id = ?`
+      )
+      .run(new Date().toISOString(), note ?? null, id);
   }
 
   /**

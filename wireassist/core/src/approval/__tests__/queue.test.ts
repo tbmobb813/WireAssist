@@ -109,6 +109,21 @@ describe('ApprovalQueue restart recovery (issue #184)', () => {
     expect(row.consumedAt).toBeInstanceOf(Date);
   });
 
+  // Regression: sweeping orphaned approvals that don't carry a resumeTask
+  // (server.ts's runOrphanedHandoffReplay(), the non-handoff fallback)
+  // needs to record why they were consumed without ever actually running.
+  it('markConsumed records an optional note without disturbing an existing one', () => {
+    const queue = freshQueue();
+    seed(queue, [{ agentRole: 'admin', action: 'A', status: 'approved' }]);
+
+    queue.markConsumed('id-1', 'swept on restart, never re-triggered');
+    expect(queue.getResolved()[0].resolutionNote).toBe('swept on restart, never re-triggered');
+
+    // A second call with no note shouldn't blank out the first one.
+    queue.markConsumed('id-1');
+    expect(queue.getResolved()[0].resolutionNote).toBe('swept on restart, never re-triggered');
+  });
+
   it('getOrphanedApprovals finds approved rows never marked consumed', () => {
     const queue = freshQueue();
     seed(queue, [
