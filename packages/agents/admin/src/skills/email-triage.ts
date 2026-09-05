@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import type { Skill } from '@wireassist/core';
+import { logger } from '@wireassist/core/logger';
 import {
   extractJson,
   type EmailTriageResult,
@@ -90,7 +91,19 @@ Only return valid JSON. No markdown fences.`;
     let triage: TriageCategories;
     try {
       triage = extractJson<TriageCategories>(rawResponse);
-    } catch {
+    } catch (err) {
+      // The error surfaced to the caller/model only ever carried the first
+      // 200 chars — nowhere near enough to diagnose a real failure (this
+      // was already invisible in server logs entirely, since callers just
+      // catch-and-return the message as a tool_result string, never log
+      // it). Full response logged here so a real failure is actually
+      // debuggable instead of a black box.
+      logger.error(
+        '[email-triage] extractJson failed:',
+        err instanceof Error ? err.message : err,
+        '\nFull raw response:\n',
+        rawResponse
+      );
       throw new Error(
         `Admin Agent returned invalid JSON during triage: ${rawResponse.slice(0, 200)}`
       );

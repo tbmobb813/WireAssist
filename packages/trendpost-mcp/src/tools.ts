@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { TrendPostStorage, Platform, PostStatus } from './storage';
 import { publishToPlatform } from './publishers';
 import type { MCPClient } from '@wireassist/core';
+import { logger } from '@wireassist/core/logger';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -51,7 +52,17 @@ export function parseJson<T>(raw: string, context: string): T {
     .trim();
   try {
     return JSON.parse(stripped) as T;
-  } catch {
+  } catch (err) {
+    // The thrown error only ever carried the first 200 chars — nowhere
+    // near enough to diagnose a real failure, and nothing else logs the
+    // full response server-side. Logged here so a real failure is
+    // debuggable instead of a black box.
+    logger.error(
+      `[${context}] parseJson failed:`,
+      err instanceof Error ? err.message : err,
+      '\nFull raw response:\n',
+      raw
+    );
     throw new Error(`${context} returned unparseable JSON: ${stripped.slice(0, 200)}`);
   }
 }
