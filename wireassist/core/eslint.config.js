@@ -16,6 +16,16 @@ module.exports = [
         ecmaVersion: 2020,
         sourceType: 'module',
         project: './tsconfig.json',
+        // Without this, './tsconfig.json' resolves against whatever the
+        // eslint process's CWD happens to be, not this config file's own
+        // directory — harmless when eslint always runs from inside this
+        // package (pnpm --filter @wireassist/core lint, the only way this
+        // repo actually invokes it), but breaks with a confusing "cannot
+        // read tsconfig.json" parse error the moment anything lints this
+        // package from a different CWD (a multi-package glob run from the
+        // repo root, a future CI step, an IDE plugin). Confirmed 2026-09-05
+        // — a one-off root-level diagnostic run hit exactly this.
+        tsconfigRootDir: __dirname,
       },
       globals: {
         ...globals.node,
