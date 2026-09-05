@@ -2,7 +2,7 @@ jest.mock('../publishers', () => ({ publishToPlatform: jest.fn() }));
 
 import { existsSync, unlinkSync } from 'fs';
 import { MCPClient } from '@wireassist/core';
-import { distributeDates, timelineWeekNumber, registerTrendPostTools } from '../tools';
+import { distributeDates, timelineWeekNumber, parseJson, registerTrendPostTools } from '../tools';
 import { TrendPostStorage } from '../storage';
 import { publishToPlatform } from '../publishers';
 
@@ -48,6 +48,44 @@ describe('timelineWeekNumber()', () => {
   it('falls back to the 1-indexed position when the label has no number', () => {
     expect(timelineWeekNumber('Pre-launch', 0)).toBe(1);
     expect(timelineWeekNumber('Pre-launch', 2)).toBe(3);
+  });
+});
+
+describe('parseJson()', () => {
+  it('parses a plain JSON object with no surrounding text', () => {
+    expect(parseJson<{ a: number }>('{"a": 1}', 'test')).toEqual({ a: 1 });
+  });
+
+  it('parses JSON wrapped in ```json fences with nothing else', () => {
+    expect(parseJson<{ a: number }>('```json\n{"a": 1}\n```', 'test')).toEqual({ a: 1 });
+  });
+
+  // The real live failure this fixes: content_analyze's model response
+  // sometimes includes prose around the object despite "return only JSON,
+  // no markdown fences" — the old anchored-at-start/end regex only handled
+  // a fence with nothing else around it.
+  it('parses JSON with a leading sentence of prose', () => {
+    expect(parseJson<{ a: number }>('Here is my analysis:\n{"a": 1}', 'test')).toEqual({ a: 1 });
+  });
+
+  it('parses JSON with trailing prose after the object', () => {
+    expect(
+      parseJson<{ a: number }>('{"a": 1}\nLet me know if you want more detail.', 'test')
+    ).toEqual({ a: 1 });
+  });
+
+  it('handles nested objects correctly (does not truncate at the first inner "}")', () => {
+    const input = '{"score": 5, "nested": {"b": 2}}';
+    expect(parseJson<{ score: number; nested: { b: number } }>(input, 'test')).toEqual({
+      score: 5,
+      nested: { b: 2 },
+    });
+  });
+
+  it('throws a labeled error (not a silent garbage result) on genuinely malformed JSON', () => {
+    expect(() => parseJson('{"a": }', 'content_analyze')).toThrow(
+      /content_analyze returned unparseable JSON/
+    );
   });
 });
 

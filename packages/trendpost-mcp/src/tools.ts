@@ -34,8 +34,18 @@ export function timelineWeekNumber(label: string, fallbackIndex: number): number
 
 const MODEL = process.env.WIREASSIST_MODEL ?? 'claude-sonnet-5';
 
-function parseJson<T>(raw: string, context: string): T {
-  const stripped = raw
+// Models sometimes ignore "return only JSON" and add a sentence of
+// preamble/commentary before or after the object, or wrap it in fences the
+// old anchored-at-start/end regex only caught when nothing else surrounded
+// them. Slicing from the first '{' to the last '}' discards anything
+// outside the object regardless of why it's there, then fence-stripping
+// (still needed for a fence that survives inside that range) runs on
+// what's left.
+export function parseJson<T>(raw: string, context: string): T {
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  const sliced = start !== -1 && end !== -1 && end > start ? raw.slice(start, end + 1) : raw;
+  const stripped = sliced
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/, '')
     .trim();
@@ -347,7 +357,13 @@ Return only valid JSON. No markdown fences.`;
 
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 512,
+      // Was 512 — a real live failure showed a truncated response cut off
+      // mid-string inside the "strengths" array, well short of a complete
+      // object; the fields here (score, two string arrays, engagement
+      // estimate, a full-sentence suggestion) can genuinely need more room
+      // than that when the model is verbose. 1024 is still cheap for a
+      // scoring call and leaves real headroom.
+      max_tokens: 1024,
       system: CONTENT_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: prompt }],
     });

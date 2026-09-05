@@ -60,9 +60,18 @@ export interface CalendarReview {
   summary: string;
 }
 
-// Models sometimes wrap JSON in ```json fences despite being told not to —
-// strip them before parsing rather than failing the whole task.
+// Models sometimes ignore "return only JSON" and wrap the object in ```json
+// fences, or add a sentence of preamble/commentary before or after it —
+// stripping fence markers alone leaves that surrounding prose in place and
+// JSON.parse rejects the whole thing. Slicing from the first '{' to the
+// last '}' discards anything outside the object regardless of why it's
+// there, then fence-stripping (still needed for a fence that survives
+// inside that range, e.g. "```json\n{...}\n```" with no outer prose) runs
+// on what's left.
 export function extractJson<T>(raw: string): T {
-  const clean = raw.replace(/```json|```/g, '').trim();
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  const sliced = start !== -1 && end !== -1 && end > start ? raw.slice(start, end + 1) : raw;
+  const clean = sliced.replace(/```json|```/g, '').trim();
   return JSON.parse(clean) as T;
 }
