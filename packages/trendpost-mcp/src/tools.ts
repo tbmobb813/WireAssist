@@ -159,9 +159,15 @@ Return a JSON array of content ideas. Each item:
 
 Return only valid JSON array. No markdown fences.`;
 
+    // Fixed at 2048 previously — fine for the 3-post default, but a real
+    // 7-post week (confirmed live 2026-09-05: a "week of Instagram posts"
+    // request) truncated mid-JSON well before finishing. Scale with the
+    // actual post count instead of a flat cap, same fix pattern already
+    // applied to email_triage_skill and content_analyze this session.
+    const maxTokens = Math.min(8192, 512 + totalPosts * 220);
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 2048,
+      max_tokens: maxTokens,
       system: CONTENT_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: prompt }],
     });
