@@ -2043,6 +2043,86 @@ app.post('/api/content/posts/:id/publish', (c) => {
   return c.json(trendpostStorage.getPost(id));
 });
 
+// Category/content-pillar are planning metadata the user fills in directly
+// from the UI, same "direct bookkeeping, not an agent task" shape as the
+// publish-confirmation route above — no LLM judgment involved.
+app.post('/api/content/posts/:id/planning', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  const id = c.req.param('id');
+  const existing = trendpostStorage.getPost(id);
+  if (!existing) return c.json({ error: 'post not found' }, 404);
+  const body = await c.req.json().catch(() => ({}));
+  trendpostStorage.updatePostPlanningFields(id, {
+    category: typeof body.category === 'string' ? body.category.trim() : undefined,
+    contentPillar: typeof body.contentPillar === 'string' ? body.contentPillar.trim() : undefined,
+  });
+  return c.json(trendpostStorage.getPost(id));
+});
+
+app.post('/api/content/ideas/:id/planning', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+  trendpostStorage.updateIdeaPlanningFields(id, {
+    category: typeof body.category === 'string' ? body.category.trim() : undefined,
+    contentPillar: typeof body.contentPillar === 'string' ? body.contentPillar.trim() : undefined,
+  });
+  const updated = trendpostStorage.listIdeas().find((i) => i.id === id);
+  if (!updated) return c.json({ error: 'idea not found' }, 404);
+  return c.json(updated);
+});
+
+app.get('/api/content/categories', (c) => {
+  if (!agentReady) return c.json([]);
+  return c.json(trendpostStorage.listCategories());
+});
+
+app.get('/api/content/pillars', (c) => {
+  if (!agentReady) return c.json([]);
+  return c.json(trendpostStorage.listContentPillars());
+});
+
+// ── HASHTAG GROUPS ────────────────────────────────────────────────────────
+// Plain reference-data CRUD — a personal hashtag library, not an agent
+// tool. See HashtagGroup's doc comment in trendpost-mcp's storage.ts.
+app.get('/api/content/hashtag-groups', (c) => {
+  if (!agentReady) return c.json([]);
+  return c.json(trendpostStorage.listHashtagGroups());
+});
+
+app.post('/api/content/hashtag-groups', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  const body = await c.req.json().catch(() => ({}));
+  if (typeof body.name !== 'string' || body.name.trim().length === 0) {
+    return c.json({ error: 'name required' }, 400);
+  }
+  if (typeof body.hashtags !== 'string' || body.hashtags.trim().length === 0) {
+    return c.json({ error: 'hashtags required' }, 400);
+  }
+  return c.json(
+    trendpostStorage.createHashtagGroup({ name: body.name.trim(), hashtags: body.hashtags.trim() }),
+    201
+  );
+});
+
+app.patch('/api/content/hashtag-groups/:id', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+  const updated = trendpostStorage.updateHashtagGroup(id, {
+    name: typeof body.name === 'string' ? body.name.trim() : undefined,
+    hashtags: typeof body.hashtags === 'string' ? body.hashtags.trim() : undefined,
+  });
+  if (!updated) return c.json({ error: 'hashtag group not found' }, 404);
+  return c.json(updated);
+});
+
+app.delete('/api/content/hashtag-groups/:id', (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  trendpostStorage.deleteHashtagGroup(c.req.param('id'));
+  return c.json({ ok: true });
+});
+
 // ── MEMORY ────────────────────────────────────────────────────────────────
 app.get('/api/memory', async (c) => {
   const query = (c.req.query('q') ?? '').trim();

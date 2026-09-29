@@ -97,6 +97,43 @@ time with a _different_ skill, that's the signal to stop patching prompts and
 add a real signal (e.g. a `needsFollowUp` field on the skill's payload,
 checked before the loop's early return) instead of a third bespoke paragraph.
 
+## Local dev gotcha: a systemd user service may already own port 3002
+
+If `pnpm dev:command-center` (or `pnpm --filter @wireassist/command-center
+dev`) starts, logs "API server ready," then dies ~1s later with exit code
+137 — repeatedly, deterministically — check for a pre-existing
+`wireassist-api.service` systemd **user** unit before assuming it's a code
+bug or memory issue (confirmed 2026-09-29, cost a multi-hour debugging
+session chasing sandbox restrictions, OOM, cgroup limits, and
+`systemd-oomd` before the real cause turned up in `journalctl --since`):
+
+```bash
+systemctl --user status wireassist-api.service
+```
+
+If that service exists and is running, it already holds port 3002 with its
+own auto-restart policy. `predev:api`'s `fuser -k 3002/tcp` kills its
+process to free the port for your manual `tsx` invocation — but systemd
+immediately restarts its own instance per its restart policy, colliding
+with yours for the port and producing the exact same symptom every time
+(`journalctl --since` around the crash timestamp shows
+`wireassist-api.service: Main process exited, code=exited, status=137/n/a`
+and a rising `restart counter`, which is the actual tell — `dmesg`,
+`free -h`, cgroup memory limits, and `systemd-oomd`'s own journal all come
+back clean, because none of those are the real cause).
+
+Fix: stop the systemd-managed instance before running the manual dev
+server:
+
+```bash
+systemctl --user stop wireassist-api.service
+```
+
+Re-enable it later with `systemctl --user enable --now
+wireassist-api.service` if you want the persistent auto-restarting version
+back (e.g., so the Telegram bot has something to talk to without a manual
+terminal open).
+
 ## Build gotchas that will cost you real time if you don't know them
 
 - **`packages/agents/*/dist/` is gitignored build output.** Any _other_

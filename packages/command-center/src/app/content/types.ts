@@ -9,6 +9,8 @@ export interface ScheduledPost {
   status: string;
   tags: string[];
   campaignId?: string;
+  category?: string;
+  contentPillar?: string;
 }
 
 export interface ContentIdea {
@@ -20,6 +22,8 @@ export interface ContentIdea {
   createdAt: string;
   scheduledFor?: string;
   campaignId?: string;
+  category?: string;
+  contentPillar?: string;
 }
 
 export interface Campaign {
@@ -27,6 +31,18 @@ export interface Campaign {
   name: string;
   source: 'manual' | 'gtm';
   createdAt: string;
+}
+
+// A reusable, named set of hashtags — plain reference data managed directly
+// via CRUD (see HashtagGroup in trendpost-mcp's storage.ts for why this
+// isn't agent-mediated). characterCount is derived server-side from
+// hashtags.length, never stored, so it can't go stale.
+export interface HashtagGroup {
+  id: string;
+  name: string;
+  hashtags: string;
+  createdAt: string;
+  characterCount: number;
 }
 
 export type CalendarItem =

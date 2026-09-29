@@ -293,3 +293,132 @@ describe('TrendPostStorage — listCampaigns()', () => {
     expect(storage.listCampaigns()).toEqual([]);
   });
 });
+
+// ── Category / content pillar ───────────────────────────────────────────────
+
+describe('TrendPostStorage — category/contentPillar on posts and ideas', () => {
+  it('createPost() and createIdea() accept and persist category/contentPillar', () => {
+    const storage = freshStorage();
+    const post = storage.createPost({
+      content: 'x',
+      platform: 'twitter',
+      scheduledAt: new Date(),
+      category: 'Behind the scenes',
+      contentPillar: 'Education',
+    });
+    expect(post.category).toBe('Behind the scenes');
+    expect(post.contentPillar).toBe('Education');
+
+    const idea = storage.createIdea({
+      topic: 'x',
+      angle: 'y',
+      platform: 'twitter',
+      category: 'Promo',
+      contentPillar: 'Sales',
+    });
+    expect(idea.category).toBe('Promo');
+    expect(idea.contentPillar).toBe('Sales');
+  });
+
+  it('leaves category/contentPillar undefined when not provided', () => {
+    const storage = freshStorage();
+    const post = storage.createPost({ content: 'x', platform: 'twitter', scheduledAt: new Date() });
+    expect(post.category).toBeUndefined();
+    expect(post.contentPillar).toBeUndefined();
+  });
+
+  it('updatePostPlanningFields() sets fields without clobbering the other on a partial update', () => {
+    const storage = freshStorage();
+    const post = storage.createPost({ content: 'x', platform: 'twitter', scheduledAt: new Date() });
+    storage.updatePostPlanningFields(post.id, { category: 'Promo' });
+    expect(storage.getPost(post.id)!.category).toBe('Promo');
+    expect(storage.getPost(post.id)!.contentPillar).toBeUndefined();
+
+    storage.updatePostPlanningFields(post.id, { contentPillar: 'Education' });
+    expect(storage.getPost(post.id)!.category).toBe('Promo');
+    expect(storage.getPost(post.id)!.contentPillar).toBe('Education');
+  });
+
+  it('updateIdeaPlanningFields() sets category/contentPillar on an existing idea', () => {
+    const storage = freshStorage();
+    const idea = storage.createIdea({ topic: 'x', angle: 'y', platform: 'twitter' });
+    storage.updateIdeaPlanningFields(idea.id, { category: 'Promo', contentPillar: 'Sales' });
+    const updated = storage.listIdeas().find((i) => i.id === idea.id)!;
+    expect(updated.category).toBe('Promo');
+    expect(updated.contentPillar).toBe('Sales');
+  });
+
+  it('listCategories()/listContentPillars() return distinct values across posts and ideas, sorted', () => {
+    const storage = freshStorage();
+    storage.createPost({
+      content: 'a',
+      platform: 'twitter',
+      scheduledAt: new Date(),
+      category: 'Promo',
+    });
+    storage.createIdea({ topic: 'b', angle: 'c', platform: 'twitter', category: 'Education' });
+    storage.createIdea({ topic: 'd', angle: 'e', platform: 'twitter', category: 'Promo' });
+    storage.createPost({
+      content: 'f',
+      platform: 'twitter',
+      scheduledAt: new Date(),
+      contentPillar: 'Sales',
+    });
+
+    expect(storage.listCategories()).toEqual(['Education', 'Promo']);
+    expect(storage.listContentPillars()).toEqual(['Sales']);
+  });
+
+  it('listCategories() returns an empty array when none are set', () => {
+    const storage = freshStorage();
+    storage.createPost({ content: 'x', platform: 'twitter', scheduledAt: new Date() });
+    expect(storage.listCategories()).toEqual([]);
+  });
+});
+
+// ── Hashtag groups ───────────────────────────────────────────────────────────
+
+describe('TrendPostStorage — hashtag groups', () => {
+  it('createHashtagGroup() persists a group and computes characterCount from hashtags.length', () => {
+    const storage = freshStorage();
+    const group = storage.createHashtagGroup({ name: 'Launch', hashtags: '#launch #newproduct' });
+    expect(group.name).toBe('Launch');
+    expect(group.hashtags).toBe('#launch #newproduct');
+    expect(group.characterCount).toBe('#launch #newproduct'.length);
+    expect(group.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('listHashtagGroups() returns all groups ordered by name', () => {
+    const storage = freshStorage();
+    storage.createHashtagGroup({ name: 'Zebra', hashtags: '#z' });
+    storage.createHashtagGroup({ name: 'Apple', hashtags: '#a' });
+    const groups = storage.listHashtagGroups();
+    expect(groups.map((g) => g.name)).toEqual(['Apple', 'Zebra']);
+  });
+
+  it('listHashtagGroups() returns an empty array when none exist', () => {
+    const storage = freshStorage();
+    expect(storage.listHashtagGroups()).toEqual([]);
+  });
+
+  it('updateHashtagGroup() partially updates a group and recomputes characterCount', () => {
+    const storage = freshStorage();
+    const group = storage.createHashtagGroup({ name: 'Launch', hashtags: '#a' });
+    const updated = storage.updateHashtagGroup(group.id, { hashtags: '#a #b #c' });
+    expect(updated!.name).toBe('Launch');
+    expect(updated!.hashtags).toBe('#a #b #c');
+    expect(updated!.characterCount).toBe('#a #b #c'.length);
+  });
+
+  it('updateHashtagGroup() returns null for a non-existent id', () => {
+    const storage = freshStorage();
+    expect(storage.updateHashtagGroup('nope', { name: 'x' })).toBeNull();
+  });
+
+  it('deleteHashtagGroup() removes the group', () => {
+    const storage = freshStorage();
+    const group = storage.createHashtagGroup({ name: 'Launch', hashtags: '#a' });
+    storage.deleteHashtagGroup(group.id);
+    expect(storage.listHashtagGroups()).toEqual([]);
+  });
+});

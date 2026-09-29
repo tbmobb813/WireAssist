@@ -167,11 +167,20 @@ export function CalendarGrid({
                   const key = item.kind === 'post' ? item.post.id : item.idea.id;
                   const campaignId =
                     item.kind === 'post' ? item.post.campaignId : item.idea.campaignId;
+                  const category = item.kind === 'post' ? item.post.category : item.idea.category;
+                  const contentPillar =
+                    item.kind === 'post' ? item.post.contentPillar : item.idea.contentPillar;
                   const isPublished = item.kind === 'post' && item.post.status === 'published';
+                  // Cell space is too tight at this density for a full pill per
+                  // item (see content/page.tsx's list view for that) — category/
+                  // pillar are surfaced in the tooltip instead.
+                  const tooltip = [label, campaignName(campaignId), category, contentPillar]
+                    .filter(Boolean)
+                    .join(' · ');
                   return (
                     <div
                       key={key}
-                      title={`${label}${campaignName(campaignId) ? ` · ${campaignName(campaignId)}` : ''}`}
+                      title={tooltip}
                       className="text-xs px-1.5 py-0.5 rounded truncate flex items-center gap-1"
                       style={{
                         background: `${platformColor[platform]}20`,

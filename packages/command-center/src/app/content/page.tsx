@@ -4,7 +4,7 @@ import { useAgentEvents } from '@/hooks/useAgentEvents';
 import { consumeContentHandoff } from '@/lib/content-handoff';
 import { ObjectivePicker, useActiveObjectives } from '../objective-picker';
 import { PLATFORMS, platformColor } from './types';
-import type { Platform, ScheduledPost, ContentIdea, Campaign } from './types';
+import type { Platform, ScheduledPost, ContentIdea, Campaign, HashtagGroup } from './types';
 import { CalendarGrid, type CalendarGridMode } from './calendar-grid';
 
 interface ContentApproval {
@@ -27,6 +27,15 @@ export default function ContentPage() {
   const [ideas, setIdeas] = useState<ContentIdea[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [pillars, setPillars] = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [hashtagGroups, setHashtagGroups] = useState<HashtagGroup[]>([]);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupHashtags, setNewGroupHashtags] = useState('');
+  const [editingPlanning, setEditingPlanning] = useState<string | null>(null);
+  const [planningCategory, setPlanningCategory] = useState('');
+  const [planningPillar, setPlanningPillar] = useState('');
   const [viewMode, setViewMode] = useState<'list' | CalendarGridMode>('list');
   const [pending, setPending] = useState<ContentApproval[]>([]);
   const [acting, setActing] = useState<string | null>(null);
@@ -75,6 +84,61 @@ export default function ContentPage() {
     if (res.ok) setCampaigns(await res.json());
   }, []);
 
+  const fetchCategories = useCallback(async () => {
+    const res = await fetch('/api/content/categories');
+    if (res.ok) setCategories(await res.json());
+  }, []);
+
+  const fetchPillars = useCallback(async () => {
+    const res = await fetch('/api/content/pillars');
+    if (res.ok) setPillars(await res.json());
+  }, []);
+
+  const fetchHashtagGroups = useCallback(async () => {
+    const res = await fetch('/api/content/hashtag-groups');
+    if (res.ok) setHashtagGroups(await res.json());
+  }, []);
+
+  const startEditingPlanning = (id: string, category?: string, contentPillar?: string) => {
+    setEditingPlanning(id);
+    setPlanningCategory(category ?? '');
+    setPlanningPillar(contentPillar ?? '');
+  };
+
+  const savePlanning = async (kind: 'post' | 'idea', id: string) => {
+    const res = await fetch(`/api/content/${kind === 'post' ? 'posts' : 'ideas'}/${id}/planning`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        category: planningCategory.trim() || undefined,
+        contentPillar: planningPillar.trim() || undefined,
+      }),
+    });
+    if (res.ok) {
+      await Promise.all([fetchPosts(), fetchIdeas(), fetchCategories(), fetchPillars()]);
+    }
+    setEditingPlanning(null);
+  };
+
+  const addHashtagGroup = async () => {
+    if (!newGroupName.trim() || !newGroupHashtags.trim()) return;
+    const res = await fetch('/api/content/hashtag-groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newGroupName.trim(), hashtags: newGroupHashtags.trim() }),
+    });
+    if (res.ok) {
+      setNewGroupName('');
+      setNewGroupHashtags('');
+      await fetchHashtagGroups();
+    }
+  };
+
+  const deleteHashtagGroup = async (id: string) => {
+    const res = await fetch(`/api/content/hashtag-groups/${id}`, { method: 'DELETE' });
+    if (res.ok) await fetchHashtagGroups();
+  };
+
   const fetchPending = useCallback(async () => {
     const res = await fetch('/api/approvals');
     if (!res.ok) return;
@@ -94,7 +158,18 @@ export default function ContentPage() {
     fetchIdeas();
     fetchCampaigns();
     fetchPending();
-  }, [fetchPosts, fetchIdeas, fetchCampaigns, fetchPending]);
+    fetchCategories();
+    fetchPillars();
+    fetchHashtagGroups();
+  }, [
+    fetchPosts,
+    fetchIdeas,
+    fetchCampaigns,
+    fetchPending,
+    fetchCategories,
+    fetchPillars,
+    fetchHashtagGroups,
+  ]);
 
   useAgentEvents(
     useCallback(
@@ -223,12 +298,12 @@ export default function ContentPage() {
 
   const campaignName = (id?: string) => campaigns.find((c) => c.id === id)?.name;
 
-  const filteredPosts = campaignFilter
-    ? posts.filter((p) => p.campaignId === campaignFilter)
-    : posts;
-  const filteredIdeas = campaignFilter
-    ? ideas.filter((i) => i.campaignId === campaignFilter)
-    : ideas;
+  const filteredPosts = posts
+    .filter((p) => !campaignFilter || p.campaignId === campaignFilter)
+    .filter((p) => !categoryFilter || p.category === categoryFilter);
+  const filteredIdeas = ideas
+    .filter((i) => !campaignFilter || i.campaignId === campaignFilter)
+    .filter((i) => !categoryFilter || i.category === categoryFilter);
 
   type CalendarItem =
     | { kind: 'post'; date: Date; post: ScheduledPost }
@@ -238,12 +313,16 @@ export default function ContentPage() {
   const unscheduledIdeas = filteredIdeas.filter((i) => !i.scheduledFor);
 
   const calendarItems: CalendarItem[] = [
-    ...filteredPosts.map(
-      (post): CalendarItem => ({ kind: 'post', date: new Date(post.scheduledAt), post })
-    ),
-    ...datedIdeas.map(
-      (idea): CalendarItem => ({ kind: 'idea', date: new Date(idea.scheduledFor!), idea })
-    ),
+    ...filteredPosts.map((post): CalendarItem => ({
+      kind: 'post',
+      date: new Date(post.scheduledAt),
+      post,
+    })),
+    ...datedIdeas.map((idea): CalendarItem => ({
+      kind: 'idea',
+      date: new Date(idea.scheduledFor!),
+      idea,
+    })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
   // Group calendar items by real date for a date-headered list view.
@@ -478,6 +557,75 @@ export default function ContentPage() {
               {generating ? 'ASKING...' : '→ ASK'}
             </button>
           </div>
+
+          {/* Hashtag groups — reusable, personal reference data (plain CRUD,
+              not agent-mediated: see HashtagGroup's doc comment in
+              trendpost-mcp's storage.ts for why). */}
+          <div
+            className="rounded-lg border p-4"
+            style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
+          >
+            <div className="text-xs tracking-widest text-gray-500 mb-3">HASHTAG GROUPS</div>
+            {hashtagGroups.length > 0 && (
+              <div className="space-y-2 mb-3">
+                {hashtagGroups.map((g) => (
+                  <div
+                    key={g.id}
+                    className="rounded px-3 py-2 flex items-start justify-between gap-2"
+                    style={{ background: '#080810', border: '1px solid #1e2040' }}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-gray-300">
+                        {g.name}{' '}
+                        <span className="text-gray-600 font-normal">
+                          ({g.characterCount} chars)
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-600 truncate">{g.hashtags}</div>
+                    </div>
+                    <button
+                      onClick={() => deleteHashtagGroup(g.id)}
+                      className="text-xs flex-shrink-0"
+                      style={{ color: '#ef4444' }}
+                    >
+                      delete
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <input
+              type="text"
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              placeholder="Group name"
+              className="w-full rounded px-3 py-2 text-sm mb-3 outline-none"
+              style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
+            />
+            <textarea
+              value={newGroupHashtags}
+              onChange={(e) => setNewGroupHashtags(e.target.value)}
+              placeholder="#hashtag #group #here"
+              rows={2}
+              className="w-full rounded px-3 py-2 text-sm mb-3 outline-none resize-none"
+              style={{ background: '#080810', border: '1px solid #1e2040', color: '#e2e8f0' }}
+            />
+            <button
+              onClick={addHashtagGroup}
+              disabled={!newGroupName.trim() || !newGroupHashtags.trim()}
+              className="w-full py-2 rounded text-xs font-bold tracking-widest transition-colors"
+              style={{
+                background:
+                  !newGroupName.trim() || !newGroupHashtags.trim() ? '#1e2040' : '#c084fc20',
+                border: `1px solid ${!newGroupName.trim() || !newGroupHashtags.trim() ? '#1e2040' : '#c084fc40'}`,
+                color: !newGroupName.trim() || !newGroupHashtags.trim() ? '#475569' : '#c084fc',
+                cursor:
+                  !newGroupName.trim() || !newGroupHashtags.trim() ? 'not-allowed' : 'pointer',
+              }}
+            >
+              + ADD GROUP
+            </button>
+          </div>
         </div>
 
         {/* Middle — Pending review + Calendar */}
@@ -593,25 +741,51 @@ export default function ContentPage() {
                   ))}
                 </div>
               </div>
-              {campaigns.length > 0 && (
-                <div className="flex gap-2 flex-wrap">
-                  {campaigns.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => setCampaignFilter((prev) => (prev === c.id ? null : c.id))}
-                      className="text-xs px-3 py-1 rounded transition-colors"
-                      style={{
-                        background: campaignFilter === c.id ? '#ffb34720' : 'transparent',
-                        border: `1px solid ${campaignFilter === c.id ? '#ffb347' : '#1e2040'}`,
-                        color: campaignFilter === c.id ? '#ffb347' : '#475569',
-                      }}
-                    >
-                      {c.name}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="flex gap-2 flex-wrap">
+                {campaigns.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setCampaignFilter((prev) => (prev === c.id ? null : c.id))}
+                    className="text-xs px-3 py-1 rounded transition-colors"
+                    style={{
+                      background: campaignFilter === c.id ? '#ffb34720' : 'transparent',
+                      border: `1px solid ${campaignFilter === c.id ? '#ffb347' : '#1e2040'}`,
+                      color: campaignFilter === c.id ? '#ffb347' : '#475569',
+                    }}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setCategoryFilter((prev) => (prev === cat ? null : cat))}
+                    className="text-xs px-3 py-1 rounded transition-colors"
+                    style={{
+                      background: categoryFilter === cat ? '#c084fc20' : 'transparent',
+                      border: `1px solid ${categoryFilter === cat ? '#c084fc' : '#1e2040'}`,
+                      color: categoryFilter === cat ? '#c084fc' : '#475569',
+                    }}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Autocomplete sources for the category/pillar inline editor below —
+                populated from distinct values already in use, never a hardcoded
+                enum (see listCategories/listContentPillars in storage.ts). */}
+            <datalist id="content-categories">
+              {categories.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+            <datalist id="content-pillars">
+              {pillars.map((p) => (
+                <option key={p} value={p} />
+              ))}
+            </datalist>
 
             {viewMode !== 'list' ? (
               <CalendarGrid
@@ -650,6 +824,10 @@ export default function ContentPage() {
                       const campaignId =
                         item.kind === 'post' ? item.post.campaignId : item.idea.campaignId;
                       const key = item.kind === 'post' ? item.post.id : item.idea.id;
+                      const category =
+                        item.kind === 'post' ? item.post.category : item.idea.category;
+                      const contentPillar =
+                        item.kind === 'post' ? item.post.contentPillar : item.idea.contentPillar;
                       return (
                         <div
                           key={key}
@@ -693,7 +871,79 @@ export default function ContentPage() {
                                   · {campaignName(campaignId)}
                                 </span>
                               )}
+                              {category && (
+                                <span className="text-xs" style={{ color: '#c084fc' }}>
+                                  · {category}
+                                </span>
+                              )}
+                              {contentPillar && (
+                                <span className="text-xs" style={{ color: '#94a3b8' }}>
+                                  · {contentPillar}
+                                </span>
+                              )}
                             </div>
+                            {editingPlanning === key ? (
+                              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                <input
+                                  type="text"
+                                  list="content-categories"
+                                  value={planningCategory}
+                                  onChange={(e) => setPlanningCategory(e.target.value)}
+                                  placeholder="Category"
+                                  className="text-xs rounded px-2 py-1 outline-none"
+                                  style={{
+                                    background: '#080810',
+                                    border: '1px solid #1e2040',
+                                    color: '#e2e8f0',
+                                    width: '120px',
+                                  }}
+                                />
+                                <input
+                                  type="text"
+                                  list="content-pillars"
+                                  value={planningPillar}
+                                  onChange={(e) => setPlanningPillar(e.target.value)}
+                                  placeholder="Content pillar"
+                                  className="text-xs rounded px-2 py-1 outline-none"
+                                  style={{
+                                    background: '#080810',
+                                    border: '1px solid #1e2040',
+                                    color: '#e2e8f0',
+                                    width: '140px',
+                                  }}
+                                />
+                                <button
+                                  onClick={() => savePlanning(item.kind, key)}
+                                  className="text-xs px-2 py-1 rounded"
+                                  style={{
+                                    background: '#00ff9d20',
+                                    border: '1px solid #00ff9d40',
+                                    color: '#00ff9d',
+                                  }}
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={() => setEditingPlanning(null)}
+                                  className="text-xs px-2 py-1 rounded"
+                                  style={{
+                                    background: 'transparent',
+                                    border: '1px solid #1e2040',
+                                    color: '#475569',
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => startEditingPlanning(key, category, contentPillar)}
+                                className="text-xs mt-1"
+                                style={{ color: '#475569' }}
+                              >
+                                {category || contentPillar ? 'edit tags' : '+ add category/pillar'}
+                              </button>
+                            )}
                           </div>
                           {item.kind === 'post' && item.post.status !== 'published' && (
                             <button
@@ -743,6 +993,84 @@ export default function ContentPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-gray-300 truncate">{idea.topic}</p>
                         <p className="text-xs text-gray-600 mt-1">{idea.angle}</p>
+                        <div className="flex items-center gap-3 mt-1 flex-wrap">
+                          {idea.category && (
+                            <span className="text-xs" style={{ color: '#c084fc' }}>
+                              {idea.category}
+                            </span>
+                          )}
+                          {idea.contentPillar && (
+                            <span className="text-xs" style={{ color: '#94a3b8' }}>
+                              · {idea.contentPillar}
+                            </span>
+                          )}
+                        </div>
+                        {editingPlanning === idea.id ? (
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            <input
+                              type="text"
+                              list="content-categories"
+                              value={planningCategory}
+                              onChange={(e) => setPlanningCategory(e.target.value)}
+                              placeholder="Category"
+                              className="text-xs rounded px-2 py-1 outline-none"
+                              style={{
+                                background: '#080810',
+                                border: '1px solid #1e2040',
+                                color: '#e2e8f0',
+                                width: '120px',
+                              }}
+                            />
+                            <input
+                              type="text"
+                              list="content-pillars"
+                              value={planningPillar}
+                              onChange={(e) => setPlanningPillar(e.target.value)}
+                              placeholder="Content pillar"
+                              className="text-xs rounded px-2 py-1 outline-none"
+                              style={{
+                                background: '#080810',
+                                border: '1px solid #1e2040',
+                                color: '#e2e8f0',
+                                width: '140px',
+                              }}
+                            />
+                            <button
+                              onClick={() => savePlanning('idea', idea.id)}
+                              className="text-xs px-2 py-1 rounded"
+                              style={{
+                                background: '#00ff9d20',
+                                border: '1px solid #00ff9d40',
+                                color: '#00ff9d',
+                              }}
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingPlanning(null)}
+                              className="text-xs px-2 py-1 rounded"
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid #1e2040',
+                                color: '#475569',
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              startEditingPlanning(idea.id, idea.category, idea.contentPillar)
+                            }
+                            className="text-xs mt-1"
+                            style={{ color: '#475569' }}
+                          >
+                            {idea.category || idea.contentPillar
+                              ? 'edit tags'
+                              : '+ add category/pillar'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

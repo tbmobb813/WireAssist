@@ -30,6 +30,8 @@ export interface ScheduledPost {
   campaignId?: string;
   platformPostId?: string;
   objectiveId?: string;
+  category?: string;
+  contentPillar?: string;
 }
 
 export interface ContentIdea {
@@ -42,6 +44,8 @@ export interface ContentIdea {
   createdAt: Date;
   scheduledFor?: Date;
   campaignId?: string;
+  category?: string;
+  contentPillar?: string;
 }
 
 export type CampaignSource = 'manual' | 'gtm';
@@ -51,6 +55,19 @@ export interface Campaign {
   name: string;
   source: CampaignSource;
   createdAt: Date;
+}
+
+// A reusable, named set of hashtags (a personal library) — plain reference
+// data, not something an agent needs to reason about, so it's managed via
+// direct CRUD from the command-center UI rather than an agent tool/skill.
+// Character count is deliberately not stored: it's derived from
+// `hashtags.length` at read time so it can never go stale.
+export interface HashtagGroup {
+  id: string;
+  name: string;
+  hashtags: string;
+  createdAt: Date;
+  characterCount: number;
 }
 
 export class TrendPostStorage {
@@ -97,6 +114,13 @@ export class TrendPostStorage {
         created_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS hashtag_groups (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        hashtags TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_posts_status ON scheduled_posts(status);
       CREATE INDEX IF NOT EXISTS idx_posts_scheduled ON scheduled_posts(scheduled_at);
       CREATE INDEX IF NOT EXISTS idx_posts_platform ON scheduled_posts(platform);
@@ -111,6 +135,10 @@ export class TrendPostStorage {
     this.addColumnIfMissing('scheduled_posts', 'objective_id', 'TEXT');
     this.addColumnIfMissing('scheduled_posts', 'account', 'TEXT');
     this.addColumnIfMissing('content_ideas', 'account', 'TEXT');
+    this.addColumnIfMissing('scheduled_posts', 'category', 'TEXT');
+    this.addColumnIfMissing('scheduled_posts', 'content_pillar', 'TEXT');
+    this.addColumnIfMissing('content_ideas', 'category', 'TEXT');
+    this.addColumnIfMissing('content_ideas', 'content_pillar', 'TEXT');
   }
 
   private addColumnIfMissing(table: string, column: string, type: string): void {
@@ -129,6 +157,8 @@ export class TrendPostStorage {
     tags?: string[];
     campaignId?: string;
     objectiveId?: string;
+    category?: string;
+    contentPillar?: string;
   }): ScheduledPost {
     const id = randomUUID();
     const now = new Date();
@@ -139,8 +169,8 @@ export class TrendPostStorage {
     this.db
       .prepare(
         `
-      INSERT INTO scheduled_posts (id, content, platform, account, scheduled_at, status, created_at, tags, campaign_id, objective_id)
-      VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?)
+      INSERT INTO scheduled_posts (id, content, platform, account, scheduled_at, status, created_at, tags, campaign_id, objective_id, category, content_pillar)
+      VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?, ?, ?)
     `
       )
       .run(
@@ -152,10 +182,31 @@ export class TrendPostStorage {
         now.toISOString(),
         JSON.stringify(params.tags ?? []),
         params.campaignId ?? null,
-        params.objectiveId ?? null
+        params.objectiveId ?? null,
+        params.category ?? null,
+        params.contentPillar ?? null
       );
 
     return this.getPost(id)!;
+  }
+
+  // Category/content-pillar are edit-only fields for now (not exposed on
+  // createPost's approval-gated path) — set after the fact from the
+  // command-center UI, same as how a spreadsheet cell gets filled in after
+  // the row already exists.
+  updatePostPlanningFields(
+    id: string,
+    fields: { category?: string; contentPillar?: string }
+  ): void {
+    this.db
+      .prepare(
+        `
+      UPDATE scheduled_posts
+      SET category = COALESCE(?, category), content_pillar = COALESCE(?, content_pillar)
+      WHERE id = ?
+    `
+      )
+      .run(fields.category ?? null, fields.contentPillar ?? null, id);
   }
 
   getPost(id: string): ScheduledPost | null {
@@ -239,13 +290,15 @@ export class TrendPostStorage {
     account?: ContentAccount;
     scheduledFor?: Date;
     campaignId?: string;
+    category?: string;
+    contentPillar?: string;
   }): ContentIdea {
     const id = randomUUID();
     this.db
       .prepare(
         `
-      INSERT INTO content_ideas (id, topic, angle, platform, account, status, created_at, scheduled_for, campaign_id)
-      VALUES (?, ?, ?, ?, ?, 'idea', ?, ?, ?)
+      INSERT INTO content_ideas (id, topic, angle, platform, account, status, created_at, scheduled_for, campaign_id, category, content_pillar)
+      VALUES (?, ?, ?, ?, ?, 'idea', ?, ?, ?, ?, ?)
     `
       )
       .run(
@@ -256,7 +309,9 @@ export class TrendPostStorage {
         params.account ?? null,
         new Date().toISOString(),
         params.scheduledFor?.toISOString() ?? null,
-        params.campaignId ?? null
+        params.campaignId ?? null,
+        params.category ?? null,
+        params.contentPillar ?? null
       );
 
     const row = this.db.prepare('SELECT * FROM content_ideas WHERE id = ?').get(id) as Record<
@@ -272,6 +327,104 @@ export class TrendPostStorage {
       : 'SELECT * FROM content_ideas ORDER BY created_at DESC, rowid DESC';
     const rows = this.db.prepare(sql).all(...(status ? [status] : [])) as Record<string, unknown>[];
     return rows.map((r) => this.mapIdea(r));
+  }
+
+  // Same edit-after-creation shape as updatePostPlanningFields — an idea's
+  // category/pillar gets filled in from the UI, not at generation time.
+  updateIdeaPlanningFields(
+    id: string,
+    fields: { category?: string; contentPillar?: string }
+  ): void {
+    this.db
+      .prepare(
+        `
+      UPDATE content_ideas
+      SET category = COALESCE(?, category), content_pillar = COALESCE(?, content_pillar)
+      WHERE id = ?
+    `
+      )
+      .run(fields.category ?? null, fields.contentPillar ?? null, id);
+  }
+
+  // Distinct, previously-used values across both tables — this is what
+  // lets the UI offer an autocomplete/dropdown for category and content
+  // pillar without either being a hardcoded enum anywhere in the codebase.
+  listCategories(): string[] {
+    return this.listDistinctPlanningValues('category');
+  }
+
+  listContentPillars(): string[] {
+    return this.listDistinctPlanningValues('content_pillar');
+  }
+
+  private listDistinctPlanningValues(column: 'category' | 'content_pillar'): string[] {
+    const rows = this.db
+      .prepare(
+        `
+      SELECT ${column} AS value FROM scheduled_posts WHERE ${column} IS NOT NULL AND ${column} != ''
+      UNION
+      SELECT ${column} AS value FROM content_ideas WHERE ${column} IS NOT NULL AND ${column} != ''
+      ORDER BY value ASC
+    `
+      )
+      .all() as { value: string }[];
+    return rows.map((r) => r.value);
+  }
+
+  // ─── HASHTAG GROUPS ───────────────────────────────────────────
+  // Plain reference-data CRUD — deliberately not agent-mediated (see the
+  // HashtagGroup interface comment above).
+
+  createHashtagGroup(params: { name: string; hashtags: string }): HashtagGroup {
+    const id = randomUUID();
+    const now = new Date();
+    this.db
+      .prepare('INSERT INTO hashtag_groups (id, name, hashtags, created_at) VALUES (?, ?, ?, ?)')
+      .run(id, params.name, params.hashtags, now.toISOString());
+    return {
+      id,
+      name: params.name,
+      hashtags: params.hashtags,
+      createdAt: now,
+      characterCount: params.hashtags.length,
+    };
+  }
+
+  listHashtagGroups(): HashtagGroup[] {
+    const rows = this.db.prepare('SELECT * FROM hashtag_groups ORDER BY name ASC').all() as Record<
+      string,
+      unknown
+    >[];
+    return rows.map((r) => this.mapHashtagGroup(r));
+  }
+
+  updateHashtagGroup(
+    id: string,
+    fields: { name?: string; hashtags?: string }
+  ): HashtagGroup | null {
+    this.db
+      .prepare(
+        'UPDATE hashtag_groups SET name = COALESCE(?, name), hashtags = COALESCE(?, hashtags) WHERE id = ?'
+      )
+      .run(fields.name ?? null, fields.hashtags ?? null, id);
+    const row = this.db.prepare('SELECT * FROM hashtag_groups WHERE id = ?').get(id) as
+      Record<string, unknown> | undefined;
+    return row ? this.mapHashtagGroup(row) : null;
+  }
+
+  deleteHashtagGroup(id: string): void {
+    this.db.prepare('DELETE FROM hashtag_groups WHERE id = ?').run(id);
+  }
+
+  private mapHashtagGroup(r: Record<string, unknown>): HashtagGroup {
+    const hashtags = r.hashtags as string;
+    return {
+      id: r.id as string,
+      name: r.name as string,
+      hashtags,
+      createdAt: new Date(r.created_at as string),
+      characterCount: hashtags.length,
+    };
   }
 
   // ─── CAMPAIGNS ────────────────────────────────────────────────
@@ -318,6 +471,8 @@ export class TrendPostStorage {
       campaignId: (r.campaign_id as string | null) ?? undefined,
       platformPostId: (r.platform_post_id as string | null) ?? undefined,
       objectiveId: (r.objective_id as string | null) ?? undefined,
+      category: (r.category as string | null) ?? undefined,
+      contentPillar: (r.content_pillar as string | null) ?? undefined,
     };
   }
 
@@ -332,6 +487,8 @@ export class TrendPostStorage {
       createdAt: new Date(r.created_at as string),
       scheduledFor: r.scheduled_for ? new Date(r.scheduled_for as string) : undefined,
       campaignId: (r.campaign_id as string | null) ?? undefined,
+      category: (r.category as string | null) ?? undefined,
+      contentPillar: (r.content_pillar as string | null) ?? undefined,
     };
   }
 }
