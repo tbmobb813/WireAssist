@@ -1,11 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import {
-  Client,
-  StreamableHTTPClientTransport,
-  type AuthProvider,
-} from '@modelcontextprotocol/client';
+import { RemoteMcpClient, type AuthProvider, type RemoteToolDefinition } from '@wireassist/core';
 
 const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
 const CREDENTIALS_PATH = path.join(HOME_PATH, '.wireassist', 'github-credentials.json');
@@ -21,11 +17,7 @@ interface GitHubCredentials {
   personalAccessToken: string;
 }
 
-export interface RemoteToolDefinition {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-}
+export type { RemoteToolDefinition };
 
 function loadCredentials(): GitHubCredentials {
   if (!fs.existsSync(CREDENTIALS_PATH)) {
@@ -42,57 +34,55 @@ function loadCredentials(): GitHubCredentials {
   return creds;
 }
 
-// The first real Model Context Protocol client in this codebase — every
-// other integration (Gmail, WordPress, YouTube) is a hand-rolled REST client
-// registered into WireAssist's own in-process MCPClient registry
-// (wireassist/core/src/mcp/client.ts), which has no relation to the actual
-// protocol. This connects to GitHub's genuine, vendor-maintained MCP server
-// instead of hand-writing a GitHub REST client — the template future
-// integrations (Slack, Notion, a local filesystem server) can follow.
+// Was the first real Model Context Protocol client in this codebase —
+// every other integration (Gmail, WordPress, YouTube) is a hand-rolled
+// REST client registered into WireAssist's own in-process MCPClient
+// registry (wireassist/core/src/mcp/client.ts), which has no relation to
+// the actual protocol. Now a thin GitHub-specific wrapper (URL, PAT-based
+// auth, the toolsets header) around the generic RemoteMcpClient
+// (wireassist/core/src/mcp/remote-client.ts), extracted from this class's
+// original implementation so future integrations (Slack, Notion, a local
+// filesystem server) construct one instead of copy-pasting this file.
+// Public API unchanged — callers (github-agent.ts, server.ts) don't
+// need to know this delegates internally.
 export class GitHubMcpClient {
-  private client: Client;
-  private transport: StreamableHTTPClientTransport;
+  private remote: RemoteMcpClient;
 
   constructor() {
     const creds = loadCredentials();
     const authProvider: AuthProvider = { token: async () => creds.personalAccessToken };
-    this.transport = new StreamableHTTPClientTransport(new URL(GITHUB_MCP_URL), {
+    this.remote = new RemoteMcpClient({
+      url: GITHUB_MCP_URL,
       authProvider,
-      requestInit: { headers: { 'X-MCP-Toolsets': GITHUB_MCP_TOOLSETS } },
+      clientName: 'wireassist-github-agent',
+      extraHeaders: { 'X-MCP-Toolsets': GITHUB_MCP_TOOLSETS },
     });
-    this.client = new Client({ name: 'wireassist-github-agent', version: '1.0.0' });
   }
 
   async connect(): Promise<void> {
-    await this.client.connect(this.transport);
+    await this.remote.connect();
   }
 
   async listRemoteTools(): Promise<RemoteToolDefinition[]> {
-    const { tools } = await this.client.listTools();
-    return tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description ?? '',
-      inputSchema: (tool.inputSchema ?? { type: 'object', properties: {} }) as Record<
-        string,
-        unknown
-      >,
-    }));
+    return this.remote.listRemoteTools();
   }
 
-  // A failed tool call comes back as a normal result with isError: true, not
-  // a thrown exception — re-throw here so it surfaces through
-  // GitHubAgent.executeToolCall()'s existing catch the same way any other
-  // tool failure does, instead of needing a second isError check downstream.
   async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-    const result = await this.client.callTool({ name, arguments: args });
-    if (result.isError) {
-      throw new Error(`GitHub tool "${name}" failed: ${JSON.stringify(result.content)}`);
+    try {
+      return await this.remote.callTool(name, args);
+    } catch (err) {
+      // Re-labeled from RemoteMcpClient's generic "MCP tool" phrasing to
+      // GitHub-specific wording — callers/logs here have always said
+      // "GitHub tool", and that's worth keeping rather than a silent
+      // message change as a side effect of this refactor.
+      if (err instanceof Error) {
+        throw new Error(err.message.replace(/^MCP tool /, 'GitHub tool '));
+      }
+      throw err;
     }
-    return result.content;
   }
 
   async disconnect(): Promise<void> {
-    await this.transport.terminateSession();
-    await this.client.close();
+    await this.remote.disconnect();
   }
 }

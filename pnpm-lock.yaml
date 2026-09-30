@@ -447,6 +447,9 @@ importers:
 
   wireassist/core:
     dependencies:
+      '@modelcontextprotocol/client':
+        specifier: ^2.0.0
+        version: 2.0.0
       '@xenova/transformers':
         specifier: ^2.17.2
         version: 2.17.2
