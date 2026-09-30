@@ -242,6 +242,26 @@ export type AgentEvent =
         failed: { id: string; platform: string; errorMessage?: string }[];
       };
     }
+  | {
+      event: 'check_post_metrics_complete';
+      payload: { taskId: string; summary: string; checked: number; failed: number };
+    }
+  | {
+      event: 'sync_scoreboard_metrics_complete';
+      payload: {
+        taskId: string;
+        summary: string;
+        totals: { likes: number; views: number; comments: number; shares: number };
+      };
+    }
+  | {
+      event: 'sync_lead_signups_complete';
+      payload: { taskId: string; summary: string; synced: boolean; count?: number };
+    }
+  | {
+      event: 'scoreboard_digest_complete';
+      payload: { taskId: string; summary: string; hasData: boolean };
+    }
   | { event: 'auto_approved'; payload: { agentRole: string; taskId: string; action: string } }
   | {
       event: 'handoff_queued';

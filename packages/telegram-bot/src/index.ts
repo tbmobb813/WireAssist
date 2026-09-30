@@ -576,6 +576,30 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
       await send(`📊 ${String(p.summary ?? '').slice(0, 3000)}\n\nUse /content to review.`);
       break;
     }
+    case 'check_post_metrics_complete': {
+      // Skip empty sweeps (nothing due yet) — same pattern as
+      // publish_due_posts_complete above.
+      const checked = typeof p.checked === 'number' ? p.checked : 0;
+      const failed = typeof p.failed === 'number' ? p.failed : 0;
+      if (checked === 0 && failed === 0) break;
+      await send(`📈 ${String(p.summary ?? '').slice(0, 3000)}`);
+      break;
+    }
+    case 'sync_lead_signups_complete': {
+      // Notify on a real signup or a sync failure — skip the routine "0
+      // signups, nothing wrong" case to avoid a daily no-op ping.
+      const synced = p.synced === true;
+      const count = typeof p.count === 'number' ? p.count : 0;
+      if (synced && count === 0) break;
+      await send(`${synced ? '📈' : '⚠️'} ${String(p.summary ?? '').slice(0, 1500)}`);
+      break;
+    }
+    case 'scoreboard_digest_complete': {
+      // Always sends — same reasoning as content_retro_complete: a quiet
+      // week is still worth a real note, not silence.
+      await send(`📊 ${String(p.summary ?? '').slice(0, 3000)}`);
+      break;
+    }
     case 'handoff_review_escalated': {
       // Delegate -> check -> redirect pilot (Research -> Content): fired
       // only after a draft has already failed review once, been retried

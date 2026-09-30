@@ -57,7 +57,10 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     department: 'Operations',
-    items: [{ href: '/ops', label: 'Ops' }],
+    items: [
+      { href: '/ops', label: 'Ops' },
+      { href: '/automations', label: 'Automations' },
+    ],
   },
 ];
 

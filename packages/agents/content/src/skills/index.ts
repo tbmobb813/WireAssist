@@ -10,6 +10,8 @@ import { freeformSkill } from './freeform';
 import { publishDuePostsSkill } from './publish-due-posts';
 import { proposeSkillSkill } from './propose-skill';
 import { contentRetroSkill } from './content-retro';
+import { checkPostMetricsSkill } from './check-post-metrics';
+import { syncScoreboardMetricsSkill } from './sync-scoreboard-metrics';
 
 export const CONTENT_SKILLS: Skill[] = [
   generatePostSkill,
@@ -23,4 +25,6 @@ export const CONTENT_SKILLS: Skill[] = [
   publishDuePostsSkill,
   proposeSkillSkill,
   contentRetroSkill,
+  checkPostMetricsSkill,
+  syncScoreboardMetricsSkill,
 ];

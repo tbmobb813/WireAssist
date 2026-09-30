@@ -56,6 +56,14 @@ const CONTENT_TOOLS = [
   // invisible to the chat tool loop. Publishing is cron-only, driven by
   // publishDuePostsSkill; scheduling stays the single approval gate.
   'content_publish_post',
+  // Same story — cron-only, driven by checkPostMetricsSkill, no chat-facing
+  // schema entry needed.
+  'content_list_posts_needing_metrics_check',
+  'content_check_post_metrics',
+  // Cross-cutting scoreboard tools (see trendpost-mcp/src/tools.ts) — also
+  // authorized for Admin, which owns the weekly digest and the leads sync.
+  'record_metric',
+  'list_metrics',
 ];
 
 export class ContentAgent extends BaseAgent {

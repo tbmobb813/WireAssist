@@ -15,6 +15,8 @@ import {
   createExpenseDigestTask,
   createMeetingFollowupTask,
   createDraftDocumentTask,
+  createSyncLeadSignupsTask,
+  createScoreboardDigestTask,
 } from './task-factory';
 import type { ObjectiveHealthCheckCandidate } from './skills/objective-health-check';
 
@@ -52,6 +54,14 @@ export const AdminTasks = {
 
   budgetWarning(thresholdPercent = 80, objectiveId?: string) {
     return createBudgetWarningTask({ thresholdPercent, objectiveId });
+  },
+
+  syncLeadSignups(objectiveId?: string) {
+    return createSyncLeadSignupsTask({ objectiveId });
+  },
+
+  scoreboardDigest(objectiveId?: string) {
+    return createScoreboardDigestTask({ objectiveId });
   },
 
   staleApprovals(daysStale = 3, objectiveId?: string, backlogThreshold?: number) {

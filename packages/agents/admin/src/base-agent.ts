@@ -24,6 +24,7 @@ import {
   SkillExecutor,
   ProviderFactory,
   ProviderHttpError,
+  loadBusinessProfile,
 } from '@wireassist/core';
 import {
   isValidDelegationTarget,
@@ -268,7 +269,17 @@ export abstract class BaseAgent {
   // is the single shared choke point think() and runToolLoop() both use.
   private buildSystemPrompt(extraContext?: string): string {
     const dateContext = `Today's date is ${new Date().toISOString().slice(0, 10)}.`;
-    const base = `${this.config.systemPrompt}\n\n${dateContext}`;
+    let base = `${this.config.systemPrompt}\n\n${dateContext}`;
+    // Shared across every agent (all six extend BaseAgent) — the single
+    // integration point for the business profile that used to be
+    // duplicated, inconsistently, inside each agent's own hardcoded
+    // persona string. Not cached: a mid-session update via the
+    // update_business_profile skill should reach every agent's very next
+    // call, not require a restart.
+    const businessProfile = loadBusinessProfile();
+    if (businessProfile) {
+      base = `${base}\n\n---\nBUSINESS PROFILE (shared across all agents):\n${businessProfile}`;
+    }
     return extraContext ? `${base}\n\n---\nCONTEXT:\n${extraContext}` : base;
   }
 

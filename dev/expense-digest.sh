@@ -19,6 +19,11 @@ set -euo pipefail
 
 API_URL="${WIREASSIST_API_URL:-http://localhost:3002}"
 
+# Self-reports to the Automations screen (Command Center) — best-effort,
+# never blocks the real task below even if this fails (old server, network
+# blip, etc). See automation-log.ts for what reads this.
+curl -fsS -X POST "$API_URL/api/automations/ping/expense-digest" >/dev/null 2>&1 || true
+
 echo "[expense-digest] Summarizing recent receipts and invoices..."
 response=$(curl -fsS -X POST "$API_URL/api/tasks/expense-digest")
 echo "[expense-digest] Queued: $response"

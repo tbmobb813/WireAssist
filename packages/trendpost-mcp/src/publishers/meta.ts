@@ -1,4 +1,4 @@
-import type { PublishResult } from './index';
+import type { PublishResult, PostMetrics } from './index';
 
 const GRAPH_API_BASE = 'https://graph.facebook.com/v19.0';
 
@@ -57,6 +57,22 @@ async function graphPost(path: string, params: Record<string, string>): Promise<
   return { id: body.id };
 }
 
+async function graphGet(
+  path: string,
+  params: Record<string, string>
+): Promise<Record<string, unknown>> {
+  const res = await fetch(`${GRAPH_API_BASE}/${path}?${new URLSearchParams(params)}`);
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown> & {
+    error?: { message?: string };
+  };
+  if (!res.ok) {
+    throw new Error(
+      `Meta Graph API request to ${path} failed: ${body.error?.message ?? res.statusText}`
+    );
+  }
+  return body;
+}
+
 export async function postToFacebook(content: string, account?: string): Promise<PublishResult> {
   const creds = requireCredentials(['META_ACCESS_TOKEN', 'FACEBOOK_PAGE_ID'], account);
 
@@ -89,4 +105,47 @@ export async function postToInstagram(content: string, account?: string): Promis
   });
 
   return { platformPostId: published.id };
+}
+
+// Most likely of the three platforms to actually work without a new
+// permission grant — insights generally read with the same page/IG
+// business token already used to publish. Instagram's like/comment counts
+// do still require instagram_manage_insights on that token; if it's
+// missing, this throws and the caller treats it as "not available."
+export async function fetchFacebookMetrics(
+  platformPostId: string,
+  account?: string
+): Promise<PostMetrics> {
+  const creds = requireCredentials(['META_ACCESS_TOKEN'], account);
+  const body = await graphGet(platformPostId, {
+    fields: 'likes.summary(true),comments.summary(true),shares',
+    access_token: creds.META_ACCESS_TOKEN,
+  });
+  const likes = body.likes as { summary?: { total_count?: number } } | undefined;
+  const comments = body.comments as { summary?: { total_count?: number } } | undefined;
+  const shares = body.shares as { count?: number } | undefined;
+
+  return {
+    likes: likes?.summary?.total_count,
+    comments: comments?.summary?.total_count,
+    shares: shares?.count,
+    raw: body,
+  };
+}
+
+export async function fetchInstagramMetrics(
+  platformPostId: string,
+  account?: string
+): Promise<PostMetrics> {
+  const creds = requireCredentials(['META_ACCESS_TOKEN'], account);
+  const body = await graphGet(platformPostId, {
+    fields: 'like_count,comments_count',
+    access_token: creds.META_ACCESS_TOKEN,
+  });
+
+  return {
+    likes: body.like_count as number | undefined,
+    comments: body.comments_count as number | undefined,
+    raw: body,
+  };
 }

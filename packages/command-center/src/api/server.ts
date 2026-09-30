@@ -68,6 +68,13 @@ import { getLocation, setLocation, listNotes, addNote, deleteNote } from './dash
 import { routeHandoffTask } from '../lib/route-handoff';
 import { replayOrphanedHandoffs } from '../lib/replay-handoffs';
 import { decideHandoffReviewAction } from '../lib/handoff-review';
+import {
+  AUTOMATION_REGISTRY,
+  isValidAutomationJob,
+  recordAutomationRun,
+  getAutomationRun,
+  computeNextRun,
+} from './automation-log';
 
 // Formerly imported from the now-deleted chat-router.ts (its classifier is
 // gone — Admin decides everything now — but this shape is still what the
@@ -678,6 +685,12 @@ events.on('agent:draft_document_complete', (p) => broadcast('draft_document_comp
 events.on('agent:publish_due_posts_complete', (p) => broadcast('publish_due_posts_complete', p));
 events.on('agent:content_retro_complete', (p) => broadcast('content_retro_complete', p));
 events.on('agent:post_published', (p) => broadcast('post_published', p));
+events.on('agent:check_post_metrics_complete', (p) => broadcast('check_post_metrics_complete', p));
+events.on('agent:sync_scoreboard_metrics_complete', (p) =>
+  broadcast('sync_scoreboard_metrics_complete', p)
+);
+events.on('agent:sync_lead_signups_complete', (p) => broadcast('sync_lead_signups_complete', p));
+events.on('agent:scoreboard_digest_complete', (p) => broadcast('scoreboard_digest_complete', p));
 
 // Agent-to-agent handoff: a skill (e.g. Research's research_topic, once its
 // own approval for the handoff is granted) hands a fully-formed AgentTask
@@ -1125,6 +1138,39 @@ function gmailRequired() {
   };
 }
 
+// ── AUTOMATIONS ──────────────────────────────────────────────────────────
+// Before this existed, none of the 16 cron-driven agent jobs in
+// dev/*.sh were visible anywhere in the app — no way to tell what's
+// scheduled, when it last ran, or whether a missing crontab line had
+// silently stopped one. Each script pings this route once per invocation
+// (see automation-log.ts's own comment on why a ping, not route-hooking,
+// is the tracking mechanism); the Automations page joins that against the
+// static registry + a computed next-run time.
+app.post('/api/automations/ping/:job', async (c) => {
+  const { job } = c.req.param();
+  if (!isValidAutomationJob(job)) return c.json({ error: `Unknown automation job: ${job}` }, 404);
+  const body = (await c.req.json().catch(() => ({}))) as {
+    status?: 'ok' | 'error';
+    detail?: string;
+  };
+  recordAutomationRun(job, { status: body.status ?? 'ok', detail: body.detail });
+  return c.json({ ok: true });
+});
+
+app.get('/api/automations', (c) => {
+  const rows = AUTOMATION_REGISTRY.map((def) => {
+    const run = getAutomationRun(def.job);
+    return {
+      ...def,
+      lastRunAt: run?.lastRunAt ?? null,
+      lastStatus: run?.status ?? null,
+      lastDetail: run?.detail ?? null,
+      nextRunAt: computeNextRun(def.schedule)?.toISOString() ?? null,
+    };
+  });
+  return c.json(rows);
+});
+
 // ── TASKS ─────────────────────────────────────────────────────────────────
 app.post('/api/tasks/triage-email', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
@@ -1195,6 +1241,23 @@ app.post('/api/tasks/budget-warning', async (c) => {
       ? body.thresholdPercent
       : 80;
   const task = AdminTasks.budgetWarning(thresholdPercent);
+  queueAgentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// No anthropicConfigured() gate — mechanical fetch-and-record, same
+// reasoning as budget-warning above.
+app.post('/api/tasks/sync-lead-signups', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  const task = AdminTasks.syncLeadSignups();
+  queueAgentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+app.post('/api/tasks/scoreboard-digest', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  if (!anthropicConfigured()) return c.json(anthropicRequiredResponse(), 503);
+  const task = AdminTasks.scoreboardDigest();
   queueAgentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });
@@ -1306,6 +1369,25 @@ app.post('/api/tasks/draft-document', async (c) => {
 app.post('/api/tasks/publish-due-posts', async (c) => {
   if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
   const task = ContentTasks.publishDuePosts();
+  queueContentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// No anthropicConfigured() gate — same reasoning as publish-due-posts:
+// check_post_metrics never calls the LLM, it's a mechanical fetch-and-store
+// sweep, so it works even before an Anthropic key is configured.
+app.post('/api/tasks/check-post-metrics', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  const task = ContentTasks.checkPostMetrics();
+  queueContentTask(task);
+  return c.json({ taskId: task.id, status: 'queued' });
+});
+
+// No anthropicConfigured() gate — mechanical aggregation over already-
+// checked post metrics, same reasoning as check-post-metrics/publish-due-posts.
+app.post('/api/tasks/sync-scoreboard-metrics', async (c) => {
+  if (!agentReady) return c.json({ error: 'Agent not ready' }, 503);
+  const task = ContentTasks.syncScoreboardMetrics();
   queueContentTask(task);
   return c.json({ taskId: task.id, status: 'queued' });
 });

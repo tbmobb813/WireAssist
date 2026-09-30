@@ -48,7 +48,9 @@ type SupportedTaskInput =
   | { type: 'travel_itinerary_digest'; daysAhead?: number }
   | { type: 'expense_digest'; daysAgo?: number }
   | { type: 'meeting_followup'; hoursBack?: number }
-  | { type: 'draft_document'; brief: string; title?: string };
+  | { type: 'draft_document'; brief: string; title?: string }
+  | { type: 'sync_lead_signups' }
+  | { type: 'scoreboard_digest' };
 
 function baseTask(
   role: AgentRole,
@@ -218,6 +220,31 @@ export function createBudgetWarningTask(options?: {
     'admin',
     options?.description ?? 'Check month-to-date spend against the budget warning threshold.',
     { type: 'budget_warning_nudge', thresholdPercent: options?.thresholdPercent },
+    options?.objectiveId
+  );
+}
+
+export function createSyncLeadSignupsTask(options?: {
+  description?: string;
+  objectiveId?: string;
+}): AgentTask {
+  return baseTask(
+    'admin',
+    options?.description ??
+      "Pull the last 24h of lead-capture-service signups into today's scoreboard totals.",
+    { type: 'sync_lead_signups' },
+    options?.objectiveId
+  );
+}
+
+export function createScoreboardDigestTask(options?: {
+  description?: string;
+  objectiveId?: string;
+}): AgentTask {
+  return baseTask(
+    'admin',
+    options?.description ?? 'Weekly scoreboard digest across every source.',
+    { type: 'scoreboard_digest' },
     options?.objectiveId
   );
 }

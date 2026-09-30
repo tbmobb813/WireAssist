@@ -32,6 +32,22 @@ export interface ScheduledPost {
   objectiveId?: string;
   category?: string;
   contentPillar?: string;
+  // Real platform engagement, filled in by the check_post_metrics sweep
+  // 24h and 7d after publish — see check-post-metrics.ts (agent-content).
+  // Each *CheckedAt timestamp being set (even with every count left
+  // undefined, e.g. no platformPostId or the platform call failed) is what
+  // stops that window from being re-checked on every future sweep.
+  metricsChecked24hAt?: Date;
+  metricsChecked7dAt?: Date;
+  likesCount?: number;
+  viewsCount?: number;
+  commentsCount?: number;
+  sharesCount?: number;
+  // Raw platform-specific fields (e.g. Twitter's impression_count, quote
+  // count) that don't map onto the four normalized columns above — kept as
+  // an escape hatch rather than adding a column per platform's own metric
+  // vocabulary. Also where a fetch failure's error message is recorded.
+  engagementRaw?: Record<string, unknown>;
 }
 
 export interface ContentIdea {
@@ -121,9 +137,27 @@ export class TrendPostStorage {
         created_at TEXT NOT NULL
       );
 
+      -- The scoreboard's single write target — every source (content
+      -- engagement, lead signups, and eventually YouTube/WordPress once
+      -- their own stats-pulling code exists) writes normalized rows here
+      -- instead of the digest skill needing to know how to read N
+      -- different source-specific shapes. One row per (date, source,
+      -- metric); re-running a day's sync upserts via the unique index
+      -- below rather than accumulating duplicates.
+      CREATE TABLE IF NOT EXISTS metrics (
+        id TEXT PRIMARY KEY,
+        date TEXT NOT NULL,
+        source TEXT NOT NULL,
+        metric TEXT NOT NULL,
+        value REAL NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_posts_status ON scheduled_posts(status);
       CREATE INDEX IF NOT EXISTS idx_posts_scheduled ON scheduled_posts(scheduled_at);
       CREATE INDEX IF NOT EXISTS idx_posts_platform ON scheduled_posts(platform);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_metrics_unique ON metrics(date, source, metric);
+      CREATE INDEX IF NOT EXISTS idx_metrics_date ON metrics(date);
     `);
 
     // content_ideas predates scheduledFor/campaignId — retrofit existing
@@ -139,6 +173,13 @@ export class TrendPostStorage {
     this.addColumnIfMissing('scheduled_posts', 'content_pillar', 'TEXT');
     this.addColumnIfMissing('content_ideas', 'category', 'TEXT');
     this.addColumnIfMissing('content_ideas', 'content_pillar', 'TEXT');
+    this.addColumnIfMissing('scheduled_posts', 'metrics_checked_24h_at', 'TEXT');
+    this.addColumnIfMissing('scheduled_posts', 'metrics_checked_7d_at', 'TEXT');
+    this.addColumnIfMissing('scheduled_posts', 'likes_count', 'INTEGER');
+    this.addColumnIfMissing('scheduled_posts', 'views_count', 'INTEGER');
+    this.addColumnIfMissing('scheduled_posts', 'comments_count', 'INTEGER');
+    this.addColumnIfMissing('scheduled_posts', 'shares_count', 'INTEGER');
+    this.addColumnIfMissing('scheduled_posts', 'engagement_raw', 'TEXT');
   }
 
   private addColumnIfMissing(table: string, column: string, type: string): void {
@@ -279,6 +320,130 @@ export class TrendPostStorage {
 
   deletePost(id: string): void {
     this.db.prepare('DELETE FROM scheduled_posts WHERE id = ?').run(id);
+  }
+
+  // ─── METRICS ──────────────────────────────────────────────────
+
+  // Published posts whose 24h (or 7d) mark has passed but haven't been
+  // checked for that window yet. A narrow ±1h/±0.5day tolerance on the
+  // lower bound, not an open-ended "anything past the mark," keeps a post
+  // that's been sitting unchecked for weeks (e.g. the cron was down) from
+  // silently skipping the check just because it's also past the window —
+  // it's still eligible, just via the "not yet checked" half of the
+  // WHERE clause, independent of how long ago the mark passed.
+  listPostsNeedingMetricsCheck(window: '24h' | '7d'): ScheduledPost[] {
+    const hoursAgo = window === '24h' ? 24 : 24 * 7;
+    const cutoff = new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString();
+    const checkedColumn = window === '24h' ? 'metrics_checked_24h_at' : 'metrics_checked_7d_at';
+
+    const rows = this.db
+      .prepare(
+        `
+      SELECT * FROM scheduled_posts
+      WHERE status = 'published'
+        AND platform_post_id IS NOT NULL
+        AND published_at <= ?
+        AND ${checkedColumn} IS NULL
+      ORDER BY published_at ASC
+    `
+      )
+      .all(cutoff) as Record<string, unknown>[];
+    return rows.map((r) => this.mapPost(r));
+  }
+
+  // Always stamps the window's *CheckedAt column, even when every metric
+  // value is omitted (platform call failed or returned nothing usable) —
+  // that stamp, not the presence of data, is what stops a future sweep
+  // from retrying this post/window forever. Metric columns use COALESCE
+  // so a 24h check with only `likes` doesn't null out a `views` value a
+  // later call might also want to set for the same window.
+  recordPostMetrics(
+    id: string,
+    window: '24h' | '7d',
+    metrics: {
+      likes?: number;
+      views?: number;
+      comments?: number;
+      shares?: number;
+      raw?: Record<string, unknown>;
+    }
+  ): void {
+    const checkedColumn = window === '24h' ? 'metrics_checked_24h_at' : 'metrics_checked_7d_at';
+    this.db
+      .prepare(
+        `
+      UPDATE scheduled_posts
+      SET ${checkedColumn} = ?,
+          likes_count = COALESCE(?, likes_count),
+          views_count = COALESCE(?, views_count),
+          comments_count = COALESCE(?, comments_count),
+          shares_count = COALESCE(?, shares_count),
+          engagement_raw = COALESCE(?, engagement_raw)
+      WHERE id = ?
+    `
+      )
+      .run(
+        new Date().toISOString(),
+        metrics.likes ?? null,
+        metrics.views ?? null,
+        metrics.comments ?? null,
+        metrics.shares ?? null,
+        metrics.raw ? JSON.stringify(metrics.raw) : null,
+        id
+      );
+  }
+
+  // ─── SCOREBOARD METRICS ───────────────────────────────────────
+  // See the `metrics` table's own comment in init() — one normalized store
+  // every source writes to, so scoreboardDigestSkill (agent-admin) never
+  // needs to know how any individual source's data actually shapes up.
+
+  recordMetric(params: { date: string; source: string; metric: string; value: number }): void {
+    this.db
+      .prepare(
+        `
+      INSERT INTO metrics (id, date, source, metric, value, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(date, source, metric) DO UPDATE SET value = excluded.value
+    `
+      )
+      .run(
+        randomUUID(),
+        params.date,
+        params.source,
+        params.metric,
+        params.value,
+        new Date().toISOString()
+      );
+  }
+
+  listMetrics(filters?: { source?: string; from?: string; to?: string }): {
+    date: string;
+    source: string;
+    metric: string;
+    value: number;
+  }[] {
+    let sql = 'SELECT date, source, metric, value FROM metrics WHERE 1=1';
+    const params: unknown[] = [];
+    if (filters?.source) {
+      sql += ' AND source = ?';
+      params.push(filters.source);
+    }
+    if (filters?.from) {
+      sql += ' AND date >= ?';
+      params.push(filters.from);
+    }
+    if (filters?.to) {
+      sql += ' AND date <= ?';
+      params.push(filters.to);
+    }
+    sql += ' ORDER BY date ASC';
+    return this.db.prepare(sql).all(...params) as {
+      date: string;
+      source: string;
+      metric: string;
+      value: number;
+    }[];
   }
 
   // ─── IDEAS ────────────────────────────────────────────────────
@@ -473,6 +638,17 @@ export class TrendPostStorage {
       objectiveId: (r.objective_id as string | null) ?? undefined,
       category: (r.category as string | null) ?? undefined,
       contentPillar: (r.content_pillar as string | null) ?? undefined,
+      metricsChecked24hAt: r.metrics_checked_24h_at
+        ? new Date(r.metrics_checked_24h_at as string)
+        : undefined,
+      metricsChecked7dAt: r.metrics_checked_7d_at
+        ? new Date(r.metrics_checked_7d_at as string)
+        : undefined,
+      likesCount: (r.likes_count as number | null) ?? undefined,
+      viewsCount: (r.views_count as number | null) ?? undefined,
+      commentsCount: (r.comments_count as number | null) ?? undefined,
+      sharesCount: (r.shares_count as number | null) ?? undefined,
+      engagementRaw: r.engagement_raw ? JSON.parse(r.engagement_raw as string) : undefined,
     };
   }
 

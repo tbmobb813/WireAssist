@@ -7,7 +7,12 @@ export { AIClient } from './client';
 export { ConversationStore, MessageStore, SettingsStore, SearchEngine, TaskStore } from './storage';
 
 // Context building
-export { ContextBuilder } from './context';
+export {
+  ContextBuilder,
+  loadBusinessProfile,
+  saveBusinessProfile,
+  businessProfilePath,
+} from './context';
 
 // Privacy controls
 export { PrivacyController, AuditLogger, ConversationEncryption } from './privacy';

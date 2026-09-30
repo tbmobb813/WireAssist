@@ -369,6 +369,26 @@ export const ADMIN_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
       required: ['request'],
     },
   },
+  update_business_profile_skill: {
+    name: 'update_business_profile_skill',
+    description:
+      "Save the shared business profile — a markdown document about Jason's business context " +
+      'that every agent (not just you) gets in its own system prompt, shown to you under ' +
+      '"BUSINESS PROFILE" above. This call fully REPLACES the file, so always pass the complete ' +
+      'profile (current content plus whatever changed), never just the new fragment. Use this ' +
+      'after Jason describes or updates his venture(s), audience, offers, or goals.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        content: {
+          type: 'string',
+          description:
+            'The complete business profile markdown to save, replacing the current file.',
+        },
+      },
+      required: ['content'],
+    },
+  },
 };
 
 // Skill-tool names dispatched via invokeSkill() rather than useTool() — see
@@ -383,6 +403,7 @@ export const ADMIN_SKILL_TOOLS = new Set<string>([
   'email_triage_skill',
   'calendar_review_skill',
   'propose_skill_skill',
+  'update_business_profile_skill',
 ]);
 
 // Tool names that only ever read data — safe to execute immediately in the

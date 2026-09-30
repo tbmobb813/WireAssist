@@ -422,3 +422,55 @@ describe('TrendPostStorage — hashtag groups', () => {
     expect(storage.listHashtagGroups()).toEqual([]);
   });
 });
+
+// ── Scoreboard metrics ───────────────────────────────────────────────────
+
+describe('TrendPostStorage — recordMetric() / listMetrics()', () => {
+  it('records a metric and lists it back', () => {
+    const storage = freshStorage();
+    storage.recordMetric({ date: '2026-01-01', source: 'content', metric: 'likes', value: 10 });
+    const rows = storage.listMetrics();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      date: '2026-01-01',
+      source: 'content',
+      metric: 'likes',
+      value: 10,
+    });
+  });
+
+  it('upserts on (date, source, metric) instead of duplicating', () => {
+    const storage = freshStorage();
+    storage.recordMetric({ date: '2026-01-01', source: 'content', metric: 'likes', value: 10 });
+    storage.recordMetric({ date: '2026-01-01', source: 'content', metric: 'likes', value: 42 });
+    const rows = storage.listMetrics();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].value).toBe(42);
+  });
+
+  it('keeps separate rows for different sources/metrics on the same date', () => {
+    const storage = freshStorage();
+    storage.recordMetric({ date: '2026-01-01', source: 'content', metric: 'likes', value: 10 });
+    storage.recordMetric({ date: '2026-01-01', source: 'leads', metric: 'signups', value: 3 });
+    expect(storage.listMetrics()).toHaveLength(2);
+  });
+
+  it('filters by source', () => {
+    const storage = freshStorage();
+    storage.recordMetric({ date: '2026-01-01', source: 'content', metric: 'likes', value: 10 });
+    storage.recordMetric({ date: '2026-01-01', source: 'leads', metric: 'signups', value: 3 });
+    const rows = storage.listMetrics({ source: 'leads' });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].source).toBe('leads');
+  });
+
+  it('filters by date range', () => {
+    const storage = freshStorage();
+    storage.recordMetric({ date: '2026-01-01', source: 'content', metric: 'likes', value: 1 });
+    storage.recordMetric({ date: '2026-01-10', source: 'content', metric: 'likes', value: 2 });
+    storage.recordMetric({ date: '2026-01-20', source: 'content', metric: 'likes', value: 3 });
+    const rows = storage.listMetrics({ from: '2026-01-05', to: '2026-01-15' });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].date).toBe('2026-01-10');
+  });
+});

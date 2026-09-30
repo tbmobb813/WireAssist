@@ -206,4 +206,32 @@ export const ContentTasks = {
       objectiveId,
     };
   },
+
+  checkPostMetrics(objectiveId?: string): AgentTask {
+    return {
+      id: randomUUID(),
+      agentRole: 'content',
+      description: 'Check real engagement for posts due a 24h/7d metrics check',
+      status: 'queued',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      input: { type: 'check_post_metrics' },
+      approvalRequired: false,
+      objectiveId,
+    };
+  },
+
+  syncScoreboardMetrics(objectiveId?: string): AgentTask {
+    return {
+      id: randomUUID(),
+      agentRole: 'content',
+      description: "Roll up published posts' engagement into today's scoreboard totals",
+      status: 'queued',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      input: { type: 'sync_scoreboard_metrics' },
+      approvalRequired: false,
+      objectiveId,
+    };
+  },
 };

@@ -781,7 +781,9 @@ it analyzes every post published in the last 30 days (default) via
 working, what's falling flat, one concrete thing to try next. Unlike the
 deterministic nudges above, this always has something to say — even a quiet
 period with zero published posts gets a real note about it — so it always
-pings Telegram, never silently skips.
+pings Telegram, never silently skips. Real engagement numbers (see section 24) are included next to `content_analyze`'s LLM-guessed
+`estimatedEngagement` where available — set up section 24's cron too, or
+this retro is working from a guess alone.
 
 Requires `ANTHROPIC_API_KEY` configured, and costs real LLM calls (one
 `content_analyze` per published post, plus one `think()` synthesis) — unlike
@@ -924,6 +926,101 @@ first Admin-agent task that touches Drive triggers one automatic
 re-authorization — same `hasRequiredScopes()` check that already handles
 the Calendar and Sheets scope additions in section 4. No manual action
 needed beyond completing that one re-auth prompt when it appears.
+
+## 24. Real post metrics (check-post-metrics)
+
+`dev/check-post-metrics.sh` triggers the Content Agent's
+`check_post_metrics` task — for every published post that's hit its 24h or
+7d mark since publishing and hasn't been checked for that window yet, it
+fetches real engagement (likes/views/comments/shares) from the post's real
+platform (Twitter v2, LinkedIn socialActions, Meta Graph API) and stores it
+on the post. Section 18's `content_retro` includes these real numbers next
+to its LLM-guessed `estimatedEngagement` where available, instead of
+relying solely on the guess.
+
+Like auto-publish (section 14) and unlike content-retro, this never calls
+the LLM — it's a mechanical fetch-and-store sweep, so it works even before
+`ANTHROPIC_API_KEY` is configured. A platform fetch that fails (missing
+scope, rate limit, bad credentials) is recorded as an error on that post
+rather than retried or allowed to abort the rest of the sweep — check a
+post's raw payload on the Content page if its metrics never show up.
+
+**Known real constraints, not guarantees this will work everywhere:**
+LinkedIn's `w_member_social` scope (used for publishing) does not include
+reading `socialActions` — this will likely fail until the token is granted
+a broader scope. Twitter's free/basic API tier often excludes
+`public_metrics` reads entirely. Meta (Facebook/Instagram) is the most
+likely to work with the same page/IG token already used to publish,
+though Instagram still needs `instagram_manage_insights` on that token.
+
+**Cron entry** (hourly — no fixed-minute deadline like a scheduled post
+has; this is about catching the 24h/7d marks promptly, not urgency):
+
+```bash
+crontab -e
+# add:
+0 * * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/check-post-metrics.sh >> /var/log/wireassist-check-post-metrics.log 2>&1
+```
+
+No `jq` needed (no request body). Run it manually once first
+(`WIREASSIST_API_URL=http://localhost:3002 ./dev/check-post-metrics.sh`) to
+confirm it queues successfully before trusting it to cron.
+
+## 25. Growth scoreboard (content metrics + lead signups + weekly digest)
+
+Three jobs feed one normalized `metrics` table (date, source, metric,
+value — see storage.ts) that answers "what's actually working," not just
+"what agents did":
+
+- **`dev/sync-scoreboard-metrics.sh`** (Content Agent, `sync_scoreboard_metrics`)
+  — daily, rolls up every published post's currently-known engagement
+  (from section 24's hourly checks) into today's content totals. No setup
+  needed — works off data section 24 already collects.
+- **`dev/sync-lead-signups.sh`** (Admin Agent, `sync_lead_signups`) —
+  daily, pulls the last 24h of signups from the lead-capture-service's
+  Supabase `leads` table. **Requires the Supabase credential setup below
+  before it records anything real.**
+- **`dev/scoreboard-digest.sh`** (Admin Agent, `scoreboard_digest`) —
+  weekly, synthesizes both sources into a short digest: what moved, any
+  real win, one suggested action. Requires `ANTHROPIC_API_KEY`; the two
+  sync jobs above don't.
+
+### Supabase credential setup (required for lead signups)
+
+`SUPABASE_URL`/`SUPABASE_ANON_KEY` here must be a **read-only** path into
+the lead-capture-service's project — never the `service_role`/secret key
+that project's own backend uses, which bypasses Row Level Security
+entirely and can read or write anything.
+
+1. In the Supabase dashboard for that project (Table Editor → `leads`),
+   enable Row Level Security if it isn't already on.
+2. Add a SELECT-only policy for the `anon` role (e.g. `USING (true)` — the
+   `leads` table holds only email/source/sequence state; scope the policy
+   tighter later if that changes).
+3. Copy the project's **anon/public** key (Project Settings → API) — not
+   `service_role` — into `SUPABASE_ANON_KEY`. Set `SUPABASE_URL` to the
+   project's URL (e.g. `https://<ref>.supabase.co`).
+
+Without RLS + that policy, the anon key can read (or, with RLS off
+entirely, write) far more than intended — don't skip step 1/2 to save
+time.
+
+**Cron entries:**
+
+```bash
+crontab -e
+# add:
+0 6 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/sync-scoreboard-metrics.sh >> /var/log/wireassist-sync-scoreboard-metrics.log 2>&1
+0 6 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/sync-lead-signups.sh >> /var/log/wireassist-sync-lead-signups.log 2>&1
+0 8 * * 1 cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/scoreboard-digest.sh >> /var/log/wireassist-scoreboard-digest.log 2>&1
+```
+
+No `jq` needed (no request bodies). Run each manually once first to
+confirm it queues successfully before trusting it to cron — for
+`sync-lead-signups.sh`, check the task's actual outcome (not just that it
+queued) to confirm the Supabase credential is working, since a missing/bad
+credential still returns a 200 queued response and only fails inside the
+task itself.
 
 ## Updating after a code change
 

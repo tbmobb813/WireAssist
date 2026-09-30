@@ -17,6 +17,9 @@ import { travelItinerarySkill } from './travel-itinerary';
 import { expenseDigestSkill } from './expense-digest';
 import { meetingFollowupSkill } from './meeting-followup';
 import { draftDocumentSkill } from './draft-document';
+import { updateBusinessProfileSkill } from './update-business-profile';
+import { syncLeadSignupsSkill } from './sync-lead-signups';
+import { scoreboardDigestSkill } from './scoreboard-digest';
 
 export const ADMIN_SKILLS: Skill[] = [
   emailTriageSkill,
@@ -37,6 +40,9 @@ export const ADMIN_SKILLS: Skill[] = [
   expenseDigestSkill,
   meetingFollowupSkill,
   draftDocumentSkill,
+  updateBusinessProfileSkill,
+  syncLeadSignupsSkill,
+  scoreboardDigestSkill,
 ];
 
 export {
@@ -58,5 +64,8 @@ export {
   expenseDigestSkill,
   meetingFollowupSkill,
   draftDocumentSkill,
+  updateBusinessProfileSkill,
+  syncLeadSignupsSkill,
+  scoreboardDigestSkill,
 };
 export { proposeOrAutoApprove, proposeBatchOrAutoApprove } from './propose-or-auto-approve';

@@ -186,6 +186,11 @@ const ADMIN_TOOLS = [
   'drive_update_file',
   'drive_read_file',
   'drive_search_files',
+  // Scoreboard (see trendpost-mcp/src/tools.ts) — no chat-facing schema
+  // entries needed, driven only by sync_lead_signups/scoreboard_digest.
+  'record_metric',
+  'list_metrics',
+  'fetch_lead_signups',
 ];
 
 export class AdminAgent extends BaseAgent {
@@ -481,6 +486,8 @@ function describeToolCall(call: ProviderToolCall): string {
       return 'Triage inbox';
     case 'calendar_review_skill':
       return 'Review calendar';
+    case 'update_business_profile_skill':
+      return 'Update shared business profile';
     default:
       return `Run tool "${call.name}"`;
   }

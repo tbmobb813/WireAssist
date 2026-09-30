@@ -26,6 +26,11 @@ set -euo pipefail
 
 API_URL="${WIREASSIST_API_URL:-http://localhost:3002}"
 
+# Self-reports to the Automations screen (Command Center) — best-effort,
+# never blocks the real task below even if this fails (old server, network
+# blip, etc). See automation-log.ts for what reads this.
+curl -fsS -X POST "$API_URL/api/automations/ping/detect-skill-opportunities" >/dev/null 2>&1 || true
+
 echo "[detect-skill-opportunities] Looking for a repeated request pattern..."
 response=$(curl -fsS -X POST "$API_URL/api/tasks/detect-skill-opportunities")
 echo "[detect-skill-opportunities] Queued: $response"

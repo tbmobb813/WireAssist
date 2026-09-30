@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { TrendPostStorage, Platform, PostStatus } from './storage';
-import { publishToPlatform } from './publishers';
+import { publishToPlatform, fetchMetricsForPlatform } from './publishers';
+import { fetchLeadSignupCount } from './leads-client';
 import type { MCPClient } from '@wireassist/core';
 import { logger } from '@wireassist/core/logger';
 
@@ -295,6 +296,80 @@ Return only valid JSON array. No markdown fences.`;
     }
 
     return storage.getPost(postId);
+  });
+
+  // ── POST METRICS ────────────────────────────────────────────────
+  // Two cron-only tools (no chat-facing schema, same as content_publish_post
+  // above), mirroring its list -> per-post-action -> record shape. Used by
+  // agent-content's check_post_metrics skill, which sweeps both the 24h and
+  // 7d windows.
+  mcp.register('content_list_posts_needing_metrics_check', async (params) => {
+    const { window } = params as { window: '24h' | '7d' };
+    return storage.listPostsNeedingMetricsCheck(window);
+  });
+
+  // Swallows a platform-fetch failure into engagement_raw's error field
+  // (same "one bad post shouldn't abort the sweep" reasoning as
+  // content_publish_post) rather than rethrowing — a platform that's
+  // missing a scope or over a rate limit shouldn't block every other
+  // post's check in the same run.
+  mcp.register('content_check_post_metrics', async (params) => {
+    const { postId, window } = params as { postId: string; window: '24h' | '7d' };
+    const post = storage.getPost(postId);
+    if (!post) throw new Error(`No post found with id ${postId}`);
+    if (!post.platformPostId) {
+      storage.recordPostMetrics(postId, window, {});
+      return storage.getPost(postId);
+    }
+
+    try {
+      const metrics = await fetchMetricsForPlatform(
+        post.platform,
+        post.platformPostId,
+        post.account
+      );
+      storage.recordPostMetrics(postId, window, metrics);
+    } catch (err) {
+      storage.recordPostMetrics(postId, window, {
+        raw: { error: err instanceof Error ? err.message : String(err) },
+      });
+    }
+
+    return storage.getPost(postId);
+  });
+
+  // ── SCOREBOARD ───────────────────────────────────────────────────
+  // Cross-cutting, not content-specific despite living in this file (the
+  // `metrics` table is here because that's where the sqlite handle already
+  // is) — record_metric/list_metrics are authorized for both Content
+  // (writes its own engagement numbers) and Admin (writes leads, reads
+  // everything for the weekly digest). See storage.ts's `metrics` table
+  // comment.
+  mcp.register('record_metric', async (params) => {
+    const { date, source, metric, value } = params as {
+      date: string;
+      source: string;
+      metric: string;
+      value: number;
+    };
+    storage.recordMetric({ date, source, metric, value });
+    return { ok: true };
+  });
+
+  mcp.register('list_metrics', async (params) => {
+    const { source, from, to } = params as { source?: string; from?: string; to?: string };
+    return storage.listMetrics({ source, from, to });
+  });
+
+  // Admin-only in practice (see admin-agent.ts's ADMIN_TOOLS) — reads the
+  // lead-capture-service's Supabase `leads` table directly, not via chat's
+  // Supabase MCP connector (that's interactive-only, unreachable from an
+  // unattended cron skill). See leads-client.ts for the required
+  // SUPABASE_URL/SUPABASE_ANON_KEY + RLS setup.
+  mcp.register('fetch_lead_signups', async (params) => {
+    const { sinceISO } = params as { sinceISO: string };
+    const count = await fetchLeadSignupCount(sinceISO);
+    return { count };
   });
 
   // ── SCHEDULE POST ─────────────────────────────────────────────

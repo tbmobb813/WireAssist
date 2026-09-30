@@ -44,24 +44,44 @@ export const contentRetroSkill: Skill<ContentRetroInput, void> = {
       analyzed.push({ post, analysis });
     }
 
+    // Real numbers, where the check-post-metrics sweep (see docs/
+    // DEPLOYMENT.md section 24) has already gathered them — not every post
+    // will have them yet (too recent, no platformPostId, or the platform
+    // fetch failed), so this is additive to content_analyze's guess, never
+    // a replacement for posts still waiting on their 24h/7d check.
+    const formatRealMetrics = (post: ScheduledPost): string | null => {
+      const parts: string[] = [];
+      if (post.likesCount !== undefined) parts.push(`${post.likesCount} likes`);
+      if (post.viewsCount !== undefined) parts.push(`${post.viewsCount} views`);
+      if (post.commentsCount !== undefined) parts.push(`${post.commentsCount} comments`);
+      if (post.sharesCount !== undefined) parts.push(`${post.sharesCount} shares`);
+      return parts.length > 0 ? parts.join(', ') : null;
+    };
+
     const retro = await agent.think(
       analyzed.length === 0
         ? `No posts were published in the last ${daysAgo} days. Write a short, direct note ` +
             `for Jason about this quiet period — ask what's blocking publishing (no ideas queued? ` +
             `no time to review drafts?) rather than assuming, and suggest one concrete next step.`
         : `Write a short, direct performance retro for Jason covering the ${analyzed.length} post(s) ` +
-            `published in the last ${daysAgo} days. Identify what's actually working (cite specific ` +
+            `published in the last ${daysAgo} days. Where real engagement numbers are present, treat ` +
+            `them as ground truth over content_analyze's own estimate — cite the real numbers, not the ` +
+            `guess, when both exist for the same post. Identify what's actually working (cite specific ` +
             `posts, not generic praise), what's falling flat, and one concrete thing to try next — ` +
             `no filler, no "consider experimenting with different content types."\n\n` +
-            `PUBLISHED POSTS (with content_analyze's own quality assessment):\n` +
+            `PUBLISHED POSTS (with content_analyze's own quality assessment, plus real engagement ` +
+            `where it's been checked):\n` +
             analyzed
-              .map(
-                ({ post, analysis }) =>
+              .map(({ post, analysis }) => {
+                const real = formatRealMetrics(post);
+                return (
                   `- [${post.platform}] score ${analysis.score ?? '?'}/10, ` +
-                  `estimated engagement: ${analysis.estimatedEngagement ?? 'unknown'}\n` +
-                  `  "${post.content.slice(0, 200)}"` +
+                  `estimated engagement: ${analysis.estimatedEngagement ?? 'unknown'}` +
+                  (real ? `, REAL engagement: ${real}` : ', real engagement: not checked yet') +
+                  `\n  "${post.content.slice(0, 200)}"` +
                   (analysis.suggestion ? `\n  Suggestion at the time: ${analysis.suggestion}` : '')
-              )
+                );
+              })
               .join('\n')
     );
 
