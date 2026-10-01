@@ -407,6 +407,22 @@ then `gpg --decrypt <file>.tar.gz.gpg > <file>.tar.gz`, then extract into
 a fresh volume the same way `docker run ... busybox tar` was used to
 populate it in step 4.
 
+## Before setting up any cron job below: which port?
+
+Every cron entry in this doc targets `WIREASSIST_API_URL=http://localhost:3001`
+— **not 3002.** `docker-compose.yml` deliberately does not publish port 3002
+(the Hono API) to the host at all; only 3001 (the Next.js command-center,
+bound to `127.0.0.1:3001` and your Tailscale IP) is published, and it proxies
+`/api/*` through to the API internally (see `next.config.ts` and
+`docker-compose.yml`'s own comment). A cron job runs on the host, outside any
+container, so it must talk to the published port — 3002 will simply refuse
+the connection. (3002 is correct only for a bare-metal/non-Docker deployment
+where the Hono server binds that port directly on the host.)
+
+Also replace `/path/to/WireAssist` in every example below with your repo's
+real path (e.g. `/home/jason/WireAssist`) — these are templates, not literal
+commands to paste in as-is.
+
 ## 8. Unattended scheduled runs (heartbeat)
 
 `dev/heartbeat.sh` checks every NixOps workflow's trust stage and, for any
@@ -433,11 +449,11 @@ you intend to run unattended, e.g. in
 ```bash
 crontab -e
 # add:
-0 * * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/heartbeat.sh >> /var/log/wireassist-heartbeat.log 2>&1
+0 * * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/heartbeat.sh >> /var/log/wireassist-heartbeat.log 2>&1
 ```
 
 Requires `jq` (`sudo apt install -y jq`). Run it manually once first
-(`WIREASSIST_API_URL=http://localhost:3002 ./dev/heartbeat.sh`) to confirm
+(`WIREASSIST_API_URL=http://localhost:3001 ./dev/heartbeat.sh`) to confirm
 it skips as expected before trusting it to cron — with no workflow yet at
 Stage 4, it should just print a skip line per workflow and exit cleanly.
 
@@ -460,11 +476,11 @@ this unattended. Installing the cron entry below **is** the opt-in.
 ```bash
 crontab -e
 # add:
-0 7 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/daily-briefing.sh >> /var/log/wireassist-daily-briefing.log 2>&1
+0 7 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/daily-briefing.sh >> /var/log/wireassist-daily-briefing.log 2>&1
 ```
 
 Requires `jq` (`sudo apt install -y jq`), same as the heartbeat script. Run
-it manually once first (`WIREASSIST_API_URL=http://localhost:3002
+it manually once first (`WIREASSIST_API_URL=http://localhost:3001
 ./dev/daily-briefing.sh`) to confirm it queues successfully before trusting
 it to cron.
 
@@ -493,11 +509,11 @@ time to accumulate):
 ```bash
 crontab -e
 # add:
-0 8 * * 1 cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/proactive-insights.sh >> /var/log/wireassist-proactive-insights.log 2>&1
+0 8 * * 1 cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/proactive-insights.sh >> /var/log/wireassist-proactive-insights.log 2>&1
 ```
 
 No `jq` needed (no request body). Run it manually once first
-(`WIREASSIST_API_URL=http://localhost:3002 ./dev/proactive-insights.sh`) to
+(`WIREASSIST_API_URL=http://localhost:3001 ./dev/proactive-insights.sh`) to
 confirm it queues successfully before trusting it to cron.
 
 ## 11. Trust-graduation nudges
@@ -517,11 +533,11 @@ approval streaks need time to accumulate):
 ```bash
 crontab -e
 # add:
-0 8 * * 1 cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/trust-graduation-nudges.sh >> /var/log/wireassist-trust-graduation-nudges.log 2>&1
+0 8 * * 1 cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/trust-graduation-nudges.sh >> /var/log/wireassist-trust-graduation-nudges.log 2>&1
 ```
 
 No `jq` needed (no request body). Run it manually once first
-(`WIREASSIST_API_URL=http://localhost:3002 ./dev/trust-graduation-nudges.sh`)
+(`WIREASSIST_API_URL=http://localhost:3001 ./dev/trust-graduation-nudges.sh`)
 to confirm it queues successfully before trusting it to cron.
 
 ## 12. Budget warning nudge
@@ -541,11 +557,11 @@ further before the monthly reset, so a same-day heads-up matters):
 ```bash
 crontab -e
 # add:
-0 9 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/budget-warning.sh >> /var/log/wireassist-budget-warning.log 2>&1
+0 9 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/budget-warning.sh >> /var/log/wireassist-budget-warning.log 2>&1
 ```
 
 No `jq` needed (no request body). Run it manually once first
-(`WIREASSIST_API_URL=http://localhost:3002 ./dev/budget-warning.sh`) to
+(`WIREASSIST_API_URL=http://localhost:3001 ./dev/budget-warning.sh`) to
 confirm it queues successfully before trusting it to cron.
 
 ## 13. Approval backlog watcher (stale-approval nudges)
@@ -574,11 +590,11 @@ streak):
 ```bash
 crontab -e
 # add:
-0 9 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/stale-approvals.sh >> /var/log/wireassist-stale-approvals.log 2>&1
+0 9 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/stale-approvals.sh >> /var/log/wireassist-stale-approvals.log 2>&1
 ```
 
 No `jq` needed (no request body). Run it manually once first
-(`WIREASSIST_API_URL=http://localhost:3002 ./dev/stale-approvals.sh`) to
+(`WIREASSIST_API_URL=http://localhost:3001 ./dev/stale-approvals.sh`) to
 confirm it queues successfully before trusting it to cron.
 
 ## 14. Auto-publish scheduled posts
@@ -607,12 +623,12 @@ work with, so a coarser cadence would mean posts going out late):
 ```bash
 crontab -e
 # add:
-*/5 * * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/auto-publish.sh >> /var/log/wireassist-auto-publish.log 2>&1
+*/5 * * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/auto-publish.sh >> /var/log/wireassist-auto-publish.log 2>&1
 ```
 
 No `jq` needed (no request body). **Before enabling this cron entry**,
 schedule a real test post via the Content page and manually run
-(`WIREASSIST_API_URL=http://localhost:3002 ./dev/auto-publish.sh`) to
+(`WIREASSIST_API_URL=http://localhost:3001 ./dev/auto-publish.sh`) to
 confirm it actually publishes and the post's status flips to `published` —
 ideally against a throwaway/test account on each platform first, since
 none of Twitter or LinkedIn offer a real sandbox for posting (Meta does —
@@ -713,11 +729,11 @@ approval sitting unread):
 ```bash
 crontab -e
 # add:
-0 8 * * 1 cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/objective-health-check.sh >> /var/log/wireassist-objective-health-check.log 2>&1
+0 8 * * 1 cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/objective-health-check.sh >> /var/log/wireassist-objective-health-check.log 2>&1
 ```
 
 No `jq` needed (no request body). Run it manually once first
-(`WIREASSIST_API_URL=http://localhost:3002 ./dev/objective-health-check.sh`)
+(`WIREASSIST_API_URL=http://localhost:3001 ./dev/objective-health-check.sh`)
 to confirm it queues successfully before trusting it to cron.
 
 ## 16. Stale PR nudge
@@ -735,11 +751,11 @@ streak, matching stale-approval nudges' reasoning above):
 ```bash
 crontab -e
 # add:
-0 9 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/stale-prs.sh >> /var/log/wireassist-stale-prs.log 2>&1
+0 9 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/stale-prs.sh >> /var/log/wireassist-stale-prs.log 2>&1
 ```
 
 No `jq` needed (no request body). Run it manually once first
-(`WIREASSIST_API_URL=http://localhost:3002 ./dev/stale-prs.sh`) to confirm
+(`WIREASSIST_API_URL=http://localhost:3001 ./dev/stale-prs.sh`) to confirm
 it queues successfully before trusting it to cron — requires GitHub
 credentials already configured (section 4).
 
@@ -766,11 +782,11 @@ a day at an arbitrary time):
 ```bash
 crontab -e
 # add:
-*/30 * * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/meeting-prep.sh >> /var/log/wireassist-meeting-prep.log 2>&1
+*/30 * * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/meeting-prep.sh >> /var/log/wireassist-meeting-prep.log 2>&1
 ```
 
 No `jq` needed (no request body). Run it manually once first
-(`WIREASSIST_API_URL=http://localhost:3002 ./dev/meeting-prep.sh`) to
+(`WIREASSIST_API_URL=http://localhost:3001 ./dev/meeting-prep.sh`) to
 confirm it queues successfully before trusting it to cron.
 
 ## 18. Content performance retro
@@ -795,11 +811,11 @@ other nudge in this doc):
 ```bash
 crontab -e
 # add:
-0 8 1 * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/content-retro.sh >> /var/log/wireassist-content-retro.log 2>&1
+0 8 1 * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/content-retro.sh >> /var/log/wireassist-content-retro.log 2>&1
 ```
 
 No `jq` needed (no request body). Run it manually once first
-(`WIREASSIST_API_URL=http://localhost:3002 ./dev/content-retro.sh`) to
+(`WIREASSIST_API_URL=http://localhost:3001 ./dev/content-retro.sh`) to
 confirm it queues successfully before trusting it to cron.
 
 ## 19. Autonomous pattern-detection nudge
@@ -829,11 +845,11 @@ proactive-insights/trust-graduation-nudges above):
 ```bash
 crontab -e
 # add:
-0 8 * * 2 cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/detect-skill-opportunities.sh >> /var/log/wireassist-detect-skill-opportunities.log 2>&1
+0 8 * * 2 cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/detect-skill-opportunities.sh >> /var/log/wireassist-detect-skill-opportunities.log 2>&1
 ```
 
 No `jq` needed (no request body). Run it manually once first
-(`WIREASSIST_API_URL=http://localhost:3002 ./dev/detect-skill-opportunities.sh`)
+(`WIREASSIST_API_URL=http://localhost:3001 ./dev/detect-skill-opportunities.sh`)
 to confirm it queues successfully before trusting it to cron.
 
 ## 20. Travel itinerary digest
@@ -853,11 +869,11 @@ the stale-PR nudge):
 ```bash
 crontab -e
 # add:
-0 7 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/travel-itinerary.sh >> /var/log/wireassist-travel-itinerary.log 2>&1
+0 7 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/travel-itinerary.sh >> /var/log/wireassist-travel-itinerary.log 2>&1
 ```
 
 No `jq` needed (no request body). Run it manually once first
-(`WIREASSIST_API_URL=http://localhost:3002 ./dev/travel-itinerary.sh`) to
+(`WIREASSIST_API_URL=http://localhost:3001 ./dev/travel-itinerary.sh`) to
 confirm it queues successfully before trusting it to cron.
 
 ## 21. Expense digest
@@ -877,11 +893,11 @@ daily/weekly nudge, same reasoning as content-retro above):
 ```bash
 crontab -e
 # add:
-0 8 2 * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/expense-digest.sh >> /var/log/wireassist-expense-digest.log 2>&1
+0 8 2 * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/expense-digest.sh >> /var/log/wireassist-expense-digest.log 2>&1
 ```
 
 No `jq` needed (no request body). Run it manually once first
-(`WIREASSIST_API_URL=http://localhost:3002 ./dev/expense-digest.sh`) to
+(`WIREASSIST_API_URL=http://localhost:3001 ./dev/expense-digest.sh`) to
 confirm it queues successfully before trusting it to cron.
 
 ## 22. Meeting follow-up
@@ -903,11 +919,11 @@ meeting ends, not once a day at an arbitrary time):
 ```bash
 crontab -e
 # add:
-*/30 * * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/meeting-followup.sh >> /var/log/wireassist-meeting-followup.log 2>&1
+*/30 * * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/meeting-followup.sh >> /var/log/wireassist-meeting-followup.log 2>&1
 ```
 
 No `jq` needed (no request body). Run it manually once first
-(`WIREASSIST_API_URL=http://localhost:3002 ./dev/meeting-followup.sh`) to
+(`WIREASSIST_API_URL=http://localhost:3001 ./dev/meeting-followup.sh`) to
 confirm it queues successfully before trusting it to cron.
 
 ## 23. Document drafting (Drive)
@@ -959,11 +975,11 @@ has; this is about catching the 24h/7d marks promptly, not urgency):
 ```bash
 crontab -e
 # add:
-0 * * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/check-post-metrics.sh >> /var/log/wireassist-check-post-metrics.log 2>&1
+0 * * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/check-post-metrics.sh >> /var/log/wireassist-check-post-metrics.log 2>&1
 ```
 
 No `jq` needed (no request body). Run it manually once first
-(`WIREASSIST_API_URL=http://localhost:3002 ./dev/check-post-metrics.sh`) to
+(`WIREASSIST_API_URL=http://localhost:3001 ./dev/check-post-metrics.sh`) to
 confirm it queues successfully before trusting it to cron.
 
 ## 25. Growth scoreboard (content metrics + lead signups + weekly digest)
@@ -1010,9 +1026,9 @@ time.
 ```bash
 crontab -e
 # add:
-0 6 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/sync-scoreboard-metrics.sh >> /var/log/wireassist-sync-scoreboard-metrics.log 2>&1
-0 6 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/sync-lead-signups.sh >> /var/log/wireassist-sync-lead-signups.log 2>&1
-0 8 * * 1 cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3002 ./dev/scoreboard-digest.sh >> /var/log/wireassist-scoreboard-digest.log 2>&1
+0 6 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/sync-scoreboard-metrics.sh >> /var/log/wireassist-sync-scoreboard-metrics.log 2>&1
+0 6 * * * cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/sync-lead-signups.sh >> /var/log/wireassist-sync-lead-signups.log 2>&1
+0 8 * * 1 cd /path/to/WireAssist && WIREASSIST_API_URL=http://localhost:3001 ./dev/scoreboard-digest.sh >> /var/log/wireassist-scoreboard-digest.log 2>&1
 ```
 
 No `jq` needed (no request bodies). Run each manually once first to
