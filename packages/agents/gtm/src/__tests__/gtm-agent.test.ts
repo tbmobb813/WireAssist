@@ -49,6 +49,13 @@ const PSYCH_JSON = JSON.stringify([
   },
 ]);
 
+const PROPOSE_DRAFT = `SKILL_NAME: Pricing Comparator
+FILENAME: pricing-comparator.ts
+SUMMARY: Compares pricing tiers against named competitors.
+\`\`\`ts
+export const pricingComparatorSkill = { name: 'pricing_comparator' };
+\`\`\``;
+
 function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
   return {
     id: 'task-g1',
@@ -236,6 +243,86 @@ describe('GtmAgent — composable skill-tools in the chat loop', () => {
       'agent:gtm_psych_generated',
       expect.objectContaining({ taskId: 'task-g1' })
     );
+  });
+
+  // propose_skill_skill reaches the registered `propose_skill` skill only via
+  // the `/_skill$/` strip in executeToolCall() — these cover that dispatch.
+  it('executeToolCall() dispatches propose_skill_skill to the propose_skill skill; its own approval gate (not an outer "Call tool" gate) hands off to GitHub', async () => {
+    const deps = makeDeps();
+    const agent = new GtmAgent(deps);
+    (agent as any).think = jest.fn().mockResolvedValue(PROPOSE_DRAFT);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c4',
+      name: 'propose_skill_skill',
+      input: { request: 'a skill that compares pricing' },
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.result).toEqual({
+      taskId: 'task-g1',
+      response: expect.stringContaining('Pricing Comparator'),
+    });
+    // Exactly one gate: the skill's own proposeAction() for the drafted code.
+    expect(deps.approval.request).toHaveBeenCalledTimes(1);
+    expect(deps.approval.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: expect.stringContaining('Draft new skill "Pricing Comparator"'),
+      })
+    );
+    expect(deps.events.emit).toHaveBeenCalledWith(
+      'agent:handoff_requested',
+      expect.objectContaining({
+        task: expect.objectContaining({
+          agentRole: 'github',
+          input: expect.objectContaining({
+            prompt: expect.stringContaining(
+              'packages/agents/gtm/src/skills/proposed/pricing-comparator.ts'
+            ),
+          }),
+        }),
+      })
+    );
+  });
+
+  it('executeToolCall() propose_skill_skill: a vague request returns the clarifying question with no approval and no handoff', async () => {
+    const deps = makeDeps();
+    const agent = new GtmAgent(deps);
+    (agent as any).think = jest
+      .fn()
+      .mockResolvedValue('CLARIFICATION_NEEDED: Which competitors should it compare?');
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c5',
+      name: 'propose_skill_skill',
+      input: { request: 'make me better' },
+    });
+
+    expect(result).toEqual({
+      result: { taskId: 'task-g1', response: 'Which competitors should it compare?' },
+      isError: false,
+    });
+    expect(deps.approval.request).not.toHaveBeenCalled();
+    expect(deps.events.emit).not.toHaveBeenCalledWith('agent:handoff_requested', expect.anything());
+  });
+
+  it('executeToolCall() propose_skill_skill: declining the draft emits no handoff', async () => {
+    const deps = makeDeps({ approval: { request: jest.fn().mockResolvedValue(false) } });
+    const agent = new GtmAgent(deps);
+    (agent as any).think = jest.fn().mockResolvedValue(PROPOSE_DRAFT);
+
+    const result = await (agent as any).executeToolCall(makeTask(), {
+      id: 'c6',
+      name: 'propose_skill_skill',
+      input: { request: 'a skill that compares pricing' },
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.result).toEqual({
+      taskId: 'task-g1',
+      response: 'Declined — not proposing this skill.',
+    });
+    expect(deps.events.emit).not.toHaveBeenCalledWith('agent:handoff_requested', expect.anything());
   });
 
   it('exposes both skill-tools in config.toolSchemas, but never treats them as MCP-authorized', () => {
