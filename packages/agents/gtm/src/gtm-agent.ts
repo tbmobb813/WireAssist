@@ -84,9 +84,12 @@ export class GtmAgent extends BaseAgent {
       }
 
       if (GTM_SKILL_TOOLS.has(call.name)) {
-        // Both skill-tools only generate strategy/copy — GTM never takes a
-        // real-world action (see system prompt) — so dispatch immediately
-        // rather than approval-gating a call that has nothing to approve.
+        // generate_gtm/generate_psych only generate strategy/copy, so there is
+        // nothing to approval-gate here. propose_skill can start a PR handoff,
+        // but it gates that itself via proposeAction() on the drafted code, so
+        // no outer "Call tool" gate is needed for any of the three.
+        // The suffix strip maps tool names to skill names: propose_skill_skill
+        // -> propose_skill (only the final `_skill` is removed).
         const skillName = call.name.replace(/_skill$/, '');
         return { result: await this.invokeSkill(task, skillName, call.input), isError: false };
       }
