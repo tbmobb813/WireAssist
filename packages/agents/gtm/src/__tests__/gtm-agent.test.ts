@@ -114,6 +114,15 @@ describe('GtmAgent — chat tool-calling loop', () => {
     );
   });
 
+  it('system prompt does not force JSON on conversational replies', () => {
+    const agent = new GtmAgent(makeDeps());
+    const prompt: string = (agent as any).config.systemPrompt;
+    expect(prompt).not.toMatch(/valid JSON, no markdown fences/);
+    expect(prompt).toMatch(/plain, specific prose/);
+    // The no-real-world-action guarantee must survive the rewording.
+    expect(prompt).toMatch(/never take real-world action/);
+  });
+
   it('config.tools stays empty — GTM has no raw MCP tools, only skill-tools', () => {
     const agent = new GtmAgent(makeDeps());
     expect((agent as any).config.tools).toEqual([]);
