@@ -43,7 +43,7 @@
     "@typescript-eslint/parser": "^8.71.0",
     "typescript": "^5.9.3",
     "jest": "^30.4.2",
-    "@swc/core": "^1.16.1",
+    "@swc/core": "^1.16.13",
     "@swc/jest": "^0.2.39",
     "eslint": "^10.8.1",
     "@eslint/js": "^10.0.1",
