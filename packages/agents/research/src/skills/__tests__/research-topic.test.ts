@@ -451,6 +451,11 @@ describe('researchTopicSkill — one-off live lookups do not ask to store findin
     'top headlines this morning',
     'what is the weather',
     'Yankees score',
+    'bitcoin exchange rate',
+    'is the RTX 4090 in stock',
+    'forecast for this weekend',
+    'what happened yesterday in the markets',
+    'pizza places open now near me',
   ])('skips the store prompt for "%s"', async (query) => {
     const agent = await run(query);
     expect(agent.proposeAction).not.toHaveBeenCalled();
@@ -471,7 +476,13 @@ describe('researchTopicSkill — one-off live lookups do not ask to store findin
   });
 
   it('still offers to store ordinary research, even when it mentions "latest" or "current"', async () => {
-    for (const query of ['AI trends', 'latest trends in AI agents', 'current state of RAG']) {
+    for (const query of [
+      'AI trends',
+      'latest trends in AI agents',
+      'current state of RAG',
+      'quotes about patience for a carousel',
+      'success rate of cold email',
+    ]) {
       expect((await run(query)).proposeAction).toHaveBeenCalledTimes(1);
     }
     // A month-or-longer freshness window is research, not a lookup.

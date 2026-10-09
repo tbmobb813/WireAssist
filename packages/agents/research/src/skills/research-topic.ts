@@ -53,8 +53,45 @@ function isLivePriceQuery(query: string): boolean {
 // question look like it needed a decision, and "couldn't confirm" answers
 // were being offered up as memories. Deliberately narrower than "anything
 // time-flavoured": "latest AI trends" is real research and still offers to save.
-const LIVE_LOOKUP_PATTERN =
-  /\bprice\b|\bcost\b|how much (is|does|would|will)|\$\d|\bright now\b|\btoday\b|\btonight\b|\bnews\b|\bheadlines?\b|\bstock\b|\bweather\b|\bscores?\b/i;
+//
+// Left out on purpose because they also describe real research: "latest",
+// "current", "now" alone, "rate", "status", "live", "results", "available",
+// and a bare "quote" (content briefs ask for quotes).
+const LIVE_LOOKUP_WORDS = [
+  // price
+  '\\bprice\\b',
+  '\\bcost\\b',
+  'how much (is|does|would|will)',
+  '\\$\\d',
+  '\\bexchange rate\\b',
+  '\\bmarket cap\\b',
+  '\\btrading at\\b',
+  '\\bin stock\\b',
+  '\\bavailability\\b',
+  // markets
+  '\\bstock\\b',
+  '\\bticker\\b',
+  '\\b(bitcoin|ethereum|crypto)\\b',
+  // time
+  '\\bright now\\b',
+  '\\btoday\\b',
+  '\\btonight\\b',
+  '\\bthis (morning|afternoon|week)\\b',
+  '\\b(yesterday|tomorrow)\\b',
+  '\\bbreaking\\b',
+  // news, weather, sports, local
+  '\\bnews\\b',
+  '\\bheadlines?\\b',
+  '\\bweather\\b',
+  '\\bforecast\\b',
+  '\\bscores?\\b',
+  '\\bstandings\\b',
+  '\\bwho won\\b',
+  '\\bopen now\\b',
+  '\\bnear me\\b',
+  '\\btraffic\\b',
+];
+const LIVE_LOOKUP_PATTERN = new RegExp(LIVE_LOOKUP_WORDS.join('|'), 'i');
 
 function isLiveLookup(query: string, freshness?: string): boolean {
   return LIVE_LOOKUP_PATTERN.test(query) || freshness === 'pd' || freshness === 'pw';
