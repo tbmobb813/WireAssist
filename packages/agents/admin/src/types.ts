@@ -30,6 +30,9 @@ export interface ProposedAction {
   // so this must always match a name registered in mcp-setup.ts.
   type: string;
   label: string;
+  // Why the agent proposed this, shown on the approval card. Kept outside
+  // `payload` on purpose: payload is passed verbatim to the tool on approval.
+  reason?: string;
   payload: Record<string, unknown>;
 }
 
