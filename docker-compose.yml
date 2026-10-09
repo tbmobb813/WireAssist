@@ -46,5 +46,39 @@ services:
       command-center:
         condition: service_healthy
 
+  # Google sign-in for public access (docs/DEPLOYMENT.md section 6c). Opt-in:
+  # only starts with `docker compose --profile public up -d oauth2-proxy`, so
+  # a Tailscale-only deploy is unaffected. Caddy on the host calls it on
+  # loopback to authenticate each request before proxying to the web UI.
+  oauth2-proxy:
+    profiles: ['public']
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:4180:4180'
+    environment:
+      OAUTH2_PROXY_PROVIDER: google
+      # Set these three in .env (not committed). Empty defaults here keep the
+      # compose file valid for stacks that never use the `public` profile.
+      OAUTH2_PROXY_CLIENT_ID: ${OAUTH2_PROXY_CLIENT_ID:-}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:-}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:-}
+      OAUTH2_PROXY_REDIRECT_URL: https://wireassist.techtrendwire.com/oauth2/callback
+      # Who may sign in: exactly the addresses in this file. Do NOT also set
+      # OAUTH2_PROXY_EMAIL_DOMAINS — a domain match is accepted in addition
+      # to the file, and "*" would admit any Google account.
+      OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: /etc/oauth2-proxy/emails.txt
+      # Auth-only mode: Caddy does the proxying, oauth2-proxy just answers
+      # "is this request signed in?" on /oauth2/auth.
+      OAUTH2_PROXY_UPSTREAMS: static://202
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      OAUTH2_PROXY_REVERSE_PROXY: 'true'
+      OAUTH2_PROXY_SET_XAUTHREQUEST: 'true'
+      OAUTH2_PROXY_COOKIE_SECURE: 'true'
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: 'true'
+      OAUTH2_PROXY_SILENCE_PING_LOGGING: 'true'
+    volumes:
+      - ./oauth2-allowed-emails.txt:/etc/oauth2-proxy/emails.txt:ro
+
 volumes:
   wireassist-data:

@@ -1,12 +1,48 @@
-# Optional reverse proxy for the Hostinger VPS deploy — only needed if you
-# point a domain at the box and want automatic HTTPS in front of the web UI.
-# Not used by docker-compose.yml; wire it in manually (see docs/DEPLOYMENT.md)
-# once you have a domain, since Caddy needs one to issue a cert.
+# Reverse proxy for the Hostinger VPS deploy — HTTPS + Google sign-in in front
+# of the web UI, for reaching it from networks that block Tailscale.
+# Not used by docker-compose.yml; install Caddy on the host and copy this to
+# /etc/caddy/Caddyfile (see docs/DEPLOYMENT.md section 6c).
 #
 # Next.js already proxies /api/* to the Hono API inside the container
 # (see packages/command-center/next.config.ts), so port 3001 is the only
-# thing that needs to be exposed publicly — 3002 should stay unpublished.
+# thing that needs to be exposed — 3002 stays unpublished.
 #
-# your-domain.example {
-# 	reverse_proxy localhost:3001
-# }
+# The app has no login of its own (Tailscale used to be the lock), so every
+# request except the /oauth2/* sign-in flow is checked against oauth2-proxy
+# (docker-compose.yml, `public` profile) before it reaches the UI.
+# Don't point this at the app without oauth2-proxy running: anyone with the
+# URL would get the agents, including their approval queue.
+
+wireassist.techtrendwire.com {
+	route {
+		# Sign-in, callback and sign-out are handled by oauth2-proxy itself.
+		reverse_proxy /oauth2/* 127.0.0.1:4180 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-Uri {uri}
+		}
+
+		# Everything else must carry a valid session; if not, bounce through
+		# Google and come back to the page that was asked for.
+		forward_auth 127.0.0.1:4180 {
+			uri /oauth2/auth
+			header_up X-Real-IP {remote_host}
+
+			@unauthenticated status 401
+			handle_response @unauthenticated {
+				redir * /oauth2/sign_in?rd={uri} 302
+			}
+		}
+
+		# flush_interval -1: don't buffer — /api/events is a live SSE stream.
+		reverse_proxy 127.0.0.1:3001 {
+			flush_interval -1
+		}
+	}
+
+	# Next's own compression is off (next.config.ts) so Caddy does it, except
+	# on the SSE stream, which compression would hold back.
+	@compressible not path /api/events
+	encode @compressible zstd gzip
+
+	header Strict-Transport-Security "max-age=31536000"
+}
