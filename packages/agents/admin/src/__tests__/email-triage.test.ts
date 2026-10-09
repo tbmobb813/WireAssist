@@ -161,6 +161,35 @@ describe('emailTriageSkill — model reply handling', () => {
     }
   });
 
+  it('carries the urgent reason on the proposed action, outside the tool payload', async () => {
+    const reply = JSON.stringify({
+      categories: {
+        urgent: [
+          { threadId: 't1', from: 'a@example.com', subject: 'hi', reason: 'Invoice due Friday' },
+        ],
+        replyNeeded: [],
+        fyi: [],
+        ignore: [],
+      },
+      summary: 'One urgent.',
+    });
+    const { handle } = makeHandle([ok(reply)]);
+    const result = await run(handle);
+    const action = result.proposedActions[0];
+    expect(action.reason).toBe('Invoice due Friday');
+    expect(action.payload).not.toHaveProperty('reason');
+    // What the user is shown for approval includes the reason...
+    expect(handle.proposeAction).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(String),
+      expect.objectContaining({
+        actions: [expect.objectContaining({ reason: 'Invoice due Friday' })],
+      })
+    );
+    // ...but the Gmail tool still receives only its own payload.
+    expect(handle.useTool).toHaveBeenCalledWith('gmail_label_thread', action.payload);
+  });
+
   it('falls back to think() on a handle without thinkDetailed', async () => {
     const { handle, think } = makeHandle([ok(VALID_REPLY)], false);
     const result = await run(handle);

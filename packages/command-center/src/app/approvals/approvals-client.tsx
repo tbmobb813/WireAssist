@@ -72,14 +72,28 @@ function PayloadPreview({ payload }: { payload: Record<string, unknown> }) {
   // batch without ever seeing the drafted content defeats the point of a
   // human-in-the-loop review.
   const batchActions = Array.isArray(payload.actions)
-    ? (payload.actions as { id?: string; label?: string; payload?: Record<string, unknown> }[])
+    ? (
+        payload.actions as {
+          id?: string;
+          label?: string;
+          reason?: string;
+          payload?: Record<string, unknown>;
+        }[]
+      )
         .filter(
-          (a): a is { id?: string; label: string; payload?: Record<string, unknown> } =>
-            typeof a?.label === 'string'
+          (
+            a
+          ): a is {
+            id?: string;
+            label: string;
+            reason?: string;
+            payload?: Record<string, unknown>;
+          } => typeof a?.label === 'string'
         )
         .map((a) => ({
           id: a.id,
           label: a.label,
+          reason: typeof a.reason === 'string' && a.reason.trim() ? a.reason : undefined,
           body: typeof a.payload?.body === 'string' ? a.payload.body : undefined,
         }))
     : undefined;
@@ -129,6 +143,9 @@ function PayloadPreview({ payload }: { payload: Record<string, unknown> }) {
               style={{ borderLeft: '2px solid #1e2040' }}
             >
               <div>{a.label}</div>
+              {a.reason && (
+                <p className="text-xs text-gray-400 mt-1 leading-relaxed">Why: {a.reason}</p>
+              )}
               {a.body &&
                 (a.body.length > 150 ? (
                   <details className="mt-1">
@@ -296,7 +313,14 @@ export default function ApprovalsClient() {
               <div className="px-5 py-4">
                 <PayloadPreview payload={approval.payload} />
 
-                <div className="text-xs text-gray-400 mb-4">{approval.action}</div>
+                {/* A single-action triage approval already lists its label in
+                    the preview above; repeating it here just shows it twice. */}
+                {!(
+                  Array.isArray(approval.payload.actions) &&
+                  (approval.payload.actions as { label?: unknown }[]).some(
+                    (a) => a?.label === approval.action
+                  )
+                ) && <div className="text-xs text-gray-400 mb-4">{approval.action}</div>}
 
                 <details>
                   <summary className="text-xs text-gray-500 mb-2 cursor-pointer hover:text-gray-400">

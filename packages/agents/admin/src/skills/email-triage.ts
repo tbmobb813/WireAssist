@@ -173,6 +173,7 @@ Only return valid JSON. No markdown fences.`;
         id: randomUUID(),
         type: 'gmail_label_thread',
         label: `Mark as URGENT: "${email.subject}"`,
+        reason: typeof email.reason === 'string' && email.reason.trim() ? email.reason : undefined,
         payload: {
           threadId: email.threadId,
           labelName: 'URGENT',
