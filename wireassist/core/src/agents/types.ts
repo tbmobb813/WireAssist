@@ -29,19 +29,15 @@ export interface AgentTask {
   agentRole: AgentRole;
   description: string;
   status:
-    | 'queued'
-    | 'running'
-    | 'awaiting_approval'
-    | 'approved'
-    | 'rejected'
-    | 'complete'
-    | 'failed';
+    'queued' | 'running' | 'awaiting_approval' | 'approved' | 'rejected' | 'complete' | 'failed';
   createdAt: Date;
   updatedAt: Date;
   input: Record<string, unknown>;
   output?: Record<string, unknown>;
   approvalRequired: boolean;
   approvalAction?: string;
+  // Why the task failed, when it did. Persisted alongside the task so History can show it.
+  error?: string;
   // Optional tag linking this task to a cross-agent Objective (see
   // wireassist/core/src/objectives/store.ts). Purely a coordination/tracking
   // tag — never required, never enforced.

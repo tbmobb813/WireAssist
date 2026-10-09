@@ -75,7 +75,7 @@ export class TaskStore {
         task.approvalAction || null,
         task.objectiveId || null,
         delegationChainStr,
-        error || null
+        error ?? task.error ?? null
       );
   }
 
@@ -185,6 +185,7 @@ export class TaskStore {
       approvalRequired: r.approval_required === 1,
       approvalAction: r.approval_action || undefined,
       objectiveId: r.objective_id || undefined,
+      error: r.error || undefined,
       delegationChain: r.delegation_chain ? JSON.parse(r.delegation_chain) : undefined,
     };
   }

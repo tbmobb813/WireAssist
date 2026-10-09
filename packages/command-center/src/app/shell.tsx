@@ -33,6 +33,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/objectives', label: 'Objectives' },
       { href: '/approvals', label: 'Approvals' },
       { href: '/chat', label: 'Chat' },
+      { href: '/history', label: 'History' },
       { href: '/memory', label: 'Memory' },
       { href: '/settings', label: 'Settings' },
     ],

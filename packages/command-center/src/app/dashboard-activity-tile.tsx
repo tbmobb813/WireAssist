@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 
 interface ActivityItem {
   id: string;
@@ -27,7 +28,7 @@ function hasExpandableDetail(event: string): boolean {
   );
 }
 
-function TriageDetail({ payload }: { payload: unknown }) {
+export function TriageDetail({ payload }: { payload: unknown }) {
   const p = payload as {
     categories?: {
       urgent?: { threadId: string; from: string; subject: string; reason: string }[];
@@ -99,7 +100,7 @@ function TriageDetail({ payload }: { payload: unknown }) {
   );
 }
 
-function CalendarReviewDetail({ payload }: { payload: unknown }) {
+export function CalendarReviewDetail({ payload }: { payload: unknown }) {
   const p = payload as {
     events?: { id: string; summary: string; start: string; end: string }[];
     review?: {
@@ -169,7 +170,7 @@ function CalendarReviewDetail({ payload }: { payload: unknown }) {
   );
 }
 
-function FreeformResponseDetail({ payload }: { payload: unknown }) {
+export function FreeformResponseDetail({ payload }: { payload: unknown }) {
   const p = payload as { response?: string };
   return (
     <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
@@ -196,7 +197,12 @@ export default function DashboardActivityTile({
 }) {
   return (
     <div className="md:col-span-2">
-      <div className="text-sm font-semibold text-gray-300 mb-4">Activity</div>
+      <div className="flex items-baseline justify-between mb-4">
+        <div className="text-sm font-semibold text-gray-300">Activity</div>
+        <Link href="/history" className="text-xs text-accent hover:underline">
+          Full history →
+        </Link>
+      </div>
       <div
         className="rounded-2xl border overflow-hidden"
         style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
