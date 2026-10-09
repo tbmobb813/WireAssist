@@ -11,6 +11,8 @@ import {
   MCPClient,
   EventBus,
   TaskStore,
+  getDiagnostics,
+  setRawCapture,
   type AgentRole,
   type AgentTask,
   type ImageAttachment,
@@ -1746,6 +1748,26 @@ app.post('/api/tasks/research-freeform', async (c) => {
 // ── BUDGET ────────────────────────────────────────────────────────────────
 app.get('/api/budget', (c) => {
   return c.json(budgetTracker.status());
+});
+
+// ── SETTINGS: diagnostic logging ───────────────────────────────────────────
+// Lets the Settings page switch on logging of raw model replies that failed to
+// parse (they can contain email content), without editing .env or restarting.
+// Turns itself off after a fixed window — see @wireassist/core diagnostics.
+app.get('/api/settings/diagnostics', (c) => c.json(getDiagnostics()));
+
+app.post('/api/settings/diagnostics', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  if (!body || typeof body.rawCapture !== 'boolean') {
+    return c.json({ error: 'rawCapture (boolean) required' }, 400);
+  }
+  const status = setRawCapture(body.rawCapture);
+  logger.info(
+    status.rawCapture
+      ? `🔧 Diagnostic logging switched ON until ${status.expiresAt}`
+      : '🔧 Diagnostic logging switched OFF'
+  );
+  return c.json(status);
 });
 
 // ── OPS (NIXOPS) TASKS ────────────────────────────────────────────────────

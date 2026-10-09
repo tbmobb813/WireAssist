@@ -1,3 +1,5 @@
+import { isRawCaptureEnabled } from './diagnostics';
+
 const levelPriorities: Record<string, number> = {
   error: 0,
   warn: 1,
@@ -18,6 +20,15 @@ function formatPrefix(level: string) {
 }
 
 export const logger = {
+  // For text that may contain private content (the raw reply from a model
+  // that failed to parse can include email senders and subjects). Written
+  // only while diagnostic logging is switched on in Settings (which turns
+  // itself off after a while) — or, as before, when LOG_LEVEL=debug.
+  raw: (...args: unknown[]) => {
+    if (!isRawCaptureEnabled() && !shouldLog('debug')) return;
+    // eslint-disable-next-line no-console
+    console.log(formatPrefix('raw'), ...args);
+  },
   debug: (...args: unknown[]) => {
     if (!shouldLog('debug')) return;
     // eslint-disable-next-line no-console
