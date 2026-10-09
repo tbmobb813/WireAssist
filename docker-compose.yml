@@ -22,6 +22,11 @@ services:
       - .env
     environment:
       WIREASSIST_HOME: /data
+      # Listen on all interfaces *inside the container* so the published port
+      # and the telegram-bot service can reach it. Outside Docker the servers
+      # default to loopback; exposure is controlled by the `ports:` above.
+      API_HOST: 0.0.0.0
+      WEB_HOST: 0.0.0.0
     volumes:
       - wireassist-data:/data
     healthcheck:

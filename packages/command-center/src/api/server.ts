@@ -2333,9 +2333,14 @@ app.get('/api/events', (c) => {
 
 // ── Start ──────────────────────────────────────────────────────────────────
 const API_PORT = Number(process.env.API_PORT ?? 3002);
+// Loopback by default: this API has no auth of its own, so a bare `pnpm dev`
+// must not be reachable from the LAN. The Docker deploy sets API_HOST=0.0.0.0
+// (docker-compose.yml) because inside the container it has to be reachable by
+// the web UI's proxy and the telegram-bot service; nothing publishes 3002.
+const API_HOST = process.env.API_HOST || '127.0.0.1';
 
-const server = serve({ fetch: app.fetch, port: API_PORT, hostname: '0.0.0.0' }, (info) => {
-  logger.info(`🚀 API server running at http://localhost:${info.port}`);
+const server = serve({ fetch: app.fetch, port: API_PORT, hostname: API_HOST }, (info) => {
+  logger.info(`🚀 API server running at http://${API_HOST}:${info.port}`);
   bootstrap().catch((err) => {
     logger.error('❌ Agent bootstrap failed:', err);
     process.exit(1);
