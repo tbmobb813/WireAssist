@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { Skill } from '@wireassist/core';
+import type { Skill, ThinkResult } from '@wireassist/core';
 import { logger } from '@wireassist/core/logger';
 import {
   extractJson,
@@ -93,28 +93,60 @@ Only return valid JSON. No markdown fences.`;
     // up fast. Explicit override rather than raising Admin's global default,
     // since this is the one call in its skill set that scales with inbox
     // volume the way nothing else here does.
-    const rawResponse = await agent.think(triagePrompt, context, 8192);
+    const ask = async (): Promise<ThinkResult> =>
+      agent.thinkDetailed
+        ? agent.thinkDetailed(triagePrompt, context, 8192)
+        : { content: await agent.think(triagePrompt, context, 8192), truncated: false };
 
-    let triage: TriageCategories;
-    try {
-      triage = extractJson<TriageCategories>(rawResponse);
-    } catch (err) {
-      // The error surfaced to the caller/model only ever carried the first
-      // 200 chars — nowhere near enough to diagnose a real failure (this
-      // was already invisible in server logs entirely, since callers just
-      // catch-and-return the message as a tool_result string, never log
-      // it). Full response logged here so a real failure is actually
-      // debuggable instead of a black box.
-      logger.error(
-        '[email-triage] extractJson failed:',
-        err instanceof Error ? err.message : err,
-        '\nFull raw response:\n',
-        rawResponse
+    const parse = (reply: ThinkResult): TriageCategories | null => {
+      try {
+        return extractJson<TriageCategories>(reply.content);
+      } catch (err) {
+        // Failures are invisible to callers (they just catch-and-return the
+        // message as a tool_result string), so the cause is logged here — but
+        // only metadata at error level. The reply itself contains senders and
+        // subjects from the inbox, so its text is written only when someone
+        // has deliberately switched on Diagnostic logging (Settings page).
+        logger.error(
+          '[email-triage] extractJson failed:',
+          err instanceof Error ? err.message : err,
+          `(finishReason=${reply.finishReason ?? 'unknown'}, ${reply.content.length} chars)`
+        );
+        logger.raw('[email-triage] raw reply that failed to parse:\n', reply.content);
+        return null;
+      }
+    };
+
+    // A bad reply here is usually a one-off (a cut-off or malformed JSON
+    // blob), and the run costs one more model call to retry — cheaper than
+    // failing the whole triage and making the user re-run it by hand. Retry
+    // exactly once; a second failure is reported, not retried forever.
+    let reply = await ask();
+    let parsed = parse(reply);
+    if (!parsed) {
+      logger.warn(
+        `[email-triage] unusable reply (finishReason=${reply.finishReason ?? 'unknown'}, ` +
+          `${reply.content.length} chars) — retrying once`
       );
+      reply = await ask();
+      parsed = parse(reply);
+    }
+    if (!parsed) {
       throw new Error(
-        `Admin Agent returned invalid JSON during triage: ${rawResponse.slice(0, 200)}`
+        reply.truncated
+          ? `Admin Agent's triage reply was cut off at the output-token limit ` +
+              `(finish reason: ${reply.finishReason}) on both attempts. ` +
+              `Try again with fewer emails (maxEmails).`
+          : // No excerpt of the reply here: this message travels to the chat/UI,
+            // and the reply contains email content. Size and finish reason are
+            // enough to tell what happened; the text goes to the log only while
+            // Diagnostic logging is on.
+            `Admin Agent returned invalid JSON during triage ` +
+              `(${reply.content.length} chars, finish reason: ${reply.finishReason ?? 'unknown'}). ` +
+              `Turn on Diagnostic logging in Settings and try again to capture the raw reply.`
       );
     }
+    const triage: TriageCategories = parsed;
 
     // 5. Build proposed actions
     const proposedActions: ProposedAction[] = [];

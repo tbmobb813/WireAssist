@@ -10,6 +10,7 @@ import {
   type MCPClient,
   type EventBus,
   type SkillAgentHandle,
+  type ThinkResult,
   type ApprovalRequest,
   type Provider,
   type ProviderType,
@@ -54,6 +55,22 @@ const PROVIDER_DEFAULT_MODEL: Partial<Record<ProviderType, string>> = {
 // string, since that string isn't valid across every provider.
 export const DEFAULT_MODEL =
   process.env.WIREASSIST_MODEL ?? PROVIDER_DEFAULT_MODEL[DEFAULT_PROVIDER] ?? 'claude-sonnet-5';
+
+// Providers disagree on how they spell "stopped normally" and "ran out of
+// output tokens", so classify by name rather than assuming Anthropic's.
+const NORMAL_FINISH_REASONS = new Set([
+  'end_turn', // Anthropic
+  'stop_sequence', // Anthropic
+  'tool_use', // Anthropic
+  'stop', // OpenAI / OpenRouter / Ollama
+  'tool_calls', // OpenAI / OpenRouter
+  'function_call', // OpenAI (legacy)
+]);
+
+// Hit the output-token limit: the content is cut off mid-way.
+function isLengthFinishReason(reason: string | undefined): boolean {
+  return reason !== undefined && /^(max_tokens|length)$/i.test(reason);
+}
 
 export abstract class BaseAgent {
   protected config: AgentConfig;
@@ -209,6 +226,8 @@ export abstract class BaseAgent {
     return {
       think: (userMessage, extraContext, maxTokensOverride) =>
         this.think(userMessage, extraContext, maxTokensOverride),
+      thinkDetailed: (userMessage, extraContext, maxTokensOverride) =>
+        this.thinkDetailed(userMessage, extraContext, maxTokensOverride),
       useTool: (toolName, params) => this.useTool(toolName, params),
       loadContext: (query) => this.loadContext(query),
       remember: (content, tags) => this.remember(content, tags),
@@ -231,6 +250,19 @@ export abstract class BaseAgent {
     extraContext?: string,
     maxTokensOverride?: number
   ): Promise<string> {
+    return (await this.thinkDetailed(userMessage, extraContext, maxTokensOverride)).content;
+  }
+
+  // think() plus the provider's stop reason. Warns when the model stopped for
+  // any reason other than finishing normally — before this, a reply cut off
+  // by the output-token limit (or refused) left no trace in the logs, so a
+  // downstream "invalid JSON" error was undiagnosable. Logs metadata only
+  // (never the prompt or reply), since replies can contain email content.
+  protected async thinkDetailed(
+    userMessage: string,
+    extraContext?: string,
+    maxTokensOverride?: number
+  ): Promise<ThinkResult> {
     const model = this.resolveModel();
     // Per-call override for stages whose output genuinely needs more room
     // than the agent's default (e.g. NixOps re-emitting a full article
@@ -258,7 +290,19 @@ export abstract class BaseAgent {
     // response.model, not the pre-resolved `model` — completeWithFallback()
     // may have served this via OpenRouter under a different model string.
     this.recordUsage(response.model || model, response);
-    return response.content;
+
+    const finishReason = response.finishReason;
+    const truncated = isLengthFinishReason(finishReason);
+    if (finishReason && !NORMAL_FINISH_REASONS.has(finishReason.toLowerCase())) {
+      console.warn(
+        `[${this.role}] think(): model stopped abnormally — finishReason="${finishReason}"` +
+          `${truncated ? ' (output cut off at the token limit)' : ''}, ` +
+          `model=${response.model || model}, maxTokens=${maxTokens}, ` +
+          `completionTokens=${response.completionTokens ?? 'unknown'}, ` +
+          `replyChars=${response.content.length}`
+      );
+    }
+    return { content: response.content, finishReason, truncated };
   }
 
   // Confirmed live 2026-09-05: with no date anywhere in context, a plain
