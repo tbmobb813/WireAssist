@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 interface MemoryEntry {
   id: string;
@@ -46,7 +47,10 @@ export default function MemoryClient() {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <div className="text-xs tracking-widest text-purple mb-2">WIREASSIST // MEMORY</div>
+        <Link href="/settings" className="text-xs text-gray-500 hover:text-gray-300">
+          ← Settings
+        </Link>
+        <div className="text-xs tracking-widest text-purple mb-2 mt-3">WIREASSIST // MEMORY</div>
         <h1 className="text-3xl font-black">AGENT MEMORY</h1>
         <p className="text-gray-500 text-sm mt-2">What your agents have learned and remembered.</p>
       </div>

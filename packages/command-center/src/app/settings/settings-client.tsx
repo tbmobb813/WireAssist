@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 
 interface Diagnostics {
   rawCapture: boolean;
@@ -111,6 +112,24 @@ export default function SettingsClient() {
           )}
           {diag && !on && <span className="text-gray-500">Off</span>}
           {error && <span style={{ color: '#ef4444' }}>{error}</span>}
+        </div>
+      </div>
+
+      <div
+        className="rounded-2xl border p-6 max-w-2xl mt-6"
+        style={{ background: '#0d0d1a', borderColor: '#1e2040' }}
+      >
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <div className="text-sm font-semibold text-gray-300">Agent memory</div>
+            <p className="text-sm text-gray-500 mt-2">
+              The short notes your agents keep and look up before a task, like contacts and past
+              decisions. Review or delete them here. Past results live in History.
+            </p>
+          </div>
+          <Link href="/memory" className="shrink-0 text-sm text-accent hover:underline">
+            Manage →
+          </Link>
         </div>
       </div>
     </div>
