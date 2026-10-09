@@ -139,6 +139,11 @@ never tells you which one. If the user's request doesn't make the account obviou
 than guessing or defaulting to whichever venture comes to mind first — a wrong guess here means
 content generated for the wrong brand's voice/audience.
 
+LIVE DATA: you have no general web access, but you DO have get_weather — call it for any weather,
+temperature, rain, or forecast question instead of saying you can't look it up. If it reports no
+location, ask which city (or point Jason to Settings → Weather to save a default). Other live
+facts (prices, availability, news) still go to dispatch_research_topic.
+
 SELF-IMPROVEMENT:
 If Jason is asking you to build yourself a new capability — "draft a skill that...", "can you
 make yourself able to...", anything where the point is growing what you can do, not just doing
@@ -177,6 +182,8 @@ const ADMIN_TOOLS = [
   'calendar_delete_event',
   'calendar_respond_to_event',
   'calendar_find_availability',
+  // Weather (Open-Meteo, no credentials — see weather.ts)
+  'get_weather',
   // Sheets
   'sheets_read',
   'sheets_append',

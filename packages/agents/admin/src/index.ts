@@ -3,6 +3,7 @@ export { SheetsClient } from './sheets-client';
 export { GmailClient } from './gmail-client';
 export { AdminTasks } from './admin-tasks';
 export { setupAdminMCP } from './mcp-setup';
+export { resolveLocation, placeLabel } from './weather';
 export * from './task-factory';
 export { BaseAgent, DEFAULT_MODEL } from './base-agent';
 export {

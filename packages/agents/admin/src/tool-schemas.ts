@@ -239,6 +239,30 @@ export const ADMIN_TOOL_SCHEMAS: Record<string, ProviderToolDefinition> = {
       required: ['eventId', 'response'],
     },
   },
+  // ── Weather ───────────────────────────────────────────────────
+  get_weather: {
+    name: 'get_weather',
+    description:
+      'Get current conditions and a short forecast for a place (live data from Open-Meteo). ' +
+      'Use this for any weather, temperature, rain or forecast question. Omit `location` to use ' +
+      "the user's default location from Settings; if none is set the tool says so, and you " +
+      'should ask which city.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        location: {
+          type: 'string',
+          description: 'A city, optionally with state or country, e.g. "Austin, TX" or "Berlin".',
+        },
+        days: { type: 'number', description: 'Forecast days, 1-7. Default 3.' },
+        units: {
+          type: 'string',
+          enum: ['imperial', 'metric'],
+          description: 'Only set if the user asks for specific units; defaults to their Settings.',
+        },
+      },
+    },
+  },
   // ── Sheets ────────────────────────────────────────────────────
   sheets_read: {
     name: 'sheets_read',
@@ -419,6 +443,7 @@ export const READ_ONLY_ADMIN_TOOLS = new Set<string>([
   'calendar_list_events',
   'calendar_list_calendars',
   'calendar_find_availability',
+  'get_weather',
   'sheets_read',
   'drive_read_file',
   'drive_search_files',

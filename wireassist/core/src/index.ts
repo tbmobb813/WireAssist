@@ -58,6 +58,7 @@ export type {
 export * from './agents';
 export { logger } from './logger';
 export * from './diagnostics';
+export * from './weather-settings';
 export * from './memory';
 export * from './approval';
 export * from './mcp';
