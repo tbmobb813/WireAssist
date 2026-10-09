@@ -438,3 +438,63 @@ describe('researchTopicSkill — Research -> NixOps handoff', () => {
     expect(agent.emit).not.toHaveBeenCalledWith('agent:handoff_requested', expect.anything());
   });
 });
+
+describe('researchTopicSkill — one-off live lookups do not ask to store findings', () => {
+  const run = (query: string, freshness?: string, agent = makeAgentHandle()) =>
+    researchTopicSkill
+      .execute({ agent, task: makeTask(), input: { query, freshness } })
+      .then(() => agent);
+
+  it.each([
+    'Current stock price of Nvidia (NVDA) right now',
+    'Latest local news stories in Brooklyn today',
+    'top headlines this morning',
+    'what is the weather',
+    'Yankees score',
+  ])('skips the store prompt for "%s"', async (query) => {
+    const agent = await run(query);
+    expect(agent.proposeAction).not.toHaveBeenCalled();
+    expect(agent.remember).not.toHaveBeenCalled();
+  });
+
+  it('skips the store prompt when the search was limited to the last day or week', async () => {
+    expect((await run('AI chip supply', 'pd')).proposeAction).not.toHaveBeenCalled();
+    expect((await run('AI chip supply', 'pw')).proposeAction).not.toHaveBeenCalled();
+  });
+
+  it('still returns the answer and sources, so History keeps them', async () => {
+    const agent = await run('NVDA stock price right now');
+    expect(agent.emit).toHaveBeenCalledWith(
+      'agent:research_complete',
+      expect.objectContaining({ summary: 'Findings summary.', sources: ['https://a.example'] })
+    );
+  });
+
+  it('still offers to store ordinary research, even when it mentions "latest" or "current"', async () => {
+    for (const query of ['AI trends', 'latest trends in AI agents', 'current state of RAG']) {
+      expect((await run(query)).proposeAction).toHaveBeenCalledTimes(1);
+    }
+    // A month-or-longer freshness window is research, not a lookup.
+    expect((await run('AI trends', 'pm')).proposeAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('still offers the content and ops handoffs after a live lookup', async () => {
+    const proposeAction = jest.fn().mockResolvedValue(true);
+    const agent = makeAgentHandle({ proposeAction });
+    await researchTopicSkill.execute({
+      agent,
+      task: makeTask(),
+      input: {
+        query: 'GPU prices today',
+        offerContentDraft: { platform: 'linkedin', tone: 'direct' },
+      },
+    });
+    expect(proposeAction).toHaveBeenCalledTimes(1);
+    expect(proposeAction).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining('Draft linkedin content'),
+      expect.anything(),
+      expect.anything()
+    );
+  });
+});

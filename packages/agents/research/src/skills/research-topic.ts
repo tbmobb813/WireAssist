@@ -47,6 +47,19 @@ function isLivePriceQuery(query: string): boolean {
   return PRICE_QUERY_PATTERN.test(query);
 }
 
+// A one-off lookup ("what's NVDA right now", "today's Brooklyn headlines")
+// is answered in chat already and is stale within the hour, so it is not
+// worth a "Store research findings" approval card — that card made a plain
+// question look like it needed a decision, and "couldn't confirm" answers
+// were being offered up as memories. Deliberately narrower than "anything
+// time-flavoured": "latest AI trends" is real research and still offers to save.
+const LIVE_LOOKUP_PATTERN =
+  /\bprice\b|\bcost\b|how much (is|does|would|will)|\$\d|\bright now\b|\btoday\b|\btonight\b|\bnews\b|\bheadlines?\b|\bstock\b|\bweather\b|\bscores?\b/i;
+
+function isLiveLookup(query: string, freshness?: string): boolean {
+  return LIVE_LOOKUP_PATTERN.test(query) || freshness === 'pd' || freshness === 'pw';
+}
+
 // A retailer's own on-site search/category/listing page matches
 // RETAILER_HOSTS just as trivially as an actual product page, but carries
 // no Schema.org Product JSON-LD — fetch_product_price is guaranteed to
@@ -173,16 +186,20 @@ export const researchTopicSkill: Skill<ResearchTopicInput, void> = {
       sources: results.map((r) => r.url),
     });
 
-    const approved = await agent.proposeAction(task, `Store research findings for: ${query}`, {
-      summary,
-      sources: results.map((r) => r.url),
-    });
-    if (approved) {
-      agent.remember(`Research on "${query}":\n\n${summary}`, [
-        'research',
-        'findings',
-        ...query.toLowerCase().split(' ').slice(0, 3),
-      ]);
+    // The answer and sources are already saved with the task (research_complete
+    // above), so History still has them; only the memory write is skipped.
+    if (!isLiveLookup(query, freshness)) {
+      const approved = await agent.proposeAction(task, `Store research findings for: ${query}`, {
+        summary,
+        sources: results.map((r) => r.url),
+      });
+      if (approved) {
+        agent.remember(`Research on "${query}":\n\n${summary}`, [
+          'research',
+          'findings',
+          ...query.toLowerCase().split(' ').slice(0, 3),
+        ]);
+      }
     }
 
     // Optional, independent second approval: hand these findings straight
