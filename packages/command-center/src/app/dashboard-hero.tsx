@@ -7,7 +7,8 @@ interface DashboardLocation {
 }
 
 interface Weather {
-  tempF: number;
+  temp: number;
+  unit: 'F' | 'C';
   code: number;
 }
 
@@ -38,6 +39,7 @@ export default function DashboardHero({
   location,
   weather,
   locationInput,
+  locationError,
   onLocationInputChange,
   savingLocation,
   onSaveLocation,
@@ -46,6 +48,7 @@ export default function DashboardHero({
   location: DashboardLocation | null | undefined;
   weather: Weather | null;
   locationInput: string;
+  locationError: string | null;
   onLocationInputChange: (value: string) => void;
   savingLocation: boolean;
   onSaveLocation: () => void;
@@ -83,26 +86,33 @@ export default function DashboardHero({
           {now ? now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '--:--'}
         </div>
         {location === null ? (
-          <div className="flex items-center gap-2 mt-2 justify-end">
-            <input
-              value={locationInput}
-              onChange={(e) => onLocationInputChange(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && onSaveLocation()}
-              placeholder="Set your city for weather"
-              className="text-xs rounded-full px-3 py-1.5 outline-none w-44"
-              style={{ background: '#0d0d1a', border: '1px solid #1e2040', color: '#e2e8f0' }}
-            />
-            <button
-              onClick={onSaveLocation}
-              disabled={savingLocation || !locationInput.trim()}
-              className="text-xs px-3 py-1.5 rounded-full text-accent border border-accent/30 hover:bg-accent/10 transition-colors disabled:opacity-40"
-            >
-              {savingLocation ? '…' : 'Save'}
-            </button>
+          <div>
+            <div className="flex items-center gap-2 mt-2 justify-end">
+              <input
+                value={locationInput}
+                onChange={(e) => onLocationInputChange(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && onSaveLocation()}
+                placeholder="Set your city for weather"
+                className="text-xs rounded-full px-3 py-1.5 outline-none w-44"
+                style={{ background: '#0d0d1a', border: '1px solid #1e2040', color: '#e2e8f0' }}
+              />
+              <button
+                onClick={onSaveLocation}
+                disabled={savingLocation || !locationInput.trim()}
+                className="text-xs px-3 py-1.5 rounded-full text-accent border border-accent/30 hover:bg-accent/10 transition-colors disabled:opacity-40"
+              >
+                {savingLocation ? '…' : 'Save'}
+              </button>
+            </div>
+            {locationError && (
+              <div className="text-xs mt-1 text-right" style={{ color: '#ef4444' }} role="alert">
+                {locationError}
+              </div>
+            )}
           </div>
         ) : location && weather ? (
           <div className="text-sm text-gray-400 mt-1">
-            {weatherIcon(weather.code)} {weather.tempF}°F · {location.label}
+            {weatherIcon(weather.code)} {weather.temp}°{weather.unit} · {location.label}
           </div>
         ) : location ? (
           <div className="text-sm text-gray-600 mt-1">{location.label}</div>

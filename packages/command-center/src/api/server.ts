@@ -13,6 +13,9 @@ import {
   TaskStore,
   getDiagnostics,
   setRawCapture,
+  getWeatherSettings,
+  setWeatherSettings,
+  type WeatherLocation,
   type AgentRole,
   type AgentTask,
   type ImageAttachment,
@@ -27,6 +30,8 @@ import {
   listAutoApproveRecords,
   setAutoApproveOverride,
   GmailClient,
+  resolveLocation,
+  placeLabel,
   type ChatDispatch,
 } from '@wireassist/agent-admin';
 import { ContentAgent, ContentTasks } from '@wireassist/agent-content';
@@ -66,7 +71,7 @@ import { registerTrendPostTools, TrendPostStorage, type Platform } from '@wireas
 import { registerPortfolioRoutes } from './portfolio-routes';
 import { registerObjectiveRoutes } from './objective-routes';
 import { registerConversationRoutes } from './conversation-routes';
-import { getLocation, setLocation, listNotes, addNote, deleteNote } from './dashboard-widgets';
+import { listNotes, addNote, deleteNote } from './dashboard-widgets';
 import { routeHandoffTask } from '../lib/route-handoff';
 import { replayOrphanedHandoffs } from '../lib/replay-handoffs';
 import { decideHandoffReviewAction } from '../lib/handoff-review';
@@ -1424,10 +1429,10 @@ app.get('/api/calendar/upcoming', async (c) => {
 });
 
 // ── DASHBOARD WIDGETS ─────────────────────────────────────────────────────
-// Location for the weather chip — client geocodes and fetches weather
-// directly against Open-Meteo (public, no key needed); this just persists
-// the chosen coordinates so it survives a refresh/redeploy.
-app.get('/api/dashboard/location', (c) => c.json({ location: getLocation() }));
+// Location for the weather chip — the same saved location get_weather and
+// Settings use (see /api/settings/weather); the client fetches the forecast
+// directly from Open-Meteo (public, no key needed).
+app.get('/api/dashboard/location', (c) => c.json({ location: getWeatherSettings().location }));
 
 app.post('/api/dashboard/location', async (c) => {
   const body = await c.req.json().catch(() => null);
@@ -1438,7 +1443,7 @@ app.post('/api/dashboard/location', async (c) => {
   ) {
     return c.json({ error: 'Required: lat (number), lon (number), label (string)' }, 400);
   }
-  setLocation({ lat: body.lat, lon: body.lon, label: body.label });
+  setWeatherSettings({ location: { lat: body.lat, lon: body.lon, label: body.label } });
   return c.json({ ok: true });
 });
 
@@ -1768,6 +1773,38 @@ app.post('/api/settings/diagnostics', async (c) => {
       : '🔧 Diagnostic logging switched OFF'
   );
   return c.json(status);
+});
+
+// ── SETTINGS: weather ──────────────────────────────────────────────────────
+// One saved location + units, shared by the dashboard weather chip and the
+// Admin Agent's get_weather tool, so "where I am" is entered once. POST takes
+// the city as plain text and looks it up here (not in the browser), so a
+// failed lookup comes back as a readable error instead of doing nothing.
+app.get('/api/settings/weather', (c) => c.json(getWeatherSettings()));
+
+app.post('/api/settings/weather', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  if (!body || typeof body !== 'object') return c.json({ error: 'JSON body required' }, 400);
+  try {
+    let location: WeatherLocation | null | undefined;
+    if (body.location === null) {
+      location = null;
+    } else if (typeof body.location === 'string') {
+      const text = body.location.trim();
+      if (text.length > 100) throw new Error('location must be 100 characters or fewer');
+      if (!text) {
+        location = null;
+      } else {
+        const place = await resolveLocation(text, fetch);
+        location = { lat: place.latitude, lon: place.longitude, label: placeLabel(place) };
+      }
+    } else if (body.location !== undefined) {
+      throw new Error('location must be text');
+    }
+    return c.json(setWeatherSettings({ location, units: body.units }));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : 'Invalid settings' }, 400);
+  }
 });
 
 // ── OPS (NIXOPS) TASKS ────────────────────────────────────────────────────

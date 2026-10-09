@@ -4,8 +4,13 @@ import { GmailClient } from './gmail-client';
 import { CalendarClient } from './calendar-client';
 import { SheetsClient } from './sheets-client';
 import { DriveClient } from './drive-client';
+import { getWeather, type WeatherParams } from './weather';
 
 export async function setupAdminMCP(mcp: MCPClient): Promise<void> {
+  // Registered before the Gmail sign-in below on purpose: weather needs no
+  // Google credentials, so it keeps working even when Gmail setup throws.
+  mcp.register('get_weather', async (params) => getWeather(params as WeatherParams));
+
   const gmail = new GmailClient();
   await gmail.authenticate();
 

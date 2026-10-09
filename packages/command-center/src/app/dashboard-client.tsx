@@ -30,7 +30,8 @@ interface DashboardLocation {
 }
 
 interface Weather {
-  tempF: number;
+  temp: number;
+  unit: 'F' | 'C';
   code: number;
 }
 
@@ -382,17 +383,23 @@ export default function DashboardClient() {
     return () => clearInterval(t);
   }, []);
 
-  // Weather — location is persisted server-side; geocoding and the forecast
-  // itself are fetched directly from Open-Meteo client-side (public, no key).
+  // Weather — the location and units are the shared saved setting (also used
+  // by the assistant's get_weather and the Settings page); the forecast itself
+  // is fetched directly from Open-Meteo client-side (public, no key).
   const [location, setLocationState] = useState<DashboardLocation | null | undefined>(undefined);
+  const [units, setUnits] = useState<'imperial' | 'metric'>('imperial');
   const [locationInput, setLocationInput] = useState('');
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [savingLocation, setSavingLocation] = useState(false);
   const [weather, setWeather] = useState<Weather | null>(null);
 
   useEffect(() => {
-    fetch('/api/dashboard/location')
+    fetch('/api/settings/weather')
       .then((r) => r.json())
-      .then((d) => setLocationState(d.location ?? null))
+      .then((d) => {
+        setLocationState(d.location ?? null);
+        if (d.units === 'metric') setUnits('metric');
+      })
       .catch(() => setLocationState(null));
   }, []);
 
@@ -401,12 +408,13 @@ export default function DashboardClient() {
     const poll = async () => {
       try {
         const res = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&current=temperature_2m,weather_code&temperature_unit=fahrenheit`
+          `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&current=temperature_2m,weather_code&temperature_unit=${units === 'metric' ? 'celsius' : 'fahrenheit'}`
         );
         const data = await res.json();
         if (typeof data.current?.temperature_2m === 'number') {
           setWeather({
-            tempF: Math.round(data.current.temperature_2m),
+            temp: Math.round(data.current.temperature_2m),
+            unit: units === 'metric' ? 'C' : 'F',
             code: data.current.weather_code,
           });
         }
@@ -417,28 +425,24 @@ export default function DashboardClient() {
     poll();
     const t = setInterval(poll, 15 * 60000);
     return () => clearInterval(t);
-  }, [location]);
+  }, [location, units]);
 
   const saveLocation = async () => {
     if (!locationInput.trim()) return;
     setSavingLocation(true);
+    setLocationError(null);
     try {
-      const geo = await fetch(
-        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationInput.trim())}&count=1`
-      ).then((r) => r.json());
-      const match = geo.results?.[0];
-      if (!match) return;
-      const loc: DashboardLocation = {
-        lat: match.latitude,
-        lon: match.longitude,
-        label: [match.name, match.admin1].filter(Boolean).join(', '),
-      };
-      await fetch('/api/dashboard/location', {
+      const res = await fetch('/api/settings/weather', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loc),
+        body: JSON.stringify({ location: locationInput.trim() }),
       });
-      setLocationState(loc);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `Server said no (${res.status})`);
+      setLocationState(data.location ?? null);
+      setLocationInput('');
+    } catch (err) {
+      setLocationError(err instanceof Error ? err.message : "Couldn't save that city. Try again.");
     } finally {
       setSavingLocation(false);
     }
@@ -641,6 +645,7 @@ export default function DashboardClient() {
           location={location}
           weather={weather}
           locationInput={locationInput}
+          locationError={locationError}
           onLocationInputChange={setLocationInput}
           savingLocation={savingLocation}
           onSaveLocation={saveLocation}
