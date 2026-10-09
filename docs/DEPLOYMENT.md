@@ -336,6 +336,121 @@ device on your tailnet.
 control-plane connection outright. If `tailscale up`'s login page or the
 admin console won't load, try a mobile hotspot as a quick test.
 
+## 6c. Or: public HTTPS behind Google sign-in (for networks that block Tailscale)
+
+Use this when you need the full web UI from a work network that blocks
+Tailscale. It puts the dashboard at `https://wireassist.techtrendwire.com`,
+behind a Google login that admits only the email addresses you list. Keep
+6b's Tailscale binding as-is; this runs alongside it.
+
+The app has **no login of its own** — Tailscale was the lock. Never publish
+port 3001 (or point Caddy at it) without oauth2-proxy in front.
+
+**Prerequisites**
+
+- DNS: in Hostinger's DNS zone for `techtrendwire.com`, add an **A record**
+  for `wireassist` pointing at the VPS's public IP. Adding a subdomain record
+  does not touch the root records, so the WordPress site is unaffected. Do not
+  change the domain's nameservers.
+- `ufw` already allows 80/443 (section 0). Caddy (section 6) needs both: 80 for
+  the certificate challenge, 443 for traffic.
+- Caddy installed from the **official** repo (section 6). If the repo steps fail
+  (a mangled paste is enough), `apt install caddy` silently falls back to
+  Ubuntu's own, much older package. Check with `apt-cache policy caddy` (the
+  candidate should come from `dl.cloudsmith.io`) and `caddy version`.
+- Know what already holds 80/443 on the box — Caddy can't start if they're
+  taken:
+
+  ```bash
+  sudo ss -ltnp | grep -E ':(80|443)\b'
+  ```
+
+  If `tailscaled` shows up on `<tailscale-ip>:443` (that's `tailscale serve`,
+  HTTPS over the tailnet), leave it alone: it only owns the Tailscale address,
+  and the `bind` below lets Caddy coexist on the public one. Anything else on
+  80/443 (nginx, Apache, another container) must be dealt with first.
+
+- A Google OAuth client of type **Web application** (separate from the Gmail
+  one in section 1): Google Cloud Console → APIs & Services → Credentials →
+  Create credentials → OAuth client ID. Under **Authorized redirect URIs** add
+  exactly `https://wireassist.techtrendwire.com/oauth2/callback`. If the
+  consent screen is in _Testing_ mode, add your email as a test user.
+
+**Step 0 — test the network path before any auth work.** From the work machine,
+confirm it can reach the hostname at all (new hostnames are sometimes blocked
+by a corporate web filter). With Caddy installed (section 6):
+
+```bash
+# Tell Caddy which IP to listen on (the VPS's public IPv4). It must match the
+# wireassist A record, and a systemd drop-in keeps it across Caddyfile updates.
+PUBLIC_IP=$(curl -4 -s https://ifconfig.me); echo "$PUBLIC_IP"
+sudo mkdir -p /etc/systemd/system/caddy.service.d
+printf '[Service]\nEnvironment=WIREASSIST_PUBLIC_IP=%s\n' "$PUBLIC_IP" |
+  sudo tee /etc/systemd/system/caddy.service.d/public-ip.conf
+sudo systemctl daemon-reload
+
+# Temporary test config: no app, no login — just proves the path works.
+printf 'wireassist.techtrendwire.com {\n\tbind {$WIREASSIST_PUBLIC_IP}\n\trespond "ok"\n}\n' |
+  sudo tee /etc/caddy/Caddyfile
+sudo WIREASSIST_PUBLIC_IP="$PUBLIC_IP" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+sudo systemctl restart caddy     # restart, not reload: the environment changed
+sleep 5; curl -sI https://wireassist.techtrendwire.com | head -3     # expect HTTP/2 200
+```
+
+Then open `https://wireassist.techtrendwire.com` from the work machine. If you
+see `ok`, continue. If it's blocked, stop here: nothing below will help.
+
+**Steps**
+
+```bash
+# 1. Secrets — append to .env (never commit it)
+python3 -c 'import os,base64; print("OAUTH2_PROXY_COOKIE_SECRET=" + base64.urlsafe_b64encode(os.urandom(32)).decode())' >> .env
+cat >> .env <<'EOF'
+OAUTH2_PROXY_CLIENT_ID=<from the Google OAuth client>
+OAUTH2_PROXY_CLIENT_SECRET=<from the Google OAuth client>
+EOF
+
+# 2. Who may sign in: one email per line, nothing else.
+cp oauth2-allowed-emails.example.txt oauth2-allowed-emails.txt
+$EDITOR oauth2-allowed-emails.txt
+
+# 3. Start the auth service (opt-in compose profile)
+docker compose --profile public up -d oauth2-proxy
+
+# 4. Real Caddy config: copy this repo's Caddyfile, validate, then reload.
+#    (WIREASSIST_PUBLIC_IP was set in step 0's systemd drop-in; the shell
+#    needs it too for `validate`.)
+PUBLIC_IP=$(curl -4 -s https://ifconfig.me)
+sudo WIREASSIST_PUBLIC_IP="$PUBLIC_IP" caddy validate --config Caddyfile --adapter caddyfile
+sudo cp Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+**Verify**
+
+```bash
+# Signed-out request must be redirected to sign-in, not served the app:
+curl -sI https://wireassist.techtrendwire.com/ | head -3     # expect 302 → /oauth2/sign_in
+curl -sI https://wireassist.techtrendwire.com/api/tasks | head -1   # expect 302, not 200
+```
+
+Then open the URL in a browser, sign in with an allow-listed Google account,
+and check the dashboard loads and live updates (the `/api/events` stream)
+keep arriving. Signing in with a Google account that is _not_ in the list must
+be refused. Sign out at `/oauth2/sign_out`.
+
+**Operations**
+
+- Add or remove people: edit `oauth2-allowed-emails.txt`, then
+  `docker compose --profile public restart oauth2-proxy`.
+- Force everyone to sign in again: change `OAUTH2_PROXY_COOKIE_SECRET` in
+  `.env` and restart oauth2-proxy.
+- Turn public access off: `docker compose --profile public stop oauth2-proxy`
+  and restore a Caddyfile that doesn't proxy to 3001 (or `systemctl stop
+caddy`). The Tailscale path keeps working either way.
+- The Telegram bot talks to the API over the compose network and is
+  unaffected.
+
 ## 7. Off-box backups
 
 The named Docker volume survives container restarts and rebuilds, but not

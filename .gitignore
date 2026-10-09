@@ -23,6 +23,9 @@ out/
 .env.local
 .env.*.local
 
+# Who may sign in to the public (Google login) deploy — see docs/DEPLOYMENT.md 6c
+oauth2-allowed-emails.txt
+
 # IDE
 .vscode/
 .idea/
