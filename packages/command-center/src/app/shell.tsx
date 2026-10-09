@@ -34,7 +34,6 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/approvals', label: 'Approvals' },
       { href: '/chat', label: 'Chat' },
       { href: '/history', label: 'History' },
-      { href: '/memory', label: 'Memory' },
       { href: '/settings', label: 'Settings' },
     ],
   },
@@ -74,7 +73,7 @@ function isActive(pathname: string, href: string): boolean {
 // destinations, and it sat at the hardest one-handed corner (fixed
 // top-4 left-4). A bottom tab bar promotes the 3 pages JNix actually
 // reaches for on his phone (Home, Approvals, Chat); everything else —
-// Objectives, Memory, Admin, Content, GTM, Research, GitHub, Ops —
+// Objectives, History, Settings, Admin, Content, GTM, Research, GitHub, Ops —
 // still lives one tap away behind "More", which reuses the old drawer.
 const MOBILE_PRIMARY_TABS: NavItem[] = [
   { href: '/', label: 'Home' },
