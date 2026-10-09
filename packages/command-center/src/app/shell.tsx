@@ -90,45 +90,133 @@ const MORE_NAV_GROUPS: NavGroup[] = NAV_GROUPS.map((group) => ({
   items: group.items.filter((item) => !MOBILE_PRIMARY_HREFS.has(item.href)),
 })).filter((group) => group.items.length > 0);
 
+// How many nav items the desktop sidebar shows before tucking the rest
+// behind a toggle. Groups are never split, so this lands on a group boundary
+// (Overview is exactly this many items today).
+const VISIBLE_NAV_ITEMS = 6;
+const NAV_OPEN_KEY = 'wireassist.nav.departmentsOpen';
+
+function NavGroupBlock({
+  group,
+  pathname,
+  onNavigate,
+}: {
+  group: NavGroup;
+  pathname: string;
+  onNavigate?: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      {group.department !== 'Overview' && (
+        // text-gray-600 (#4b5563) against this sidebar's #0d0d1a
+        // background computes to ~2.4:1 — well under WCAG AA's 4.5:1
+        // minimum for normal text. text-gray-400 (#9ca3af) computes to
+        // ~7.6:1 against the same background.
+        <div className="px-3 text-[10px] font-semibold tracking-widest text-gray-400 uppercase">
+          {group.department}
+        </div>
+      )}
+      {group.items.map((item) => {
+        const active = isActive(pathname, item.href);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={onNavigate}
+            className={`rounded-lg px-3 py-2 text-sm tracking-wide transition-colors ${
+              active ? 'bg-accent/10 text-accent' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
 function NavLinks({
   pathname,
   onNavigate,
   groups = NAV_GROUPS,
+  collapseAfter,
 }: {
   pathname: string;
   onNavigate?: () => void;
   groups?: NavGroup[];
+  // When set, groups past this many items sit behind a "Departments" toggle.
+  collapseAfter?: number;
 }) {
+  let shownItems = 0;
+  let splitAt = groups.length;
+  if (collapseAfter !== undefined) {
+    splitAt = 0;
+    for (const group of groups) {
+      if (splitAt > 0 && shownItems >= collapseAfter) break;
+      shownItems += group.items.length;
+      splitAt += 1;
+    }
+  }
+  const visible = groups.slice(0, splitAt);
+  const hidden = groups.slice(splitAt);
+  const hiddenCount = hidden.reduce((n, g) => n + g.items.length, 0);
+  const activeInHidden = hidden.some((g) => g.items.some((i) => isActive(pathname, i.href)));
+
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(NAV_OPEN_KEY) === '1') setOpen(true);
+    } catch {
+      // storage can be blocked; the toggle still works for this visit
+    }
+  }, []);
+  // Never hide the page you're on, whatever the saved preference says.
+  const expanded = open || activeInHidden;
+
+  const toggle = () => {
+    const next = !expanded;
+    setOpen(next);
+    try {
+      window.localStorage.setItem(NAV_OPEN_KEY, next ? '1' : '0');
+    } catch {
+      // see above
+    }
+  };
+
   return (
     <nav className="flex flex-col gap-4">
-      {groups.map((group) => (
-        <div key={group.department} className="flex flex-col gap-1">
-          {group.department !== 'Overview' && (
-            // text-gray-600 (#4b5563) against this sidebar's #0d0d1a
-            // background computes to ~2.4:1 — well under WCAG AA's 4.5:1
-            // minimum for normal text. text-gray-400 (#9ca3af) computes to
-            // ~7.6:1 against the same background.
-            <div className="px-3 text-[10px] font-semibold tracking-widest text-gray-400 uppercase">
-              {group.department}
-            </div>
-          )}
-          {group.items.map((item) => {
-            const active = isActive(pathname, item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onNavigate}
-                className={`rounded-lg px-3 py-2 text-sm tracking-wide transition-colors ${
-                  active ? 'bg-accent/10 text-accent' : 'text-gray-500 hover:text-gray-300'
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </div>
+      {visible.map((group) => (
+        <NavGroupBlock
+          key={group.department}
+          group={group}
+          pathname={pathname}
+          onNavigate={onNavigate}
+        />
       ))}
+      {hidden.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={expanded}
+            // Can't collapse while you're standing on a page inside it.
+            disabled={activeInHidden}
+            className="flex items-center justify-between rounded-lg px-3 py-2 text-sm tracking-wide text-gray-400 hover:text-gray-200 disabled:cursor-default disabled:hover:text-gray-400"
+          >
+            <span>Departments ({hiddenCount})</span>
+            <span aria-hidden>{expanded ? '▾' : '▸'}</span>
+          </button>
+          {expanded &&
+            hidden.map((group) => (
+              <NavGroupBlock
+                key={group.department}
+                group={group}
+                pathname={pathname}
+                onNavigate={onNavigate}
+              />
+            ))}
+        </>
+      )}
     </nav>
   );
 }
@@ -176,7 +264,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <div className="text-xs tracking-widest text-accent">WIREASSIST</div>
           <div className="text-sm font-bold">Command Center</div>
         </div>
-        <NavLinks pathname={pathname} />
+        <NavLinks pathname={pathname} collapseAfter={VISIBLE_NAV_ITEMS} />
       </aside>
 
       {/* Mobile "More" drawer — holds everything not promoted to a
