@@ -14,6 +14,15 @@
 # URL would get the agents, including their approval queue.
 
 wireassist.techtrendwire.com {
+	# Listen on the VPS's public IPv4 only. Tailscale already holds
+	# <tailscale-ip>:443 on this box (`tailscale serve`), so Caddy's default
+	# "all interfaces" bind fails with "address already in use". Set the IP once
+	# in a systemd drop-in so re-copying this file never loses it
+	# (docs/DEPLOYMENT.md section 6c, step 0):
+	#   sudo systemctl edit caddy   →   [Service]
+	#                                    Environment=WIREASSIST_PUBLIC_IP=<ip>
+	bind {$WIREASSIST_PUBLIC_IP}
+
 	route {
 		# Sign-in, callback and sign-out are handled by oauth2-proxy itself.
 		reverse_proxy /oauth2/* 127.0.0.1:4180 {
