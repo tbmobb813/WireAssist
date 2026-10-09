@@ -67,17 +67,20 @@ export function parseJson<T>(raw: string, context: string): T {
   try {
     return JSON.parse(stripped) as T;
   } catch (err) {
-    // The thrown error only ever carried the first 200 chars — nowhere
-    // near enough to diagnose a real failure, and nothing else logs the
-    // full response server-side. Logged here so a real failure is
-    // debuggable instead of a black box.
+    // Nothing else logs the failure server-side, so the cause is logged here
+    // — metadata only at error level. The model's reply text is written only
+    // while Diagnostic logging is on (Settings page), and is not echoed in the
+    // thrown error, which travels to whoever called the tool.
     logger.error(
       `[${context}] parseJson failed:`,
       err instanceof Error ? err.message : err,
-      '\nFull raw response:\n',
-      raw
+      `(${raw.length} chars)`
     );
-    throw new Error(`${context} returned unparseable JSON: ${stripped.slice(0, 200)}`);
+    logger.raw(`[${context}] raw reply that failed to parse:\n`, raw);
+    throw new Error(
+      `${context} returned unparseable JSON (${stripped.length} chars). ` +
+        `Turn on Diagnostic logging in Settings and try again to capture the raw reply.`
+    );
   }
 }
 

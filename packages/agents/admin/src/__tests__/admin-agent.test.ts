@@ -6,6 +6,17 @@ import { AdminAgent } from '../admin-agent';
 import * as autoApprovePolicy from '../auto-approve-policy';
 import type { ChatDispatch } from '../chat-dispatch';
 
+// email_triage reads the model's stop reason through thinkDetailed(). These
+// tests replace think() on the agent instance, so route thinkDetailed()
+// through that mock (looked up at call time) rather than the real provider.
+function adaptThink(agent: unknown): void {
+  const a = agent as any;
+  a.thinkDetailed = async (...args: unknown[]) => ({
+    content: await a.think(...args),
+    truncated: false,
+  });
+}
+
 function makeChatDispatchMock(overrides: Partial<ChatDispatch> = {}): ChatDispatch {
   const stubResult = {
     taskId: 'dispatched-task-1',
@@ -98,6 +109,7 @@ describe('AdminAgent.triageEmail() — JSON parsing', () => {
       },
     });
     const agent = new AdminAgent(deps);
+    adaptThink(agent);
     (agent as any).think = jest.fn().mockResolvedValue(
       '```json\n' +
         JSON.stringify({
@@ -124,6 +136,7 @@ describe('AdminAgent.triageEmail() — JSON parsing', () => {
       },
     });
     const agent = new AdminAgent(deps);
+    adaptThink(agent);
     (agent as any).think = jest.fn().mockResolvedValue('not json at all');
 
     await expect(agent.triageEmail(makeTask())).rejects.toThrow(/invalid JSON during triage/);
@@ -166,6 +179,7 @@ describe('AdminAgent.triageEmail() — ignore-labeling and auto-approval', () =>
       },
     });
     const agent = new AdminAgent(deps);
+    adaptThink(agent);
     (agent as any).think = jest
       .fn()
       .mockResolvedValue(
@@ -203,6 +217,7 @@ describe('AdminAgent.triageEmail() — ignore-labeling and auto-approval', () =>
       },
     });
     const agent = new AdminAgent(deps);
+    adaptThink(agent);
     (agent as any).think = jest
       .fn()
       .mockResolvedValue(
@@ -238,6 +253,7 @@ describe('AdminAgent.triageEmail() — ignore-labeling and auto-approval', () =>
       },
     });
     const agent = new AdminAgent(deps);
+    adaptThink(agent);
     (agent as any).think = jest.fn().mockResolvedValue(
       JSON.stringify({
         categories: {
@@ -558,6 +574,7 @@ describe('AdminAgent — composable skill-tools in the chat loop', () => {
       },
     });
     const agent = new AdminAgent(deps);
+    adaptThink(agent);
     (agent as any).think = jest.fn().mockResolvedValue(
       JSON.stringify({
         categories: { urgent: [], replyNeeded: [], fyi: [], ignore: [] },
@@ -587,6 +604,7 @@ describe('AdminAgent — composable skill-tools in the chat loop', () => {
   it('executeToolCall() dispatches calendar_review_skill via invokeSkill() and surfaces its emitted review as the result', async () => {
     const deps = makeDeps({ mcp: { call: jest.fn().mockResolvedValue([]) } });
     const agent = new AdminAgent(deps);
+    adaptThink(agent);
     (agent as any).think = jest.fn().mockResolvedValue(
       JSON.stringify({
         conflicts: [],
@@ -627,6 +645,7 @@ describe('AdminAgent.reviewCalendar() — JSON parsing', () => {
       mcp: { call: jest.fn().mockResolvedValue([]) },
     });
     const agent = new AdminAgent(deps);
+    adaptThink(agent);
     (agent as any).think = jest.fn().mockResolvedValue(
       '```json\n' +
         JSON.stringify({

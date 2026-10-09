@@ -34,6 +34,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/approvals', label: 'Approvals' },
       { href: '/chat', label: 'Chat' },
       { href: '/memory', label: 'Memory' },
+      { href: '/settings', label: 'Settings' },
     ],
   },
   {

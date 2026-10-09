@@ -3,10 +3,30 @@ import type { ApprovalRequest } from '../approval/types';
 import type { ImageAttachment, DocumentAttachment, ProviderMessage } from '../providers/base';
 import type { MemoryEntry } from '../memory/store';
 
+// What a think() call returned plus *why* the model stopped. `truncated` is
+// true when the provider reports it hit the output-token limit, i.e. the
+// content is cut off mid-way and structured output (JSON) won't parse.
+export interface ThinkResult {
+  content: string;
+  // Provider's own stop reason (Anthropic `stop_reason`, OpenAI-style
+  // `finish_reason`, Gemini `finishReason`) — undefined if not reported.
+  finishReason?: string;
+  truncated: boolean;
+}
+
 // Narrower than BaseAgent itself — a Skill can reach these, but never
 // `config`, `client`, or `status` directly.
 export interface SkillAgentHandle {
   think(userMessage: string, extraContext?: string, maxTokensOverride?: number): Promise<string>;
+  // Same call as think(), but also reports the finish reason. Optional so
+  // existing handles/mocks keep compiling; a skill that needs to tell a
+  // truncated reply from a malformed one should fall back to think() when
+  // it's absent.
+  thinkDetailed?(
+    userMessage: string,
+    extraContext?: string,
+    maxTokensOverride?: number
+  ): Promise<ThinkResult>;
   useTool(toolName: string, params: Record<string, unknown>): Promise<unknown>;
   loadContext(query: string): Promise<string>;
   remember(content: string, tags?: string[]): void;

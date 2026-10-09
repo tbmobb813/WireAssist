@@ -36,6 +36,9 @@ class TestAgent extends BaseAgent {
   testThink(userMessage: string, extraContext?: string) {
     return this.think(userMessage, extraContext);
   }
+  testThinkDetailed(userMessage: string, extraContext?: string, maxTokensOverride?: number) {
+    return this.thinkDetailed(userMessage, extraContext, maxTokensOverride);
+  }
   testRunToolLoop(
     task: AgentTask,
     userMessage: string,
@@ -699,6 +702,64 @@ describe('BaseAgent.think()', () => {
     await agent.testThink('one');
     await agent.testThink('two');
     expect(createSpy).toHaveBeenCalledTimes(1);
+  });
+
+  describe('finish reason', () => {
+    let warnSpy: jest.SpyInstance;
+    beforeEach(() => {
+      warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    it('thinkDetailed() returns the content, the finish reason, and truncated=false for a normal stop', async () => {
+      completeMock.mockResolvedValueOnce(stubResponse({ finishReason: 'end_turn' }));
+      const { agent } = makeAgent();
+      const result = await agent.testThinkDetailed('hello');
+      expect(result).toEqual({ content: 'a reply', finishReason: 'end_turn', truncated: false });
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it.each(['max_tokens', 'length', 'MAX_TOKENS'])(
+      'flags finishReason "%s" as truncated and warns with metadata only',
+      async (finishReason) => {
+        completeMock.mockResolvedValueOnce(
+          stubResponse({ content: 'secret email text', finishReason, completionTokens: 600 })
+        );
+        const { agent } = makeAgent();
+        const result = await agent.testThinkDetailed('hello', undefined, 8192);
+        expect(result.truncated).toBe(true);
+        expect(warnSpy).toHaveBeenCalledTimes(1);
+        const message = String(warnSpy.mock.calls[0][0]);
+        expect(message).toContain(`finishReason="${finishReason}"`);
+        expect(message).toContain('maxTokens=8192');
+        expect(message).toContain('completionTokens=600');
+        // Never log the reply itself — it can contain email content.
+        expect(message).not.toContain('secret email text');
+      }
+    );
+
+    it.each(['stop', 'STOP', 'tool_use', 'tool_calls', 'stop_sequence'])(
+      'does not warn for the normal finish reason "%s"',
+      async (finishReason) => {
+        completeMock.mockResolvedValueOnce(stubResponse({ finishReason }));
+        const { agent } = makeAgent();
+        await agent.testThinkDetailed('hello');
+        expect(warnSpy).not.toHaveBeenCalled();
+      }
+    );
+
+    it('warns (without marking truncated) for other abnormal reasons such as a refusal', async () => {
+      completeMock.mockResolvedValueOnce(stubResponse({ finishReason: 'refusal' }));
+      const { agent } = makeAgent();
+      const result = await agent.testThinkDetailed('hello');
+      expect(result.truncated).toBe(false);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('think() still returns just the string', async () => {
+      completeMock.mockResolvedValueOnce(stubResponse({ finishReason: 'max_tokens' }));
+      const { agent } = makeAgent();
+      expect(await agent.testThink('hello')).toBe('a reply');
+    });
   });
 });
 
