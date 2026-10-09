@@ -71,3 +71,23 @@ describe('buildChatDispatchToolSchemas', () => {
     }
   });
 });
+
+describe('live lookups are routed to the freeform research dispatch', () => {
+  const schemas = buildChatDispatchToolSchemas();
+
+  // The topic dispatch has no recency filter and ends in a "store findings"
+  // approval; a live lookup (price, news) sent there returned stale pages and
+  // an approval card. These descriptions are the only routing signal the
+  // model gets, so pin them.
+  it('tells the model live lookups belong on dispatch_research_freeform', () => {
+    expect(schemas.dispatch_research_freeform.description).toMatch(/live lookup/i);
+    expect(schemas.dispatch_research_freeform.description).toMatch(/news/i);
+  });
+
+  it('tells the model NOT to use dispatch_research_topic for live lookups', () => {
+    expect(schemas.dispatch_research_topic.description).toMatch(/NOT for live lookups/);
+    expect(schemas.dispatch_research_topic.description).not.toMatch(
+      /OR use this for a specific fact/
+    );
+  });
+});

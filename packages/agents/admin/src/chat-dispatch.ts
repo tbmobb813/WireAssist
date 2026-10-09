@@ -202,11 +202,10 @@ export function buildChatDispatchToolSchemas(): Record<string, ProviderToolDefin
       name: 'dispatch_research_topic',
       description:
         'Hand off web research/synthesis on a topic, market, or competitor to the Research agent — ' +
-        'OR use this for a specific fact that changes over time and needs a live lookup (current ' +
-        "price, stock/availability, latest version number, today's exchange rate, etc.), even if it " +
-        'sounds like a single quick lookup question rather than "research." You have no web-search ' +
-        'or page-fetch tools of your own — answering a live-lookup question yourself from training ' +
-        'data risks a stale or wrong answer. Starts immediately, no approval needed.',
+        'a study the user may want kept. NOT for live lookups (current price, stock quote, ' +
+        "availability, today's news or headlines, latest version number, exchange rate): those " +
+        'need a recency-filtered search, which only dispatch_research_freeform can do. Starts ' +
+        'immediately, no approval needed.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -232,7 +231,12 @@ export function buildChatDispatchToolSchemas(): Record<string, ProviderToolDefin
         'Hand off open-ended or multi-part research chat to the Research agent — a compound request ' +
         'combining a search with synthesis of prior findings, a follow-up question about earlier ' +
         'research, or anything not cleanly a single "research X" ask (use dispatch_research_topic ' +
-        'for that instead). Starts immediately, no approval needed.',
+        'for that instead). ALSO the right tool for any live lookup — a fact that changes over ' +
+        "time (current price, stock/availability, today's news or headlines, latest version " +
+        "number, exchange rate), even when it's phrased as one quick question. You have no " +
+        'web-search or page-fetch tools of your own, and answering from training data risks a ' +
+        'stale or wrong answer. Research searches with a recency filter and can fetch retail ' +
+        'product pages for live prices. Starts immediately, no approval needed.',
       inputSchema: {
         type: 'object',
         properties: {
