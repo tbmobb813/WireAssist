@@ -30,7 +30,7 @@
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@types/node": "^22.19.0",
-    "@typescript-eslint/eslint-plugin": "^8.67.0",
+    "@typescript-eslint/eslint-plugin": "^8.71.0",
     "@typescript-eslint/parser": "^8.71.0",
     "eslint": "^10.8.1",
     "@eslint/js": "^10.0.1",
@@ -47,7 +47,7 @@
   },
   "pnpm": {
     "overrides": {
-      "@typescript-eslint/eslint-plugin": "^8.67.0",
+      "@typescript-eslint/eslint-plugin": "^8.71.0",
       "@typescript-eslint/parser": "^8.71.0",
       "esbuild": "^0.28.2",
       "eslint": "^10.8.1",
