@@ -48,6 +48,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { logger } from '@wireassist/core/logger';
+import { escapeMarkdown, sendMessage } from '@wireassist/core/telegram-format';
 
 if (!BOT_TOKEN || !CHAT_ID) {
   logger.error('TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set.');
@@ -61,12 +62,15 @@ const HOME_PATH = process.env.WIREASSIST_HOME ?? os.homedir();
 const CONVERSATION_ID_PATH = path.join(HOME_PATH, '.wireassist', 'telegram-conversation-id');
 const MAX_HISTORY_MESSAGES = 20;
 
+// Text we write ourselves may use Markdown (*bold*, `code`, links). Anything a
+// model or an error wrote goes through escapeMarkdown() first — see format.ts.
 async function send(text: string): Promise<void> {
-  await fetch(`${TG}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: 'Markdown' }),
-  }).catch((err) => logger.error('sendMessage failed:', err));
+  await sendMessage({
+    apiBase: TG,
+    chatId: CHAT_ID as string,
+    text,
+    onError: (message) => logger.error(message),
+  });
 }
 
 // Registers the command list with Telegram itself so its client shows a
@@ -188,7 +192,7 @@ async function handleAsk(prompt: string): Promise<string> {
   })) as { taskId?: string; redirect?: string; message?: string };
 
   if (r.redirect) {
-    return `${r.message ?? ''}\n\nOpen: ${r.redirect}`;
+    return `${escapeMarkdown(r.message ?? '')}\n\nOpen: ${r.redirect}`;
   }
   if (r.taskId) pendingAskTaskId = r.taskId;
   return `🧠 Task queued (\`${r.taskId}\`) — answer will arrive here.`;
@@ -277,7 +281,7 @@ async function handleCommand(text: string): Promise<string> {
       return pending
         .map(
           (p) =>
-            `⏳ \`${p.id}\`\n${p.agentRole}: ${p.action}\n/approve\\_${p.id} · /reject\\_${p.id}`
+            `⏳ \`${p.id}\`\n${escapeMarkdown(String(p.agentRole))}: ${escapeMarkdown(String(p.action))}\n/approve\\_${p.id} · /reject\\_${p.id}`
         )
         .join('\n\n');
     }
@@ -357,7 +361,7 @@ async function pollLoop(): Promise<never> {
             : await handleAsk(msg.text);
           await send(reply);
         } catch (err) {
-          await send(`⚠️ ${err instanceof Error ? err.message : String(err)}`);
+          await send(`⚠️ ${escapeMarkdown(err instanceof Error ? err.message : String(err))}`);
         }
       }
     } catch (err) {
@@ -408,18 +412,18 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
   switch (e.event) {
     case 'waiting_approval':
       await send(
-        `⏳ *Approval needed*\nAgent: ${p.agentName ?? p.agentRole}\nAction: ${p.action}\n\nUse /approvals to review.`
+        `⏳ *Approval needed*\nAgent: ${escapeMarkdown(String(p.agentName ?? p.agentRole))}\nAction: ${escapeMarkdown(String(p.action))}\n\nUse /approvals to review.`
       );
       break;
     case 'auto_approved': {
       const action = p.action as { label?: string } | undefined;
       await send(
-        `🤖 *Auto-approved* (${p.agentRole}): ${action?.label ?? 'an action'} — already trusted, no approval needed.`
+        `🤖 *Auto-approved* (${escapeMarkdown(String(p.agentRole))}): ${escapeMarkdown(action?.label ?? 'an action')} — already trusted, no approval needed.`
       );
       break;
     }
     case 'ops_blocked':
-      await send(`🛑 *NixOps blocked*\n${String(p.diagnosis ?? '').slice(0, 800)}`);
+      await send(`🛑 *NixOps blocked*\n${escapeMarkdown(String(p.diagnosis ?? '').slice(0, 800))}`);
       break;
     case 'ops_run_complete':
       await send(`✅ *Workflow ${p.workflow}* finished — ${p.approved ? 'approved' : 'rejected'}.`);
@@ -427,12 +431,14 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
     case 'ops_freeform_response':
     case 'freeform_response': {
       const response = String(p.response ?? '');
-      await send(`🧠 ${response.slice(0, 3500)}`);
+      await send(`🧠 ${escapeMarkdown(response.slice(0, 3500))}`);
       await maybePersistAskResponse(p.taskId, response);
       break;
     }
     case 'content_generated':
-      await send(`✍️ *Generated ${p.platform} post:*\n\n${String(p.content ?? '').slice(0, 3500)}`);
+      await send(
+        `✍️ *Generated ${p.platform} post:*\n\n${escapeMarkdown(String(p.content ?? '').slice(0, 3500))}`
+      );
       break;
     case 'content_plan_generated':
       await send(
@@ -440,7 +446,9 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
       );
       break;
     case 'content_approved':
-      await send(`✅ *Approved ${p.platform} post:*\n\n${String(p.content ?? '').slice(0, 3500)}`);
+      await send(
+        `✅ *Approved ${p.platform} post:*\n\n${escapeMarkdown(String(p.content ?? '').slice(0, 3500))}`
+      );
       break;
     case 'post_scheduled': {
       const post = p.post as { platform?: string; scheduledAt?: string } | undefined;
@@ -453,7 +461,9 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
         Array.isArray(p.sources) && p.sources.length > 0
           ? `\n\nSources:\n${(p.sources as string[]).join('\n')}`
           : '';
-      await send(`🔍 ${String(p.summary ?? '').slice(0, 3000)}${sources}`);
+      await send(
+        `🔍 ${escapeMarkdown(`${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}${sources}`)}`
+      );
       break;
     }
     case 'gtm_generated': {
@@ -483,10 +493,12 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
       break;
     }
     case 'task_failed':
-      await send(`🔴 Task failed (${p.agentRole}): ${String(p.error ?? '').slice(0, 500)}`);
+      await send(
+        `🔴 Task failed (${escapeMarkdown(String(p.agentRole))}): ${escapeMarkdown(String(p.error ?? '').slice(0, 500))}`
+      );
       break;
     case 'daily_briefing_complete':
-      await send(`☀️ ${String(p.summary ?? '').slice(0, 3500)}`);
+      await send(`☀️ ${escapeMarkdown(String(p.summary ?? '').slice(0, 3500))}`);
       break;
     case 'follow_up_nudges_complete': {
       const staleThreads = Array.isArray(p.staleThreads) ? p.staleThreads : [];
@@ -497,83 +509,95 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
     case 'proactive_insights_complete': {
       const findings = Array.isArray(p.findings) ? p.findings : [];
       if (findings.length === 0) break;
-      await send(`💡 ${String(p.summary ?? '').slice(0, 3000)}`);
+      await send(`💡 ${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}`);
       break;
     }
     case 'trust_graduation_nudges_complete': {
       const candidates = Array.isArray(p.candidates) ? p.candidates : [];
       if (candidates.length === 0) break;
-      await send(`🎓 ${String(p.summary ?? '').slice(0, 3000)}`);
+      await send(`🎓 ${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}`);
       break;
     }
     case 'budget_warning_complete': {
       if (!p.warranted) break;
-      await send(`💸 ${String(p.summary ?? '').slice(0, 3000)}`);
+      await send(`💸 ${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}`);
       break;
     }
     case 'stale_approvals_complete': {
       const stale = Array.isArray(p.stale) ? p.stale : [];
       const orphaned = Array.isArray(p.orphaned) ? p.orphaned : [];
       if (stale.length === 0 && orphaned.length === 0) break;
-      await send(`⏰ ${String(p.summary ?? '').slice(0, 3000)}\n\nUse /approvals to review.`);
+      await send(
+        `⏰ ${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}\n\nUse /approvals to review.`
+      );
       break;
     }
     case 'stale_prs_complete': {
       const stale = Array.isArray(p.stale) ? p.stale : [];
       if (stale.length === 0) break;
-      await send(`🔧 ${String(p.summary ?? '').slice(0, 3000)}\n\nUse /github to review.`);
+      await send(
+        `🔧 ${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}\n\nUse /github to review.`
+      );
       break;
     }
     case 'detect_skill_opportunities_complete': {
       if (!p.patternFound) break;
-      await send(`🔍 ${String(p.summary ?? '').slice(0, 3000)}\n\nUse /approvals to review.`);
+      await send(
+        `🔍 ${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}\n\nUse /approvals to review.`
+      );
       break;
     }
     case 'meeting_prep_complete': {
       const prepared = Array.isArray(p.prepared) ? p.prepared : [];
       if (prepared.length === 0) break;
-      await send(`🗒️ ${String(p.summary ?? '').slice(0, 3000)}`);
+      await send(`🗒️ ${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}`);
       break;
     }
     case 'objective_health_check_complete': {
       const stale = Array.isArray(p.stale) ? p.stale : [];
       if (stale.length === 0) break;
-      await send(`🎯 ${String(p.summary ?? '').slice(0, 3000)}\n\nUse /objectives to review.`);
+      await send(
+        `🎯 ${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}\n\nUse /objectives to review.`
+      );
       break;
     }
     case 'travel_itinerary_digest_complete': {
       if (!p.hasTravel) break;
-      await send(`✈️ ${String(p.summary ?? '').slice(0, 3000)}`);
+      await send(`✈️ ${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}`);
       break;
     }
     case 'expense_digest_complete': {
       if (!p.hasExpenses) break;
-      await send(`🧾 ${String(p.summary ?? '').slice(0, 3000)}`);
+      await send(`🧾 ${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}`);
       break;
     }
     case 'meeting_followup_complete': {
       const followedUp = Array.isArray(p.followedUp) ? p.followedUp : [];
       if (followedUp.length === 0) break;
-      await send(`📝 ${String(p.summary ?? '').slice(0, 3000)}`);
+      await send(`📝 ${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}`);
       break;
     }
     case 'draft_document_complete': {
       const link = typeof p.webViewLink === 'string' ? p.webViewLink : '';
-      await send(`📄 Drafted "${String(p.title ?? '')}"${link ? `\n\n${link}` : ''}`);
+      await send(
+        `📄 Drafted "${escapeMarkdown(String(p.title ?? ''))}"${link ? `\n\n${link}` : ''}`
+      );
       break;
     }
     case 'publish_due_posts_complete': {
       const published = Array.isArray(p.published) ? p.published : [];
       const failed = Array.isArray(p.failed) ? p.failed : [];
       if (published.length === 0 && failed.length === 0) break;
-      await send(`📤 ${String(p.summary ?? '').slice(0, 3000)}`);
+      await send(`📤 ${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}`);
       break;
     }
     case 'content_retro_complete': {
       // Always sends — unlike the nudges above, a retro is meaningful even
       // over a quiet period (postsAnalyzed: 0 still gets a real note about
       // why nothing published), so there's no empty-array case to skip.
-      await send(`📊 ${String(p.summary ?? '').slice(0, 3000)}\n\nUse /content to review.`);
+      await send(
+        `📊 ${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}\n\nUse /content to review.`
+      );
       break;
     }
     case 'check_post_metrics_complete': {
@@ -582,7 +606,7 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
       const checked = typeof p.checked === 'number' ? p.checked : 0;
       const failed = typeof p.failed === 'number' ? p.failed : 0;
       if (checked === 0 && failed === 0) break;
-      await send(`📈 ${String(p.summary ?? '').slice(0, 3000)}`);
+      await send(`📈 ${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}`);
       break;
     }
     case 'sync_lead_signups_complete': {
@@ -591,13 +615,15 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
       const synced = p.synced === true;
       const count = typeof p.count === 'number' ? p.count : 0;
       if (synced && count === 0) break;
-      await send(`${synced ? '📈' : '⚠️'} ${String(p.summary ?? '').slice(0, 1500)}`);
+      await send(
+        `${synced ? '📈' : '⚠️'} ${escapeMarkdown(String(p.summary ?? '').slice(0, 1500))}`
+      );
       break;
     }
     case 'scoreboard_digest_complete': {
       // Always sends — same reasoning as content_retro_complete: a quiet
       // week is still worth a real note, not silence.
-      await send(`📊 ${String(p.summary ?? '').slice(0, 3000)}`);
+      await send(`📊 ${escapeMarkdown(String(p.summary ?? '').slice(0, 3000))}`);
       break;
     }
     case 'handoff_review_escalated': {
@@ -607,8 +633,8 @@ async function notify(e: { event: string; payload: Record<string, unknown> }): P
       // retried draft is untouched — this just flags why, so the decision
       // to approve/reject it is made with the review's concern in view.
       await send(
-        `⚠️ Content draft failed review twice for "${String(p.originalQuery ?? '')}" ` +
-          `(${String(p.requestedPlatform ?? '')}): ${String(p.reason ?? '').slice(0, 1500)}` +
+        `⚠️ Content draft failed review twice for "${escapeMarkdown(String(p.originalQuery ?? ''))}" ` +
+          `(${escapeMarkdown(String(p.requestedPlatform ?? ''))}): ${escapeMarkdown(String(p.reason ?? '').slice(0, 1500))}` +
           `\n\nUse /approvals to review the draft anyway.`
       );
       break;
@@ -642,7 +668,7 @@ async function healthLoop(): Promise<never> {
         isDown = true;
         const reason = err instanceof Error ? err.message : String(err);
         await send(
-          `🔴 WireAssist API unreachable at ${API_URL} (${consecutiveFailures} checks failed). Last error: ${reason}`
+          `🔴 WireAssist API unreachable at ${API_URL} (${consecutiveFailures} checks failed). Last error: ${escapeMarkdown(reason)}`
         );
       }
     }
@@ -678,13 +704,15 @@ async function checkRestartRecovery(): Promise<void> {
           `\n🔴 ${summary.interruptedTasks.length} task(s) interrupted mid-run and marked failed:`,
           ...summary.interruptedTasks
             .slice(0, 5)
-            .map((t) => `  • (${t.agentRole}) ${t.description}`)
+            .map((t) => `  • (${escapeMarkdown(t.agentRole)}) ${escapeMarkdown(t.description)}`)
         );
       }
       if (summary.orphanedApprovals.length > 0) {
         lines.push(
           `\n🛑 ${summary.orphanedApprovals.length} approved action(s) never ran — you approved these, but the process restarted before anything could act on it. Re-trigger manually if still needed:`,
-          ...summary.orphanedApprovals.slice(0, 5).map((a) => `  • (${a.agentRole}) ${a.action}`)
+          ...summary.orphanedApprovals
+            .slice(0, 5)
+            .map((a) => `  • (${escapeMarkdown(a.agentRole)}) ${escapeMarkdown(a.action)}`)
         );
       }
       if (summary.staleApprovalsRejected.length > 0) {
@@ -692,7 +720,7 @@ async function checkRestartRecovery(): Promise<void> {
           `\n🗑️ ${summary.staleApprovalsRejected.length} pending approval(s) auto-rejected — no live process was left to act on them, re-request if still needed:`,
           ...summary.staleApprovalsRejected
             .slice(0, 5)
-            .map((a) => `  • (${a.agentRole}) ${a.action}`)
+            .map((a) => `  • (${escapeMarkdown(a.agentRole)}) ${escapeMarkdown(a.action)}`)
         );
       }
       await send(lines.join('\n'));
