@@ -26,6 +26,12 @@ describe('escapeMarkdown', () => {
     expect(escapeMarkdown('**bold** `code` [link]')).toBe('\\*\\*bold\\*\\* \\`code\\` \\[link]');
   });
 
+  it('does not double backslashes: legacy Markdown shows them literally unless one precedes _ * ` [', () => {
+    expect(escapeMarkdown('C:\\temp\\file')).toBe('C:\\temp\\file');
+    // A literal backslash before a special character: the backslash stays, the special is escaped.
+    expect(escapeMarkdown('a\\_b')).toBe('a\\\\_b');
+  });
+
   it('leaves ordinary text, emoji and URLs without formatting characters alone', () => {
     const text = '🧠 Brooklyn news: https://gothamist.com/ — 86.5°F';
     expect(escapeMarkdown(text)).toBe(text);
@@ -62,6 +68,13 @@ describe('sendMessage', () => {
     await sendMessage({ ...base, text: escapeMarkdown('BRAVE_API_KEY'), fetchFn });
     expect(calls[0].body.text).toBe('BRAVE\\_API\\_KEY');
     expect(calls[1].body.text).toBe('BRAVE_API_KEY');
+  });
+
+  it('restores literal backslashes exactly in the plain-text resend', async () => {
+    const { calls, fetchFn } = fakeTelegram([400, 200]);
+    const original = 'path C:\\x\\_y and *bold*';
+    await sendMessage({ ...base, text: escapeMarkdown(original), fetchFn });
+    expect(calls[1].body.text).toBe(original);
   });
 
   it('reports failure, and says why, when both attempts fail', async () => {

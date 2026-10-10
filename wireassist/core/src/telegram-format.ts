@@ -3,7 +3,28 @@
 // the underscores were read as italics — so any text we did not write ourselves
 // is escaped before it goes into a Markdown message. Telegram removes the
 // backslash and shows the character.
-export const escapeMarkdown = (text: string): string => text.replace(/([_*`[])/g, '\\$1');
+//
+// Backslash itself is deliberately NOT escaped. Legacy Markdown only treats a
+// backslash as an escape when it directly precedes one of these four
+// characters; anywhere else it is shown literally. So a literal "\_" in the
+// input becomes "\\_", which Telegram shows as "\_" again, whereas doubling
+// every backslash would show two. (MarkdownV2 differs; this bot does not use it.)
+const SPECIAL = new Set(['_', '*', '`', '[']);
+
+export const escapeMarkdown = (text: string): string =>
+  Array.from(text, (ch) => (SPECIAL.has(ch) ? `\\${ch}` : ch)).join('');
+
+// Undoes escapeMarkdown() for the plain-text resend, where there is no
+// Markdown to escape from and a backslash would otherwise show.
+const unescapeMarkdown = (text: string): string => {
+  const out: string[] = [];
+  const chars = Array.from(text);
+  for (let i = 0; i < chars.length; i++) {
+    if (chars[i] === '\\' && SPECIAL.has(chars[i + 1])) continue;
+    out.push(chars[i]);
+  }
+  return out.join('');
+};
 
 type FetchFn = typeof fetch;
 
@@ -51,7 +72,7 @@ export async function sendMessage(opts: SendOptions): Promise<boolean> {
   report(`sendMessage as Markdown failed (${formatted.detail}); resending as plain text`);
 
   // Plain text has no escapes, so drop the backslashes escapeMarkdown() added.
-  const plain = await post({ ...opts, text: opts.text.replace(/\\([_*`[])/g, '$1') }, fetchFn);
+  const plain = await post({ ...opts, text: unescapeMarkdown(opts.text) }, fetchFn);
   if (plain.ok) return true;
   report(`sendMessage failed (${plain.detail})`);
   return false;
